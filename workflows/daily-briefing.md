@@ -17,19 +17,19 @@ Do not proceed until all three tool schemas are available.
 Note the current date (YYYY-MM-DD format) — used for file naming and calendar queries.
 
 ### 3. Fetch today's calendar events
-Use the Google Calendar MCP tool `gcal_list_events` to retrieve all events for today:
+Call `mcp__Google-Calendar__gcal_list_events` to retrieve all events for today:
 - timeMin: today at 00:00:00 local time
 - timeMax: today at 23:59:59 local time
 - Sort results by start time
 
 ### 4. Fetch tomorrow's calendar events
-Use `gcal_list_events` again for tomorrow:
+Call `mcp__Google-Calendar__gcal_list_events` again for tomorrow:
 - timeMin: tomorrow at 00:00:00 local time
 - timeMax: tomorrow at 23:59:59 local time
 - Sort results by start time
 
 ### 5. Fetch all pending Todoist tasks
-Use the Todoist MCP tool `find-tasks` to retrieve all incomplete tasks across all projects.
+Call `mcp__todoist__find-tasks` to retrieve all incomplete tasks across all projects.
 - Include task priority, project name, and due date where available
 - Order by: overdue first, then by priority (p1 → p4), then by due date
 
@@ -74,8 +74,8 @@ Save the completed report to:
 Where YYYY-MM-DD is today's date.
 
 ### 8. Send via Gmail
-Authenticate with Gmail if needed using `authenticate`.
-Send the report content as an email to the user with:
+Call `mcp__Gmail__gmail_get_profile` to retrieve the user's email address.
+Call `mcp__Gmail__gmail_create_draft` to create an email with:
 - Subject: `Daily Briefing — [DATE]`
 - Body: the full markdown report
 
