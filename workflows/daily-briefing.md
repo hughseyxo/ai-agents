@@ -5,27 +5,35 @@ Generate a concise daily briefing every morning covering the user's calendar and
 
 ## Steps
 
-### 1. Get today's date
+### 1. Import MCP connectors
+Use ToolSearch to load the required MCP tools before anything else:
+- Search `"google calendar gcal_list_events"` to import the Google Calendar connector
+- Search `"todoist find-tasks"` to import the Todoist connector
+- Search `"gmail authenticate"` to import the Gmail connector
+
+Do not proceed until all three tool schemas are available.
+
+### 2. Get today's date
 Note the current date (YYYY-MM-DD format) — used for file naming and calendar queries.
 
-### 2. Fetch today's calendar events
+### 3. Fetch today's calendar events
 Use the Google Calendar MCP tool `gcal_list_events` to retrieve all events for today:
 - timeMin: today at 00:00:00 local time
 - timeMax: today at 23:59:59 local time
 - Sort results by start time
 
-### 3. Fetch tomorrow's calendar events
+### 4. Fetch tomorrow's calendar events
 Use `gcal_list_events` again for tomorrow:
 - timeMin: tomorrow at 00:00:00 local time
 - timeMax: tomorrow at 23:59:59 local time
 - Sort results by start time
 
-### 4. Fetch all pending Todoist tasks
+### 5. Fetch all pending Todoist tasks
 Use the Todoist MCP tool `find-tasks` to retrieve all incomplete tasks across all projects.
 - Include task priority, project name, and due date where available
 - Order by: overdue first, then by priority (p1 → p4), then by due date
 
-### 5. Format the report
+### 6. Format the report
 Produce a markdown report with the following sections:
 
 ```
@@ -59,13 +67,13 @@ Tasks from the list above that look short based on their title:
 
 Keep the report tight — bullet points only, no paragraphs.
 
-### 6. Save to file
+### 7. Save to file
 Save the completed report to:
 `output/daily-briefing-YYYY-MM-DD.md`
 
 Where YYYY-MM-DD is today's date.
 
-### 7. Send via Gmail
+### 8. Send via Gmail
 Authenticate with Gmail if needed using `authenticate`.
 Send the report content as an email to the user with:
 - Subject: `Daily Briefing — [DATE]`
@@ -73,7 +81,7 @@ Send the report content as an email to the user with:
 
 Note: If Gmail send is not available, skip this step and note in the file that email delivery was skipped.
 
-### 8. Confirm completion
+### 9. Confirm completion
 Output a brief confirmation: "Briefing saved to output/daily-briefing-YYYY-MM-DD.md"
 
 ## Constraints
