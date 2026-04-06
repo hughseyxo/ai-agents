@@ -24,7 +24,16 @@ Parse the ICS output from both calendars to extract VEVENT blocks. For each even
 - DTEND (end time)
 - DESCRIPTION (optional)
 
-Merge events from both calendars, filter to only those occurring **today** or **tomorrow**, deduplicate by title+time, and sort by start time within each day.
+Merge events from both calendars and deduplicate by title+time. Split into two groups:
+
+**Group A — Today:** all events occurring today, sorted by start time.
+
+**Group B — Upcoming (next 4 weeks):** events from tomorrow through 28 days from now. Filter to only **notable** events — exclude:
+- All-day events that are just date markers or reminders (e.g. "Birthday", "Holiday", single-word all-day blocks)
+- Recurring daily events (e.g. daily standups, lunch blocks)
+- Events under 15 minutes
+
+Keep: meetings with other people, appointments, deadlines, one-off events, multi-day events. List chronologically, max 10 events. Show the date and time for each.
 
 ### 4. Fetch Inbox tasks from Todoist
 Call `mcp__todoist__find-tasks` with `projectId: "inbox"` to retrieve only incomplete Inbox tasks.
@@ -42,9 +51,9 @@ Save a markdown version to `output/daily-briefing-YYYY-MM-DD.md` with these sect
 - [TIME] — [Event Title]
 - (If no events: "No events scheduled today")
 
-## Tomorrow's Schedule
-- [TIME] — [Event Title]
-- (If no events: "No events scheduled tomorrow")
+## Coming Up (next 4 weeks)
+- [DAY DATE, TIME] — [Event Title]
+- (If no notable events: "Nothing notable in the next 4 weeks")
 
 ## Inbox Tasks
 ### Overdue
@@ -88,10 +97,11 @@ Construct the email body as HTML. Use inline CSS only (no external stylesheets).
           [If no events: <p style="margin:0;color:#999;font-size:14px;font-style:italic;">No events today</p>]
         </td></tr>
 
-        <!-- Tomorrow's Schedule -->
+        <!-- Coming Up -->
         <tr><td style="padding:20px 32px 0;">
-          <h2 style="margin:0 0 12px;font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#1a1a2e;">📅 Tomorrow</h2>
-          [Same event format as today]
+          <h2 style="margin:0 0 12px;font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#1a1a2e;">🗓 Coming Up</h2>
+          [For each notable upcoming event in next 4 weeks: <p style="margin:0 0 8px;padding:10px 14px;background:#f0f4ff;border-left:3px solid #4a6fa5;border-radius:4px;font-size:14px;color:#333;"><strong>[Mon 7 Apr, 14:00]</strong> — [Title]</p>]
+          [If none: <p style="margin:0;color:#999;font-size:14px;font-style:italic;">Nothing notable in the next 4 weeks</p>]
         </td></tr>
 
         <!-- Inbox Tasks -->
