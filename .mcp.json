@@ -1,5 +1,12 @@
 {
   "mcpServers": {
+    "todoist": {
+      "type": "http",
+      "url": "https://ai.todoist.net/mcp",
+      "headers": {
+        "Authorization": "Bearer ${TODOIST_API_TOKEN}"
+      }
+    },
     "google-calendar": {
       "type": "http",
       "url": "https://gcal.mcp.claude.com/mcp"
