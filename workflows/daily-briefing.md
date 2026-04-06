@@ -5,54 +5,52 @@ Generate a concise daily briefing every morning covering the user's calendar and
 
 ## Steps
 
-### 1. Import MCP connectors
-Use ToolSearch to load the required MCP tools before anything else:
-- Search `"google calendar gcal_list_events"` to import the Google Calendar connector
+### 1. Import MCP connector
+Use ToolSearch to load the Todoist MCP tool before proceeding:
 - Search `"todoist find-tasks"` to import the Todoist connector
-- Search `"gmail authenticate"` to import the Gmail connector
-
-Do not proceed until all three tool schemas are available.
 
 ### 2. Get today's date
-Note the current date (YYYY-MM-DD format) — used for file naming and calendar queries.
+Note today's date and tomorrow's date in YYYY-MM-DD format.
 
-### 3. Fetch today's calendar events
-Call `mcp__Google-Calendar__gcal_list_events` to retrieve all events for today:
-- timeMin: today at 00:00:00 local time
-- timeMax: today at 23:59:59 local time
-- Sort results by start time
+### 3. Fetch calendar events via ICS
+Run the following bash command to fetch the calendar:
+```bash
+curl -s "$GCAL_ICS_URL"
+```
+Parse the ICS output to extract VEVENT blocks. For each event extract:
+- SUMMARY (title)
+- DTSTART (start time)
+- DTEND (end time)
+- DESCRIPTION (optional)
 
-### 4. Fetch tomorrow's calendar events
-Call `mcp__Google-Calendar__gcal_list_events` again for tomorrow:
-- timeMin: tomorrow at 00:00:00 local time
-- timeMax: tomorrow at 23:59:59 local time
-- Sort results by start time
+Filter events to only those occurring **today** or **tomorrow**.
+Sort by start time within each day.
 
-### 5. Fetch all pending Todoist tasks
+### 4. Fetch all pending Todoist tasks
 Call `mcp__todoist__find-tasks` to retrieve all incomplete tasks across all projects.
 - Include task priority, project name, and due date where available
 - Order by: overdue first, then by priority (p1 → p4), then by due date
 
-### 6. Format the report
+### 5. Format the report
 Produce a markdown report with the following sections:
 
 ```
 # Daily Briefing — [DATE]
 
 ## Today's Schedule
-- [TIME] — [Event Title] ([Duration if available])
+- [TIME] — [Event Title]
 - (If no events: "No events scheduled today")
 
 ## Tomorrow's Schedule
-- [TIME] — [Event Title] ([Duration if available])
+- [TIME] — [Event Title]
 - (If no events: "No events scheduled tomorrow")
 
 ## Pending Tasks
 ### Overdue
-- [Task title] (Due: [date]) [Priority badge if p1/p2]
+- [Task title] (Due: [date]) [p1/p2 if high priority]
 
 ### Due Today
-- [Task title] [Priority badge if p1/p2]
+- [Task title] [p1/p2 if high priority]
 
 ### Upcoming
 - [Task title] (Due: [date]) — [Project]
@@ -61,30 +59,43 @@ Produce a markdown report with the following sections:
 - [Task title] — [Project]
 
 ## Quick Wins (estimated < 30 min)
-Tasks from the list above that look short based on their title:
 - [Task title] (~[X] min)
 ```
 
 Keep the report tight — bullet points only, no paragraphs.
 
-### 7. Save to file
+### 6. Save to file
 Save the completed report to:
 `output/daily-briefing-YYYY-MM-DD.md`
 
-Where YYYY-MM-DD is today's date.
+### 7. Send via Gmail (SMTP)
+Write a plain-text email file to `/tmp/briefing_email.txt` with this format:
+```
+From: [GMAIL_ADDRESS env var]
+To: [GMAIL_ADDRESS env var]
+Subject: Daily Briefing — [DATE]
+Content-Type: text/plain; charset=utf-8
 
-### 8. Send via Gmail
-Call `mcp__Gmail__gmail_get_profile` to retrieve the user's email address.
-Call `mcp__Gmail__gmail_create_draft` to create an email with:
-- Subject: `Daily Briefing — [DATE]`
-- Body: the full markdown report
+[full report content]
+```
 
-Note: If Gmail send is not available, skip this step and note in the file that email delivery was skipped.
+Then send it with:
+```bash
+curl --ssl-reqd \
+  --url 'smtps://smtp.gmail.com:465' \
+  --user "${GMAIL_ADDRESS}:${GMAIL_APP_PASSWORD}" \
+  --mail-from "${GMAIL_ADDRESS}" \
+  --mail-rcpt "${GMAIL_ADDRESS}" \
+  --upload-file /tmp/briefing_email.txt
+```
 
-### 9. Confirm completion
-Output a brief confirmation: "Briefing saved to output/daily-briefing-YYYY-MM-DD.md"
+If the send fails, note it in the saved file but do not stop.
+
+### 8. Confirm completion
+Output: `Briefing saved to output/daily-briefing-YYYY-MM-DD.md`
 
 ## Constraints
 - Do NOT mark any Todoist tasks as complete — only the user does that
 - Do NOT delete or modify any calendar events
+- Do NOT run any git commands
 - Keep estimates and guesses clearly labelled as estimates
