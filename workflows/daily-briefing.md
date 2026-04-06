@@ -62,9 +62,6 @@ Save a markdown version to `output/daily-briefing-YYYY-MM-DD.md` with these sect
 ### Due Today
 - [Task title] 🟡
 
-### Upcoming
-- [Task title] (Due: [date])
-
 ### No Due Date
 - [Task title]
 
@@ -115,10 +112,6 @@ Construct the email body as HTML. Use inline CSS only (no external stylesheets).
           [If due today:]
           <p style="margin:12px 0 6px;font-size:11px;font-weight:700;text-transform:uppercase;color:#e67e22;letter-spacing:0.5px;">Due Today</p>
           [For each: <p style="margin:0 0 6px;padding:8px 12px;background:#fffaf0;border-left:3px solid #f39c12;border-radius:4px;font-size:14px;color:#333;">[Title]</p>]
-
-          [If upcoming:]
-          <p style="margin:12px 0 6px;font-size:11px;font-weight:700;text-transform:uppercase;color:#27ae60;letter-spacing:0.5px;">Upcoming</p>
-          [For each: <p style="margin:0 0 6px;padding:8px 12px;background:#f0fff4;border-left:3px solid #2ecc71;border-radius:4px;font-size:14px;color:#333;">[Title] <span style="color:#888;font-size:12px;">[due date]</span></p>]
 
           [If no due date:]
           <p style="margin:12px 0 6px;font-size:11px;font-weight:700;text-transform:uppercase;color:#888;letter-spacing:0.5px;">No Due Date</p>
