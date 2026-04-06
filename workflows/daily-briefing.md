@@ -13,18 +13,18 @@ Use ToolSearch to load the Todoist MCP tool before proceeding:
 Note today's date and tomorrow's date in YYYY-MM-DD format.
 
 ### 3. Fetch calendar events via ICS
-Run the following bash command to fetch the calendar:
+Run both commands and combine the results:
 ```bash
 curl -s "$GCAL_ICS_URL"
+curl -s "$GCAL_ICS_URL_2"
 ```
-Parse the ICS output to extract VEVENT blocks. For each event extract:
+Parse the ICS output from both calendars to extract VEVENT blocks. For each event extract:
 - SUMMARY (title)
 - DTSTART (start time)
 - DTEND (end time)
 - DESCRIPTION (optional)
 
-Filter events to only those occurring **today** or **tomorrow**.
-Sort by start time within each day.
+Merge events from both calendars, filter to only those occurring **today** or **tomorrow**, deduplicate by title+time, and sort by start time within each day.
 
 ### 4. Fetch all pending Todoist tasks
 Call `mcp__todoist__find-tasks` to retrieve all incomplete tasks across all projects.
