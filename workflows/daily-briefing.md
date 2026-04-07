@@ -5,44 +5,45 @@ Generate a concise daily briefing every morning covering the user's calendar and
 
 ## Steps
 
-### 1. Import MCP connector
-Use ToolSearch to load the Todoist MCP tool before proceeding:
+### 1. Import MCP connectors
+Use ToolSearch to load all required MCP tools before proceeding:
 - Search `"todoist find-tasks"` to import the Todoist connector
+- Search `"gcal_list_events"` to import the Google Calendar connector
+- Search `"gmail_create_draft"` to import the Gmail connector
 
 ### 2. Get today's date
-Note today's date and tomorrow's date in YYYY-MM-DD format.
+Note today's date and the date 28 days from now in YYYY-MM-DD format.
 
-### 3. Fetch calendar events via ICS
-Run both commands and combine the results:
-```bash
-curl -s "$GCAL_ICS_URL"
-curl -s "$GCAL_ICS_URL_2"
-```
-Parse the ICS output from both calendars to extract VEVENT blocks. For each event extract:
-- SUMMARY (title)
-- DTSTART (start time)
-- DTEND (end time)
-- DESCRIPTION (optional)
+### 3. Fetch today's calendar events
+Call `mcp__google-calendar__gcal_list_events` with:
+- calendarId: `primary`
+- timeMin: today at 00:00:00
+- timeMax: today at 23:59:59
+- timeZone: Europe/Dublin
 
-Merge events from both calendars and deduplicate by title+time. Split into two groups:
+### 4. Fetch upcoming notable events (next 4 weeks)
+Call `mcp__google-calendar__gcal_list_events` with:
+- calendarId: `primary`
+- timeMin: tomorrow at 00:00:00
+- timeMax: 28 days from now at 23:59:59
+- timeZone: Europe/Dublin
+- maxResults: 50
 
-**Group A — Today:** all events occurring today, sorted by start time.
-
-**Group B — Upcoming (next 4 weeks):** events from tomorrow through 28 days from now. Filter to only **notable** events — exclude:
-- All-day events that are just date markers or reminders (e.g. "Birthday", "Holiday", single-word all-day blocks)
-- Recurring daily events (e.g. daily standups, lunch blocks)
+Filter to only **notable** events — exclude:
+- All-day events that are just date markers (birthdays, public holidays)
+- Recurring daily events (daily standups, lunch blocks)
 - Events under 15 minutes
 
-Keep: meetings with other people, appointments, deadlines, one-off events, multi-day events. List chronologically, max 10 events. Show the date and time for each.
+Keep: meetings with attendees, appointments, deadlines, one-off events, multi-day events. Take the top 10 chronologically.
 
-### 4. Fetch Inbox tasks from Todoist
+### 5. Fetch Inbox tasks from Todoist
 Call `mcp__todoist__find-tasks` with `projectId: "inbox"` to retrieve only incomplete Inbox tasks.
 - Include task priority and due date where available
 - Order by: overdue first, then by priority (p1 → p4), then by due date
 - Do NOT include tasks from any named projects
 
-### 5. Format the markdown report
-Save a markdown version to `output/daily-briefing-YYYY-MM-DD.md` with these sections:
+### 6. Format the markdown report
+Save to `output/daily-briefing-YYYY-MM-DD.md`:
 
 ```
 # Daily Briefing — [DATE]
@@ -53,7 +54,7 @@ Save a markdown version to `output/daily-briefing-YYYY-MM-DD.md` with these sect
 
 ## Coming Up (next 4 weeks)
 - [DAY DATE, TIME] — [Event Title]
-- (If no notable events: "Nothing notable in the next 4 weeks")
+- (If none: "Nothing notable in the next 4 weeks")
 
 ## Inbox Tasks
 ### Overdue
@@ -69,8 +70,8 @@ Save a markdown version to `output/daily-briefing-YYYY-MM-DD.md` with these sect
 - [Task title] (~[X] min)
 ```
 
-### 6. Build the HTML email
-Construct the email body as HTML. Use inline CSS only (no external stylesheets). Follow this structure and style:
+### 7. Build the HTML email
+Construct the email body as HTML with inline CSS only. Use this structure:
 
 ```html
 <!DOCTYPE html>
@@ -97,7 +98,7 @@ Construct the email body as HTML. Use inline CSS only (no external stylesheets).
         <!-- Coming Up -->
         <tr><td style="padding:20px 32px 0;">
           <h2 style="margin:0 0 12px;font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#1a1a2e;">🗓 Coming Up</h2>
-          [For each notable upcoming event in next 4 weeks: <p style="margin:0 0 8px;padding:10px 14px;background:#f0f4ff;border-left:3px solid #4a6fa5;border-radius:4px;font-size:14px;color:#333;"><strong>[Mon 7 Apr, 14:00]</strong> — [Title]</p>]
+          [For each notable upcoming event: <p style="margin:0 0 8px;padding:10px 14px;background:#f0f4ff;border-left:3px solid #4a6fa5;border-radius:4px;font-size:14px;color:#333;"><strong>[Mon 7 Apr, 14:00]</strong> — [Title]</p>]
           [If none: <p style="margin:0;color:#999;font-size:14px;font-style:italic;">Nothing notable in the next 4 weeks</p>]
         </td></tr>
 
@@ -105,7 +106,7 @@ Construct the email body as HTML. Use inline CSS only (no external stylesheets).
         <tr><td style="padding:20px 32px 0;">
           <h2 style="margin:0 0 12px;font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#1a1a2e;">✅ Inbox Tasks</h2>
 
-          [If overdue tasks exist:]
+          [If overdue:]
           <p style="margin:0 0 6px;font-size:11px;font-weight:700;text-transform:uppercase;color:#c0392b;letter-spacing:0.5px;">Overdue</p>
           [For each: <p style="margin:0 0 6px;padding:8px 12px;background:#fff5f5;border-left:3px solid #e74c3c;border-radius:4px;font-size:14px;color:#333;">[Title] <span style="color:#e74c3c;font-size:12px;">[due date]</span></p>]
 
@@ -126,7 +127,7 @@ Construct the email body as HTML. Use inline CSS only (no external stylesheets).
         </td></tr>
 
         <!-- Footer -->
-        <tr><td style="padding:24px 32px;margin-top:8px;border-top:1px solid #eee;">
+        <tr><td style="padding:24px 32px;border-top:1px solid #eee;">
           <p style="margin:0;color:#aaa;font-size:12px;text-align:center;">Generated by your Daily Briefing Agent</p>
         </td></tr>
 
@@ -137,32 +138,18 @@ Construct the email body as HTML. Use inline CSS only (no external stylesheets).
 </html>
 ```
 
-### 7. Send via Gmail (SMTP)
-Write the email to `/tmp/briefing_email.txt` using MIME format:
+### 8. Send via Gmail MCP
+Call `mcp__gmail__gmail_create_draft` with:
+- to: the user's Gmail address (fetch via `mcp__gmail__gmail_get_profile` if needed)
+- subject: `Daily Briefing — [WEEKDAY, DATE]`
+- body: the full HTML from step 7
+- mimeType: `text/html`
 
-```
-From: ${GMAIL_ADDRESS}
-To: ${GMAIL_ADDRESS}
-Subject: Daily Briefing — [WEEKDAY, DATE]
-MIME-Version: 1.0
-Content-Type: text/html; charset=utf-8
+If the draft is created successfully, also call `mcp__gmail__gmail_send_draft` to send it immediately if that tool is available. Otherwise the draft will be ready in Gmail.
 
-[HTML email content from step 6]
-```
+If Gmail fails entirely, note it in the saved file but do not stop.
 
-Then send:
-```bash
-curl --ssl-reqd \
-  --url 'smtps://smtp.gmail.com:465' \
-  --user "${GMAIL_ADDRESS}:${GMAIL_APP_PASSWORD}" \
-  --mail-from "${GMAIL_ADDRESS}" \
-  --mail-rcpt "${GMAIL_ADDRESS}" \
-  --upload-file /tmp/briefing_email.txt
-```
-
-If the send fails, note it in the saved file but do not stop.
-
-### 8. Confirm completion
+### 9. Confirm completion
 Output: `Briefing saved to output/daily-briefing-YYYY-MM-DD.md`
 
 ## Constraints
