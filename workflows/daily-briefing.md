@@ -146,7 +146,7 @@ Construct the email body as HTML with inline CSS only:
 ```
 
 ### 8. Send via Gmail MCP
-First call `mcp__gmail__gmail_get_profile` to get the user's email address.
+Call `mcp__gmail__gmail_get_profile` to get the user's email address.
 Then call `mcp__gmail__gmail_send` with:
 - to: the email address from above
 - subject: `Daily Briefing — [WEEKDAY, DATE]`
