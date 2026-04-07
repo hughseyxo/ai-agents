@@ -9,7 +9,7 @@ Generate a concise daily briefing every morning covering the user's calendar and
 Use ToolSearch to load all required MCP tools before proceeding:
 - Search `"todoist find-tasks"` to import the Todoist connector
 - Search `"gcal_list_events"` to import the Google Calendar connector
-- Search `"gmail_create_draft"` to import the Gmail connector
+- Search `"gmail_send"` to import the Gmail connector
 
 ### 2. Get today's date
 Note today's date and the date 28 days from now in YYYY-MM-DD format.
@@ -19,14 +19,14 @@ Call `mcp__google-calendar__gcal_list_events` with:
 - calendarId: `primary`
 - timeMin: today at 00:00:00
 - timeMax: today at 23:59:59
-- timeZone: Europe/Dublin
+- timeZone: `Europe/Dublin`
 
 ### 4. Fetch upcoming notable events (next 4 weeks)
 Call `mcp__google-calendar__gcal_list_events` with:
 - calendarId: `primary`
 - timeMin: tomorrow at 00:00:00
 - timeMax: 28 days from now at 23:59:59
-- timeZone: Europe/Dublin
+- timeZone: `Europe/Dublin`
 - maxResults: 50
 
 Filter to only **notable** events — exclude:
@@ -34,7 +34,7 @@ Filter to only **notable** events — exclude:
 - Recurring daily events (daily standups, lunch blocks)
 - Events under 15 minutes
 
-Keep: meetings with attendees, appointments, deadlines, one-off events, multi-day events. Take the top 10 chronologically.
+Keep: meetings with attendees, appointments, deadlines, one-off events. Top 10 chronologically.
 
 ### 5. Fetch Inbox tasks from Todoist
 Call `mcp__todoist__find-tasks` with `projectId: "inbox"` to retrieve only incomplete Inbox tasks.
@@ -63,6 +63,9 @@ Save to `output/daily-briefing-YYYY-MM-DD.md`:
 ### Due Today
 - [Task title] 🟡
 
+### Upcoming
+- [Task title] (Due: [date])
+
 ### No Due Date
 - [Task title]
 
@@ -71,7 +74,7 @@ Save to `output/daily-briefing-YYYY-MM-DD.md`:
 ```
 
 ### 7. Build the HTML email
-Construct the email body as HTML with inline CSS only. Use this structure:
+Construct the email body as HTML with inline CSS only:
 
 ```html
 <!DOCTYPE html>
@@ -114,6 +117,10 @@ Construct the email body as HTML with inline CSS only. Use this structure:
           <p style="margin:12px 0 6px;font-size:11px;font-weight:700;text-transform:uppercase;color:#e67e22;letter-spacing:0.5px;">Due Today</p>
           [For each: <p style="margin:0 0 6px;padding:8px 12px;background:#fffaf0;border-left:3px solid #f39c12;border-radius:4px;font-size:14px;color:#333;">[Title]</p>]
 
+          [If upcoming:]
+          <p style="margin:12px 0 6px;font-size:11px;font-weight:700;text-transform:uppercase;color:#27ae60;letter-spacing:0.5px;">Upcoming</p>
+          [For each: <p style="margin:0 0 6px;padding:8px 12px;background:#f0fff4;border-left:3px solid #2ecc71;border-radius:4px;font-size:14px;color:#333;">[Title] <span style="color:#888;font-size:12px;">[due date]</span></p>]
+
           [If no due date:]
           <p style="margin:12px 0 6px;font-size:11px;font-weight:700;text-transform:uppercase;color:#888;letter-spacing:0.5px;">No Due Date</p>
           [For each: <p style="margin:0 0 6px;padding:8px 12px;background:#fafafa;border-left:3px solid #ccc;border-radius:4px;font-size:14px;color:#333;">[Title]</p>]
@@ -139,15 +146,14 @@ Construct the email body as HTML with inline CSS only. Use this structure:
 ```
 
 ### 8. Send via Gmail MCP
-Call `mcp__gmail__gmail_create_draft` with:
-- to: the user's Gmail address (fetch via `mcp__gmail__gmail_get_profile` if needed)
+First call `mcp__gmail__gmail_get_profile` to get the user's email address.
+Then call `mcp__gmail__gmail_send` with:
+- to: the email address from above
 - subject: `Daily Briefing — [WEEKDAY, DATE]`
 - body: the full HTML from step 7
 - mimeType: `text/html`
 
-If the draft is created successfully, also call `mcp__gmail__gmail_send_draft` to send it immediately if that tool is available. Otherwise the draft will be ready in Gmail.
-
-If Gmail fails entirely, note it in the saved file but do not stop.
+If Gmail fails, note it in the saved file but do not stop.
 
 ### 9. Confirm completion
 Output: `Briefing saved to output/daily-briefing-YYYY-MM-DD.md`

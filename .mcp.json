@@ -8,12 +8,22 @@
       }
     },
     "google-calendar": {
-      "type": "http",
-      "url": "https://gcal.mcp.claude.com/mcp"
+      "type": "stdio",
+      "command": "python3",
+      "args": ["mcp-servers/calendar_server.py"],
+      "env": {
+        "GOOGLE_CLIENT_ID": "${GOOGLE_CLIENT_ID}",
+        "GOOGLE_CLIENT_SECRET": "${GOOGLE_CLIENT_SECRET}"
+      }
     },
     "gmail": {
-      "type": "http",
-      "url": "https://gmail.mcp.claude.com/mcp"
+      "type": "stdio",
+      "command": "python3",
+      "args": ["mcp-servers/gmail_server.py"],
+      "env": {
+        "GOOGLE_CLIENT_ID": "${GOOGLE_CLIENT_ID}",
+        "GOOGLE_CLIENT_SECRET": "${GOOGLE_CLIENT_SECRET}"
+      }
     }
   }
 }
