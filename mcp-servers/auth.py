@@ -31,8 +31,12 @@ def request_device_code():
         data=data,
         headers={"Content-Type": "application/x-www-form-urlencoded"},
     )
-    with urllib.request.urlopen(req) as resp:
-        return json.loads(resp.read())
+    try:
+        with urllib.request.urlopen(req) as resp:
+            return json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        body = e.read()
+        raise RuntimeError(f"Device code request failed {e.code}: {body}")
 
 
 def poll_for_token(device_code, interval):
