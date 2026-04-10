@@ -21,20 +21,31 @@ Call `mcp__google-calendar__gcal_list_events` with:
 - timeMax: today at 23:59:59
 - timeZone: `Europe/Dublin`
 
-### 4. Fetch upcoming notable events (next 4 weeks)
-Call `mcp__google-calendar__gcal_list_events` with:
-- calendarId: `primary`
-- timeMin: tomorrow at 00:00:00
-- timeMax: 28 days from now at 23:59:59
+### 4. Fetch upcoming events (next 30 days)
+Make three parallel calls to `mcp__google-calendar__gcal_list_events`:
+
+**Call A — Primary calendar:**
+- calendarId: `cianohughes@gmail.com`
+- timeMin: tomorrow 00:00:00
+- timeMax: 30 days from now 23:59:59
 - timeZone: `Europe/Dublin`
 - maxResults: 50
 
-Filter to only **notable** events — exclude:
-- All-day events that are just date markers (birthdays, public holidays)
-- Recurring daily events (daily standups, lunch blocks)
-- Events under 15 minutes
+**Call B — On-call calendar:**
+- calendarId: `8ubfqbcooeks9np5aufgu7g3mm0gj1rh@import.calendar.google.com`
+- timeMin: tomorrow 00:00:00
+- timeMax: 30 days from now 23:59:59
+- timeZone: `Europe/Dublin`
+- maxResults: 50
 
-Keep: meetings with attendees, appointments, deadlines, one-off events. Top 10 chronologically.
+From **Call A**, filter to notable events only — exclude all-day date markers, recurring daily events, events under 15 min. Keep meetings, appointments, one-off events.
+
+From **Call B**, include ALL on-call shifts — label each one clearly as `[ON CALL]`.
+
+Merge both lists, sort chronologically, cap at 15 events total.
+
+**Call C — Todoist upcoming tasks:**
+Use `mcp__todoist__find-tasks` with `projectId: "inbox"` — filter to tasks with a due date within the next 30 days. Include these in the Coming Up section labelled as `[TASK]`.
 
 ### 5. Fetch Inbox tasks from Todoist
 Call `mcp__todoist__find-tasks` with `projectId: "inbox"` to retrieve only incomplete Inbox tasks.
@@ -52,10 +63,6 @@ Save to `output/daily-briefing-YYYY-MM-DD.md`:
 - [TIME] — [Event Title]
 - (If no events: "No events scheduled today")
 
-## Coming Up (next 4 weeks)
-- [DAY DATE, TIME] — [Event Title]
-- (If none: "Nothing notable in the next 4 weeks")
-
 ## Inbox Tasks
 ### Overdue
 - [Task title] (Due: [date]) 🔴
@@ -71,6 +78,11 @@ Save to `output/daily-briefing-YYYY-MM-DD.md`:
 
 ## Quick Wins (estimated < 30 min)
 - [Task title] (~[X] min)
+
+## Coming Up (next 30 days)
+- [DATE] — [Event Title]              (calendar events)
+- [DATE] — [ON CALL] On-Call Shift    (on-call shifts)
+- [DATE] — [TASK] [Task title]        (Todoist tasks)
 ```
 
 ### 7. Build the HTML email
@@ -96,13 +108,6 @@ Construct the email body as HTML with inline CSS only:
           <h2 style="margin:0 0 12px;font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#1a1a2e;">📅 Today</h2>
           [For each event: <p style="margin:0 0 8px;padding:10px 14px;background:#f0f4ff;border-left:3px solid #4a6fa5;border-radius:4px;font-size:14px;color:#333;"><strong>[TIME]</strong> — [Title]</p>]
           [If no events: <p style="margin:0;color:#999;font-size:14px;font-style:italic;">No events today</p>]
-        </td></tr>
-
-        <!-- Coming Up -->
-        <tr><td style="padding:20px 32px 0;">
-          <h2 style="margin:0 0 12px;font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#1a1a2e;">🗓 Coming Up</h2>
-          [For each notable upcoming event: <p style="margin:0 0 8px;padding:10px 14px;background:#f0f4ff;border-left:3px solid #4a6fa5;border-radius:4px;font-size:14px;color:#333;"><strong>[Mon 7 Apr, 14:00]</strong> — [Title]</p>]
-          [If none: <p style="margin:0;color:#999;font-size:14px;font-style:italic;">Nothing notable in the next 4 weeks</p>]
         </td></tr>
 
         <!-- Inbox Tasks -->
@@ -131,6 +136,15 @@ Construct the email body as HTML with inline CSS only:
           <h2 style="margin:0 0 12px;font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#1a1a2e;">⚡ Quick Wins</h2>
           [For each: <p style="margin:0 0 6px;padding:8px 12px;background:#fafafa;border-radius:4px;font-size:14px;color:#333;">[Title] <span style="color:#888;font-size:12px;">~[X] min</span></p>]
           [If none: omit this section]
+        </td></tr>
+
+        <!-- Coming Up -->
+        <tr><td style="padding:20px 32px 0;">
+          <h2 style="margin:0 0 12px;font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#1a1a2e;">📆 Coming Up</h2>
+          [For each calendar event: <p style="margin:0 0 6px;padding:8px 12px;background:#f0f4ff;border-left:3px solid #4a6fa5;border-radius:4px;font-size:14px;color:#333;"><strong>[DATE]</strong> — [Title]</p>]
+          [For each on-call shift: <p style="margin:0 0 6px;padding:8px 12px;background:#fff8f0;border-left:3px solid #e67e22;border-radius:4px;font-size:14px;color:#333;"><strong>[DATE]</strong> — <span style="color:#e67e22;font-weight:700;">[ON CALL]</span> On-Call Shift</p>]
+          [For each Todoist task: <p style="margin:0 0 6px;padding:8px 12px;background:#f0fff4;border-left:3px solid #2ecc71;border-radius:4px;font-size:14px;color:#333;"><strong>[DATE]</strong> — <span style="color:#27ae60;font-weight:700;">[TASK]</span> [Title]</p>]
+          [All sorted chronologically, max 15 entries total]
         </td></tr>
 
         <!-- Footer -->
