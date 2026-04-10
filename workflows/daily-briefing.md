@@ -19,7 +19,7 @@ Call `mcp__google-calendar__gcal_list_events` with:
 - calendarId: `primary`
 - timeMin: today at 00:00:00
 - timeMax: today at 23:59:59
-- timeZone: `Europe/Dublin`
+- timeZone: `Europe/Berlin`
 
 ### 4. Fetch upcoming events (next 30 days)
 Make three parallel calls to `mcp__google-calendar__gcal_list_events`:
@@ -28,14 +28,14 @@ Make three parallel calls to `mcp__google-calendar__gcal_list_events`:
 - calendarId: `cianohughes@gmail.com`
 - timeMin: tomorrow 00:00:00
 - timeMax: 30 days from now 23:59:59
-- timeZone: `Europe/Dublin`
+- timeZone: `Europe/Berlin`
 - maxResults: 50
 
 **Call B — On-call calendar:**
 - calendarId: `8ubfqbcooeks9np5aufgu7g3mm0gj1rh@import.calendar.google.com`
 - timeMin: tomorrow 00:00:00
 - timeMax: 30 days from now 23:59:59
-- timeZone: `Europe/Dublin`
+- timeZone: `Europe/Berlin`
 - maxResults: 50
 
 From **Call A**, filter to notable events only — exclude all-day date markers, recurring daily events, events under 15 min. Keep meetings, appointments, one-off events.
