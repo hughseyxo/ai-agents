@@ -1,0 +1,29 @@
+{
+  "mcpServers": {
+    "todoist": {
+      "type": "http",
+      "url": "https://ai.todoist.net/mcp",
+      "headers": {
+        "Authorization": "Bearer ${TODOIST_API_TOKEN}"
+      }
+    },
+    "gmail": {
+      "type": "stdio",
+      "command": "python3",
+      "args": ["mcp-servers/gmail_server.py"],
+      "env": {
+        "GOOGLE_CLIENT_ID": "${GOOGLE_CLIENT_ID}",
+        "GOOGLE_CLIENT_SECRET": "${GOOGLE_CLIENT_SECRET}"
+      }
+    },
+    "google-calendar": {
+      "type": "stdio",
+      "command": "python3",
+      "args": ["mcp-servers/calendar_server.py"],
+      "env": {
+        "GOOGLE_CLIENT_ID": "${GOOGLE_CLIENT_ID}",
+        "GOOGLE_CLIENT_SECRET": "${GOOGLE_CLIENT_SECRET}"
+      }
+    }
+  }
+}

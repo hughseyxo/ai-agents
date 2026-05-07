@@ -1,1 +1,6 @@
 .claude/
+output/*
+!output/.gitkeep
+.env
+credentials.json
+mcp-servers/__pycache__/
