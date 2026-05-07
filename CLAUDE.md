@@ -57,8 +57,8 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 - Entrypoint shell scripts (`run-*.sh`) invoke Claude Code headlessly with a workflow
 
 # Plant Watering Tracker
-- Data lives in `~/plants.json`; CLI tool is `plant.sh` (add/list/remove)
-- Daily briefing checks plants and creates Todoist reminders automatically
+- Data lives in `data/agents.db` (SQLite state table); CLI tool is `plant.sh` (add/list/remove)
+- Daily briefing agent checks plants and creates Todoist reminders automatically
 - **When adding a plant without an explicit frequency:** search the web for recommended indoor watering cadence, check at least 3 sources, and use the consensus value. Do NOT default to 7 days.
 
 # Available MCP Integrations

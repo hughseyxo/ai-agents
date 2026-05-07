@@ -12,7 +12,6 @@ from pathlib import Path
 from .base import BaseAgent, REPO_ROOT
 
 PERSONAL_PROJECT_ID = "6Crf3cH2RF5v86wc"
-PLANTS_JSON = Path.home() / "plants.json"
 
 
 class DailyBriefingAgent(BaseAgent):
@@ -42,14 +41,9 @@ class DailyBriefingAgent(BaseAgent):
 
     def _check_plants(self):
         """Calculate watering schedule and return plant data + any new tasks to create."""
-        # Read from SQLite state, fall back to plants.json
         plants = self.get_state("plants")
         if plants is None:
-            if PLANTS_JSON.exists():
-                plants = json.loads(PLANTS_JSON.read_text())
-                self.set_state("plants", plants)
-            else:
-                return {"plants": [], "tasks_to_create": []}
+            return {"plants": [], "tasks_to_create": []}
 
         today = datetime.now(timezone.utc).date()
         upcoming_watering = []
@@ -77,8 +71,6 @@ class DailyBriefingAgent(BaseAgent):
 
         if updated:
             self.set_state("plants", plants)
-            if PLANTS_JSON.exists():
-                PLANTS_JSON.write_text(json.dumps(plants, indent=2) + "\n")
 
         return {"plants": upcoming_watering, "tasks_to_create": tasks_to_create}
 
