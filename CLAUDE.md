@@ -35,11 +35,11 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 ├── output/             # Finished deliverables (reports, drafts, analysis)
 ├── scripts/            # Shell helper scripts (e.g. Google token check)
 ├── skills/             # Claude Code custom skills (e.g. mealsave)
-├── mcp-servers/        # Custom MCP servers (calendar, gmail auth, shared OAuth)
+├── mcp-servers/        # Custom MCP servers (calendar, gmail auth)
 ├── docs/               # Design docs and architecture specs
 ├── plant.sh            # CLI tool: manage plant watering tracker (add/list/remove)
 ├── run-agent.sh        # Single entrypoint for all agents
-├── run-*.sh            # Legacy entrypoint scripts (being replaced by run-agent.sh)
+├── run-news-briefing.sh # Legacy entrypoint (news briefing not yet migrated to agent)
 └── credentials.json    # Google OAuth credentials (DO NOT commit secrets)
 ```
 
