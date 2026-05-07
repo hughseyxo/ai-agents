@@ -4,3 +4,5 @@ output/*
 .env
 credentials.json
 mcp-servers/__pycache__/
+agents/__pycache__/
+data/agents.db

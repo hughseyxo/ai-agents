@@ -1,0 +1,9 @@
+#!/usr/bin/env zsh
+source /home/cian/git/ai-agents/.env
+export TODOIST_API_TOKEN GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET
+cd /home/cian/git/ai-agents
+
+# Pre-flight: refresh Google OAuth token
+source scripts/check-google-token.sh || { echo "Skipping agent due to token failure"; exit 1; }
+
+python3 -m agents "$@"

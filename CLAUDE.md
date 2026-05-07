@@ -20,24 +20,41 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 
 # Project Structure
 ```
-├── workflows/          # Plain-english recipe files the agent follows
-│   ├── daily-briefing.md       # Morning briefing: calendar + tasks + weather + news + plant watering
+├── agents/             # Python agent framework (replacing workflows)
+│   ├── base.py                 # BaseAgent class — lifecycle, retry, state
+│   ├── db.py                   # SQLite wrapper (AgentDB)
+│   ├── runner.py               # CLI: python3 -m agents <command>
+│   ├── daily_briefing.py       # Daily briefing agent
+│   └── prompts/                # Claude CLI synthesis prompt templates
+│       └── daily_briefing.md
+├── workflows/          # Legacy workflow files (being migrated to agents)
+│   ├── daily-briefing.md       # Morning briefing (legacy — see agents/daily_briefing.py)
 │   ├── news-briefing.md        # Combined news + tech + gaming + SRE briefing
 │   └── free-time-advisor.md    # Suggests activities based on schedule/weather
+├── data/               # SQLite database (gitignored)
 ├── output/             # Finished deliverables (reports, drafts, analysis)
 ├── scripts/            # Shell helper scripts (e.g. Google token check)
 ├── skills/             # Claude Code custom skills (e.g. mealsave)
-├── mcp-servers/        # Custom MCP servers (calendar, gmail auth)
+├── mcp-servers/        # Custom MCP servers (calendar, gmail auth, shared OAuth)
+├── docs/               # Design docs and architecture specs
 ├── plant.sh            # CLI tool: manage plant watering tracker (add/list/remove)
-├── run-*.sh            # Entrypoint scripts for scheduled agent runs
+├── run-agent.sh        # Single entrypoint for all agents
+├── run-*.sh            # Legacy entrypoint scripts (being replaced by run-agent.sh)
 └── credentials.json    # Google OAuth credentials (DO NOT commit secrets)
 ```
 
-# Workflow Conventions
+# Agent Conventions
+- Agents are Python classes in `agents/` extending `BaseAgent`
+- Execution model: Python handles lifecycle, state (SQLite), retry, dedup, and deterministic logic (e.g. plant watering). Claude CLI (with MCP tools) handles data fetching, formatting, and email sending.
+- Run via: `run-agent.sh <agent-name>` or `python3 -m agents <agent-name>`
+- Each agent declares its own cron schedule; `python3 -m agents install-cron` writes crontab entries
+- Agent state lives in `data/agents.db` (SQLite) — never store secrets there
+- MCP servers (Todoist, Calendar, Gmail) are used via Claude CLI, not called directly from Python
+
+# Workflow Conventions (Legacy)
 - Workflows are markdown files in `workflows/` describing steps in plain English
-- They reference MCP tools (Todoist, Google Calendar, Gmail) by name
+- Being migrated to agents — see `docs/2026-05-07-agent-architecture-design.md`
 - Entrypoint shell scripts (`run-*.sh`) invoke Claude Code headlessly with a workflow
-- New workflows follow the same pattern: markdown recipe + shell entrypoint
 
 # Plant Watering Tracker
 - Data lives in `~/plants.json`; CLI tool is `plant.sh` (add/list/remove)
