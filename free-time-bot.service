@@ -1,0 +1,14 @@
+[Unit]
+Description=Free Time Telegram Bot
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/cian/git/ai-agents
+EnvironmentFile=/home/cian/git/ai-agents/.env
+ExecStart=/usr/bin/python3 /home/cian/git/ai-agents/free_time_bot.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

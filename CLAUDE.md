@@ -37,6 +37,7 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 │   └── free-time/              # Suggest best tasks for a free time window
 ├── mcp-servers/        # Custom MCP servers (calendar, gmail auth)
 ├── docs/               # Design docs and architecture specs
+├── free_time_bot.py    # Telegram bot: free-time task advisor (systemd service)
 ├── plant.sh            # CLI tool: manage plant watering tracker (add/list/remove)
 ├── run-agent.sh        # Single entrypoint for all agents
 └── credentials.json    # Google OAuth credentials (DO NOT commit secrets)
