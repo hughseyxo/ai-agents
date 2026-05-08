@@ -5,7 +5,7 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 # Token Efficiency Rules
 - **Be terse.** Short answers, no filler, no restating what I said.
 - **Don't explore what's documented here.** This file IS the map — don't glob/grep to rediscover project structure.
-- **Don't read workflow files unless editing them.** The summaries below are enough for context.
+- **Don't read skill files unless editing them.** The summaries below are enough for context.
 - **Don't read MCP server source unless debugging them.** Tool names are discoverable via MCP; the code is auth/plumbing.
 - **Skip preamble.** No "Let me...", "I'll now...", "Great question!" — just do the thing.
 - **One-shot edits.** Read a file once, make all changes, move on. Don't re-read to verify unless the edit is high-risk.
@@ -29,12 +29,12 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 │   └── prompts/                # Claude CLI synthesis prompt templates
 │       ├── daily_briefing.md
 │       └── news_briefing.md
-├── workflows/          # Legacy workflow files (reference only, migrated to agents)
-│   └── free-time-advisor.md    # Suggests activities based on schedule/weather (not yet migrated)
 ├── data/               # SQLite database (gitignored)
 ├── output/             # Finished deliverables (reports, drafts, analysis)
 ├── scripts/            # Shell helper scripts (e.g. Google token check)
-├── skills/             # Claude Code custom skills (e.g. mealsave)
+├── skills/             # Claude Code custom skills
+│   ├── mealsave/               # Save recipes to Mealie instance
+│   └── free-time/              # Suggest best tasks for a free time window
 ├── mcp-servers/        # Custom MCP servers (calendar, gmail auth)
 ├── docs/               # Design docs and architecture specs
 ├── plant.sh            # CLI tool: manage plant watering tracker (add/list/remove)
@@ -52,9 +52,10 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 - Agents log operational notes (feed failures, API quirks, unexpected behavior) to `docs/agent-notes.md` (gitignored) to save tokens on future runs
 - All cron schedules target 7:00 AM Amsterdam time (CEST = UTC+2, so 05:00 UTC)
 
-# Workflow Conventions (Legacy — mostly migrated)
-- Daily briefing and news briefing are now agents — legacy workflow files kept as reference
-- Only `free-time-advisor.md` remains unmigrated
+# Skills
+- Skills are Claude Code interactive commands in `skills/<name>/SKILL.md`
+- `mealsave` — save recipe URLs to Mealie (`/mealsave <url>`)
+- `free-time` — suggest best tasks for a free time window ("I have 30 minutes free")
 
 # Plant Watering Tracker
 - Data lives in `data/agents.db` (SQLite state table); CLI tool is `plant.sh` (add/list/remove)
