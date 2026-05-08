@@ -111,19 +111,23 @@ Create `agents/todoist.py`:
 
 ---
 
-## Phase 4: News Briefing Agent (future, not this session)
+## Phase 4: News Briefing Agent ✓ COMPLETE
 
-- Python for RSS fetching + retry + dedup via `seen` table
-- Claude CLI for article selection/summarization (needs LLM judgment)
-- Same pattern: `agents/news_briefing.py` extending `BaseAgent`
+- `agents/news_briefing.py` — single Claude CLI synthesis step for RSS fetch + format + email
+- `agents/prompts/news_briefing.md` — token-efficient prompt with 14 RSS feeds, section caps, HTML template
+- Dedup via `seen` table prevents double email sends
+- Registered in runner, crontab updated (05:00 UTC / 07:00 CEST)
+- Legacy `run-news-briefing.sh` and `workflows/news-briefing.md` deleted
 
 ---
 
-## Phase 5: Cleanup (after both agents migrated)
+## Phase 5: Cleanup ✓ MOSTLY COMPLETE
 
-- Delete `workflows/` directory
-- Delete old `run-*.sh` scripts
-- Update `CLAUDE.md` with new project structure
+- Deleted `workflows/daily-briefing.md`, `workflows/news-briefing.md`, `run-news-briefing.sh`
+- Updated `CLAUDE.md` with new project structure
+- `workflows/free-time-advisor.md` remains (not yet migrated to agent)
+- All cron entries managed via `python3 -m agents install-cron`
+- Schedules set to 7:00 AM Amsterdam time (05:00/05:05 UTC)
 
 ---
 

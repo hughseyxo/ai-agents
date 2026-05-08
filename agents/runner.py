@@ -19,6 +19,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 # Registry of all agents — import lazily to avoid circular imports
 AGENT_REGISTRY = {
     "daily-briefing": "agents.daily_briefing:DailyBriefingAgent",
+    "news-briefing": "agents.news_briefing:NewsBriefingAgent",
 }
 
 

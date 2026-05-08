@@ -24,13 +24,13 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 │   ├── base.py                 # BaseAgent class — lifecycle, retry, state
 │   ├── db.py                   # SQLite wrapper (AgentDB)
 │   ├── runner.py               # CLI: python3 -m agents <command>
-│   ├── daily_briefing.py       # Daily briefing agent
+│   ├── daily_briefing.py       # Daily briefing agent (schedule: 05:05 UTC / 07:05 CEST)
+│   ├── news_briefing.py        # News briefing agent (schedule: 05:00 UTC / 07:00 CEST)
 │   └── prompts/                # Claude CLI synthesis prompt templates
-│       └── daily_briefing.md
-├── workflows/          # Legacy workflow files (being migrated to agents)
-│   ├── daily-briefing.md       # Morning briefing (legacy — see agents/daily_briefing.py)
-│   ├── news-briefing.md        # Combined news + tech + gaming + SRE briefing
-│   └── free-time-advisor.md    # Suggests activities based on schedule/weather
+│       ├── daily_briefing.md
+│       └── news_briefing.md
+├── workflows/          # Legacy workflow files (reference only, migrated to agents)
+│   └── free-time-advisor.md    # Suggests activities based on schedule/weather (not yet migrated)
 ├── data/               # SQLite database (gitignored)
 ├── output/             # Finished deliverables (reports, drafts, analysis)
 ├── scripts/            # Shell helper scripts (e.g. Google token check)
@@ -39,7 +39,6 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 ├── docs/               # Design docs and architecture specs
 ├── plant.sh            # CLI tool: manage plant watering tracker (add/list/remove)
 ├── run-agent.sh        # Single entrypoint for all agents
-├── run-news-briefing.sh # Legacy entrypoint (news briefing not yet migrated to agent)
 └── credentials.json    # Google OAuth credentials (DO NOT commit secrets)
 ```
 
@@ -50,11 +49,12 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 - Each agent declares its own cron schedule; `python3 -m agents install-cron` writes crontab entries
 - Agent state lives in `data/agents.db` (SQLite) — never store secrets there
 - MCP servers (Todoist, Calendar, Gmail) are used via Claude CLI, not called directly from Python
+- Agents log operational notes (feed failures, API quirks, unexpected behavior) to `docs/agent-notes.md` (gitignored) to save tokens on future runs
+- All cron schedules target 7:00 AM Amsterdam time (CEST = UTC+2, so 05:00 UTC)
 
-# Workflow Conventions (Legacy)
-- Workflows are markdown files in `workflows/` describing steps in plain English
-- Being migrated to agents — see `docs/2026-05-07-agent-architecture-design.md`
-- Entrypoint shell scripts (`run-*.sh`) invoke Claude Code headlessly with a workflow
+# Workflow Conventions (Legacy — mostly migrated)
+- Daily briefing and news briefing are now agents — legacy workflow files kept as reference
+- Only `free-time-advisor.md` remains unmigrated
 
 # Plant Watering Tracker
 - Data lives in `data/agents.db` (SQLite state table); CLI tool is `plant.sh` (add/list/remove)
