@@ -39,7 +39,7 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 │   ├── plant_weather.py        # Weather-based watering adjustment logic (pure functions)
 │   ├── daily_briefing.py       # Daily briefing agent (schedule: 05:05 UTC / 07:05 CEST)
 │   ├── news_briefing.py        # News briefing agent (schedule: 05:00 UTC / 07:00 CEST)
-│   ├── security_audit.py       # Security audit agent — 16 checks: 12 system + 4 seedbox (schedule: Sunday 06:00 UTC / 08:00 CEST). Seedbox configs live in ~/git/yopflix (private repo).
+│   ├── security_audit.py       # Security audit agent — 18 checks: 12 system + 4 seedbox + 2 web (Cloudflare IP validation, Shodan InternetDB). Schedule: Sunday 06:00 UTC / 08:00 CEST. Seedbox configs live in ~/git/yopflix (private repo).
 │   └── prompts/                # LLM CLI synthesis prompt templates
 │       ├── daily_briefing.md
 │       └── news_briefing.md
@@ -54,7 +54,8 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 │   ├── test_synthesize.py      # Failover + prompt adaptation tests
 │   ├── test_weather.py         # Open-Meteo weather fetch tests
 │   ├── test_plant_weather.py   # Watering adjustment logic tests
-│   └── test_daily_briefing.py  # Daily briefing integration tests
+│   ├── test_daily_briefing.py  # Daily briefing integration tests
+│   └── test_security_audit.py  # Cloudflare IP + Shodan exposure tests
 ├── docs/               # Design docs (mandatory for non-trivial changes)
 │   ├── llm-failover.md         # Claude→Gemini failover design doc
 │   └── weather-aware-plant-watering.md  # Weather-based watering adjustments
@@ -67,7 +68,7 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 # Agent Conventions
 - Agents are Python classes in `agents/` extending `BaseAgent`
 - **Dual-CLI rule:** All agent Python code must be runnable by both Claude and Gemini CLI. No Claude-specific or Gemini-specific dependencies in Python. LLM-specific adaptations happen in `BaseAgent.synthesize()` only.
-- Execution model: Python handles lifecycle, state (SQLite), retry, dedup, and deterministic logic (e.g. plant watering, weather). LLM CLI (with MCP tools) handles data fetching, formatting, and email sending. Exception: `security_audit.py` is fully deterministic (subprocess only, no LLM CLI or MCP).
+- Execution model: Python handles lifecycle, state (SQLite), retry, dedup, and deterministic logic (e.g. plant watering, weather). LLM CLI (with MCP tools) handles data fetching, formatting, and email sending. Exception: `security_audit.py` is mostly deterministic (subprocess + web APIs for Cloudflare/Shodan checks, no LLM CLI or MCP).
 - **LLM failover:** `BaseAgent.synthesize()` tries Claude CLI first, falls back to Gemini CLI on infrastructure failure (rate limits, timeouts, quota). Prompts are adapted at runtime for Gemini (tool name remapping, ToolSearch stripping, WebFetch→curl). See `docs/llm-failover.md` for details.
 - Run via: `run-agent.sh <agent-name>` or `python3 -m agents <agent-name>`
 - Each agent declares its own cron schedule; `python3 -m agents install-cron` writes crontab entries

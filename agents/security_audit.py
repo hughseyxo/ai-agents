@@ -10,6 +10,8 @@ import os
 import re
 import subprocess
 import sys
+import urllib.error
+import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -67,6 +69,8 @@ class SecurityAuditAgent(BaseAgent):
             {"name": "tailscale_network", "fn": self._check_tailscale_network},
             {"name": "public_route_auth", "fn": self._check_public_route_auth},
             {"name": "git_secret_scan", "fn": self._check_git_secrets},
+            {"name": "cloudflare_ips", "fn": self._check_cloudflare_ips},
+            {"name": "shodan_exposure", "fn": self._check_shodan_exposure},
         ]
 
     def report(self) -> str:
@@ -1087,6 +1091,139 @@ class SecurityAuditAgent(BaseAgent):
             )
         else:
             self._pass("Git secret scan: no secrets found in unpushed changes across public repos")
+
+    # --- Check 17: Cloudflare IP range validation (web source) ---
+
+    def _check_cloudflare_ips(self):
+        """Fetch official Cloudflare IP ranges and validate UFW rules."""
+        try:
+            req = urllib.request.Request("https://api.cloudflare.com/client/v4/ips")
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read().decode())
+        except (urllib.error.URLError, OSError, json.JSONDecodeError):
+            self._pass("Cloudflare IPs: could not fetch ranges (network unavailable)")
+            return
+
+        if not data.get("success"):
+            self._pass("Cloudflare IPs: API returned error")
+            return
+
+        cf_ipv4 = data["result"]["ipv4_cidrs"]
+        cf_ipv6 = data["result"]["ipv6_cidrs"]
+
+        # Get UFW rules
+        ufw = _run(["sudo", "ufw", "status", "numbered"])
+        if ufw.returncode != 0:
+            return  # UFW not available — covered by firewall check
+
+        lines = ufw.stdout.splitlines()
+        http_anywhere = []
+        http_restricted = []
+
+        for line in lines:
+            # Look for 80 or 443 rules
+            if not any(p in line for p in ("80", "443")):
+                continue
+            if "ALLOW" not in line:
+                continue
+            if "Anywhere" in line:
+                http_anywhere.append(line.strip())
+            else:
+                http_restricted.append(line.strip())
+
+        if not http_anywhere and not http_restricted:
+            self._pass("Cloudflare IPs: no HTTP/HTTPS UFW rules to validate")
+            return
+
+        if http_anywhere:
+            cf_ranges_str = ", ".join(cf_ipv4[:5]) + f" (+ {len(cf_ipv4) - 5 + len(cf_ipv6)} more)"
+            self._finding(
+                severity="Medium",
+                check="Cloudflare IP validation",
+                detail=f"Ports 80/443 allow Anywhere — should be restricted to Cloudflare ranges: {cf_ranges_str}",
+                context="Current Cloudflare IPv4 ranges: " + ", ".join(cf_ipv4),
+                risk="Direct access bypasses Cloudflare DDoS protection and WAF rules",
+                impact="Restricting to Cloudflare IPs means direct IP access stops working (intended behavior)",
+                fix_commands=[
+                    "# Replace broad 80/443 rules with Cloudflare-only rules:",
+                    "sudo ufw delete allow 80/tcp",
+                    "sudo ufw delete allow 443/tcp",
+                ] + [f"sudo ufw allow from {cidr} to any port 80,443 proto tcp" for cidr in cf_ipv4],
+            )
+        else:
+            self._pass(f"Cloudflare IPs: HTTP/HTTPS rules restricted to specific ranges ({len(http_restricted)} rules)")
+
+    # --- Check 18: Shodan InternetDB exposure (web source) ---
+
+    def _check_shodan_exposure(self):
+        """Check what Shodan's InternetDB sees for our public IP."""
+        # Get public IP
+        try:
+            req = urllib.request.Request("https://api.ipify.org?format=json")
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                ip_data = json.loads(resp.read().decode())
+            public_ip = ip_data["ip"]
+        except (urllib.error.URLError, OSError, json.JSONDecodeError, KeyError):
+            self._pass("External exposure: could not determine public IP (network unavailable)")
+            return
+
+        # Query Shodan InternetDB (free, no auth)
+        try:
+            req = urllib.request.Request(f"https://internetdb.shodan.io/{public_ip}")
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read().decode())
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                self._pass("External exposure: server not found in Shodan (good — low profile)")
+                return
+            self._pass("External exposure: could not query Shodan InternetDB")
+            return
+        except (urllib.error.URLError, OSError, json.JSONDecodeError):
+            self._pass("External exposure: could not query Shodan InternetDB")
+            return
+
+        open_ports = set(data.get("ports", []))
+        vulns = data.get("vulns", [])
+        hostnames = data.get("hostnames", [])
+
+        issues = []
+        severity = "Medium"
+
+        # Check for known CVEs — always critical
+        if vulns:
+            cve_list = ", ".join(vulns[:10])
+            if len(vulns) > 10:
+                cve_list += f" (+ {len(vulns) - 10} more)"
+            issues.append(f"Shodan reports {len(vulns)} known CVE(s): {cve_list}")
+            severity = "Critical"
+
+        # Check for unexpected ports
+        expected = {80, 443}
+        unexpected = open_ports - expected
+        if unexpected:
+            # SSH externally visible is always high
+            if 22 in unexpected:
+                issues.append(f"SSH (port 22) is visible externally — should be Tailscale-only")
+                if severity != "Critical":
+                    severity = "High"
+            other = unexpected - {22}
+            if other:
+                issues.append(f"Unexpected ports visible externally: {sorted(other)}")
+                if severity not in ("Critical", "High"):
+                    severity = "Medium"
+
+        if issues:
+            self._finding(
+                severity=severity,
+                check="Shodan InternetDB exposure",
+                detail="; ".join(issues),
+                context=f"Shodan sees this server (IP: {public_ip}) with ports {sorted(open_ports)}"
+                        + (f", hostnames: {', '.join(hostnames)}" if hostnames else ""),
+                risk="Externally visible ports and CVEs are what attackers scan for — this is the attacker's view of your server",
+                impact="Unexpected ports should be blocked at UFW; CVEs require patching the affected service",
+            )
+        else:
+            self._pass(f"External exposure: Shodan sees only expected ports (80, 443) for {public_ip}")
 
     # --- Interactive fix mode ---
 
