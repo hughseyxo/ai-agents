@@ -5,9 +5,9 @@ DB_PATH="/home/cian/git/ai-agents/data/agents.db"
 
 usage() {
   echo "Usage:"
-  echo "  plant.sh add \"Name\" [frequency_days]   # default 7 days"
-  echo "  plant.sh list                           # show all plants + next water date"
-  echo "  plant.sh remove \"Name\"                  # remove plant (and close open Todoist task)"
+  echo "  plant.sh add \"Name\" [frequency_days] [--outdoor]   # default 7 days, indoor"
+  echo "  plant.sh list                                      # show all plants + next water date"
+  echo "  plant.sh remove \"Name\"                             # remove plant (and close open Todoist task)"
   exit 1
 }
 
@@ -48,16 +48,27 @@ if cmd == "list":
     if not plants:
         print("No plants tracked.")
         sys.exit(0)
-    print(f"{'PLANT':<25} {'FREQ':<10} {'LAST WATERED':<14} {'NEXT WATER':<14}")
-    print(f"{'-----':<25} {'----':<10} {'------------':<14} {'----------':<14}")
+    print(f"{'PLANT':<25} {'FREQ':<10} {'LOCATION':<10} {'LAST WATERED':<14} {'NEXT WATER':<14}")
+    print(f"{'-----':<25} {'----':<10} {'--------':<10} {'------------':<14} {'----------':<14}")
     for p in plants:
         last = datetime.strptime(p["last_watered"], "%Y-%m-%d")
         nxt = last + timedelta(days=p["frequency_days"])
-        print(f"{p['name']:<25} {p['frequency_days']}d{'':<8} {p['last_watered']:<14} {nxt.strftime('%Y-%m-%d'):<14}")
+        loc = p.get("location", "indoor")
+        print(f"{p['name']:<25} {p['frequency_days']}d{'':<8} {loc:<10} {p['last_watered']:<14} {nxt.strftime('%Y-%m-%d'):<14}")
 
 elif cmd == "add":
     name = sys.argv[2] if len(sys.argv) > 2 else None
-    freq = int(sys.argv[3]) if len(sys.argv) > 3 else 7
+    # Parse remaining args: optional frequency (int) and --outdoor flag
+    freq = 7
+    location = "indoor"
+    for arg in sys.argv[3:]:
+        if arg == "--outdoor":
+            location = "outdoor"
+        else:
+            try:
+                freq = int(arg)
+            except ValueError:
+                pass
     if not name:
         print("Plant name required.", file=sys.stderr)
         sys.exit(1)
@@ -67,9 +78,9 @@ elif cmd == "add":
         print(f'Plant "{name}" already exists.')
         sys.exit(1)
     today = datetime.now().strftime("%Y-%m-%d")
-    plants.append({"name": name, "frequency_days": freq, "last_watered": today})
+    plants.append({"name": name, "frequency_days": freq, "last_watered": today, "location": location})
     save_plants(conn, plants)
-    print(f'Added "{name}" (every {freq} days, last watered {today})')
+    print(f'Added "{name}" ({location}, every {freq} days, last watered {today})')
 
 elif cmd == "remove":
     name = sys.argv[2] if len(sys.argv) > 2 else None
