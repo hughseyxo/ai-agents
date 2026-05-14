@@ -1,6 +1,7 @@
 """Base agent class with lifecycle, retry, and state management."""
 
 import json
+import re
 import subprocess
 import sys
 import time
@@ -26,6 +27,7 @@ class BaseAgent:
         self.run_id: int | None = None
         self.context: dict = {}
         self.errors: list = []
+        self._failed_steps: list = []
         self.started_at: float | None = None
 
     def run(self):
@@ -39,7 +41,12 @@ class BaseAgent:
             for step in self.steps():
                 self._execute_step(step)
             output = self.report()
-            self.db.complete_run(self.run_id, status="success", output_summary=output)
+            if self._failed_steps:
+                status = "partial_failure"
+                error_msg = f"Steps failed: {', '.join(self._failed_steps)}"
+                self.db.complete_run(self.run_id, status=status, output_summary=output, error=error_msg)
+            else:
+                self.db.complete_run(self.run_id, status="success", output_summary=output)
             return output
         except Exception as e:
             self.db.complete_run(self.run_id, status="error", error=str(e))
@@ -74,8 +81,9 @@ class BaseAgent:
                         self.errors.append((name, "fallback", str(fe)))
                         self.db.record_step(self.run_id, name, "fallback_error", error=str(fe))
 
-        # Step fully failed — continue with None
+        # Step fully failed
         self.context[name] = None
+        self._failed_steps.append(name)
         print(f"[{self.name}] Step '{name}' failed after {retries + 1} attempts", file=sys.stderr)
 
     def pre_check(self):
@@ -94,19 +102,74 @@ class BaseAgent:
         """Format + deliver results. Override in subclass."""
         raise NotImplementedError
 
-    # --- Claude CLI synthesis ---
+    # --- LLM CLI synthesis (Claude → Gemini failover) ---
+
+    PROVIDERS = [
+        {
+            "name": "claude",
+            "cmd_prefix": ["claude", "--dangerously-skip-permissions", "-p"],
+            "cmd_suffix": ["--output-format", "text"],
+            "adapt_prompt": False,
+        },
+        {
+            "name": "gemini",
+            "cmd_prefix": ["gemini", "-y", "-p"],
+            "cmd_suffix": ["-o", "text"],
+            "adapt_prompt": True,
+        },
+    ]
+
+    # Errors that will fail on any provider — don't bother retrying
+    _NON_RETRIABLE = ["context_length", "invalid_request", "too long"]
 
     def synthesize(self, prompt: str) -> str:
-        """Invoke Claude CLI with MCP access for data fetching and synthesis."""
-        result = subprocess.run(
-            ["claude", "--dangerously-skip-permissions", "-p", prompt, "--output-format", "text"],
-            capture_output=True,
-            text=True,
-            cwd=str(REPO_ROOT),
+        """Invoke LLM CLI with MCP access. Tries Claude first, falls back to Gemini."""
+        last_error = None
+        for provider in self.PROVIDERS:
+            p_prompt = self._adapt_prompt_for_gemini(prompt) if provider["adapt_prompt"] else prompt
+            cmd = provider["cmd_prefix"] + [p_prompt] + provider["cmd_suffix"]
+            try:
+                result = subprocess.run(
+                    cmd, capture_output=True, text=True,
+                    cwd=str(REPO_ROOT), timeout=300,
+                )
+                if result.returncode == 0 and result.stdout.strip():
+                    print(f"[synthesize] {provider['name']} succeeded", file=sys.stderr)
+                    return result.stdout
+
+                stderr = result.stderr or ""
+                # Non-retriable errors — raise immediately
+                if any(s in stderr.lower() for s in self._NON_RETRIABLE):
+                    raise RuntimeError(f"{provider['name']} failed (non-retriable): {stderr[:500]}")
+
+                last_error = f"{provider['name']} failed (rc={result.returncode}): {stderr[:500]}"
+                print(f"[synthesize] {last_error}", file=sys.stderr)
+
+            except subprocess.TimeoutExpired:
+                last_error = f"{provider['name']} timed out after 300s"
+                print(f"[synthesize] {last_error}", file=sys.stderr)
+
+        raise RuntimeError(f"All LLM providers failed. Last error: {last_error}")
+
+    @staticmethod
+    def _adapt_prompt_for_gemini(prompt: str) -> str:
+        """Adapt Claude-specific prompt features for Gemini CLI."""
+        # Strip ToolSearch instructions — Gemini loads all tools immediately
+        prompt = re.sub(
+            r'## Step 1: Import MCP tools.*?(?=## Step 2)',
+            '## Step 1: Tools are available\n'
+            'All MCP tools are already loaded and available. Proceed to Step 2.\n\n',
+            prompt, flags=re.DOTALL,
         )
-        if result.returncode != 0:
-            raise RuntimeError(f"Claude CLI failed: {result.stderr[:500]}")
-        return result.stdout
+        # Remap tool name prefixes: mcp__name__tool → mcp_name_tool
+        prompt = prompt.replace('mcp__google_calendar__', 'mcp_google-calendar_')
+        prompt = prompt.replace('mcp__todoist__', 'mcp_todoist_')
+        prompt = prompt.replace('mcp__gmail__', 'mcp_gmail_')
+        # WebFetch → curl via shell (Gemini has shell access in -y mode)
+        prompt = prompt.replace('WebFetch', 'the shell tool with curl')
+        # ToolSearch references outside Step 1
+        prompt = prompt.replace('ToolSearch', 'the appropriate tool')
+        return prompt
 
     # --- State helpers ---
 

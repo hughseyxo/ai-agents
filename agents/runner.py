@@ -20,6 +20,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 AGENT_REGISTRY = {
     "daily-briefing": "agents.daily_briefing:DailyBriefingAgent",
     "news-briefing": "agents.news_briefing:NewsBriefingAgent",
+    "security-audit": "agents.security_audit:SecurityAuditAgent",
 }
 
 
@@ -46,6 +47,15 @@ def _all_agents():
 def cmd_run(args):
     cls = _load_agent(args.agent)
     agent = cls()
+
+    # Security audit --fix mode
+    if getattr(args, "fix", False):
+        if not hasattr(agent, "run_fix_mode"):
+            print(f"Agent '{args.agent}' does not support --fix mode", file=sys.stderr)
+            sys.exit(1)
+        agent.run_fix_mode()
+        return
+
     try:
         output = agent.run()
         print(output)
@@ -138,6 +148,7 @@ def main():
     # Default: run an agent by name (positional)
     run_parser = subparsers.add_parser("run", help="Run an agent")
     run_parser.add_argument("agent", help="Agent name")
+    run_parser.add_argument("--fix", action="store_true", help="Interactive fix mode (security-audit)")
 
     # List agents
     subparsers.add_parser("list", help="List all agents and schedules")

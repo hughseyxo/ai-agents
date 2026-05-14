@@ -1,4 +1,5 @@
 .claude/
+.gemini/
 output/*
 !output/.gitkeep
 .env
@@ -7,3 +8,4 @@ mcp-servers/__pycache__/
 agents/__pycache__/
 data/agents.db
 docs/agent-notes.md
+docs/security-audit-agent.md

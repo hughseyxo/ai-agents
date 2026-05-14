@@ -1,0 +1,1 @@
+This project uses Claude for agents. For all project rules, context, and conventions, you MUST read and follow the instructions in `CLAUDE.md`. Do not duplicate rules here.

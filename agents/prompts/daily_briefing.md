@@ -23,12 +23,28 @@ Use ToolSearch to load required tools:
 ## Step 2: Get today's date
 Note today's date and the date 30 days from now in YYYY-MM-DD format.
 
-## Step 3: Fetch today's calendar events
+## Step 3: Fetch today's events
+Make two parallel calls to get today's events from both calendars:
+
+**Call A — Personal calendar:**
 Call `mcp__google_calendar__gcal_list_events` with:
 - calendarId: `cianohughes@gmail.com`
 - startTime: today at 00:00:00 (ISO 8601, e.g. `2026-05-07T00:00:00`)
 - endTime: today at 23:59:59 (ISO 8601, e.g. `2026-05-07T23:59:59`)
 - timeZone: `Europe/Berlin`
+
+**Call B — On-call calendar:**
+Call `mcp__google_calendar__gcal_list_events` with:
+- calendarId: `8ubfqbcooeks9np5aufgu7g3mm0gj1rh@import.calendar.google.com`
+- startTime: today at 00:00:00 (ISO 8601)
+- endTime: today at 23:59:59 (ISO 8601)
+- timeZone: `Europe/Berlin`
+
+From **Call A**, filter to notable events — exclude all-day date markers, recurring daily events, events under 15 min. Keep meetings, appointments, one-off events.
+
+From **Call B**, include ALL on-call shifts — label each one as `[ON CALL]`.
+
+Merge both lists and sort chronologically.
 
 ## Step 4: Fetch upcoming events (next 30 days)
 Make three parallel calls:
@@ -65,6 +81,7 @@ Call `mcp__todoist__find-tasks` with `projectId: "6Crf3cH2RF5v86wc"`, `limit: 50
 - Include task priority and due date where available
 - Order by: overdue first, then by priority (p1 → p4), then by due date
 - Do NOT include tasks from any named projects
+- Tasks due today should be included in BOTH the "Today" section AND the "Due Today" subsection under Inbox Tasks
 
 ## Step 6: Handle plant watering tasks
 The agent has pre-computed plant watering data (see "Pre-computed Plant Data" section below).
@@ -76,9 +93,11 @@ This is your final text output. Output ONLY this content — no commentary befor
 ```
 # Daily Briefing — [DATE]
 
-## Today's Schedule
-- [TIME] — [Event Title]
-- (If no events: "No events scheduled today")
+## Today
+- [TIME] — [Event Title]                    (calendar events)
+- [TIME] — [ON CALL] On-Call Shift           (on-call shifts)
+- [TASK] [Task title]                        (Todoist tasks due today)
+- (If nothing: "Nothing scheduled today")
 
 ## Inbox Tasks
 ### Overdue
@@ -87,15 +106,13 @@ This is your final text output. Output ONLY this content — no commentary befor
 ### Due Today
 - [Task title] 🟡
 
-### Upcoming
-- [Task title] (Due: [date])
-
 ### No Due Date
 - [Task title]
 
 ## Plant Watering
-- [DATE] — Water [Plant Name]
+- [DATE] — Water [Plant Name] [adjusted: reason if present]
 - (If no plants need water soon: "All plants are happy!")
+- (If a plant has an [adjusted: ...] note, include that reason in the output)
 
 ## Quick Wins (estimated < 30 min)
 - [Task title] (~[X] min)
@@ -122,71 +139,69 @@ Build the email body as HTML with inline CSS only, then send via `mcp__gmail__gm
 <!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"></head>
-<body style="margin:0;padding:0;background:#f4f4f4;font-family:Arial,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f4;padding:24px 0;">
+<body style="margin:0;padding:0;background:#0d1117;font-family:Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0d1117;padding:24px 0;">
     <tr><td align="center">
-      <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+      <table width="600" cellpadding="0" cellspacing="0" style="background:#161b22;border-radius:8px;overflow:hidden;border:1px solid #30363d;">
 
         <!-- Header -->
-        <tr><td style="background:#1a1a2e;padding:28px 32px;">
-          <p style="margin:0;color:#a0a8c0;font-size:13px;letter-spacing:1px;text-transform:uppercase;">Daily Briefing</p>
-          <h1 style="margin:4px 0 0;color:#ffffff;font-size:24px;">[WEEKDAY, DATE]</h1>
+        <tr><td style="background:#0d1117;padding:28px 32px;border-bottom:1px solid #30363d;">
+          <p style="margin:0;color:#8b949e;font-size:13px;letter-spacing:1px;text-transform:uppercase;">Daily Briefing</p>
+          <h1 style="margin:4px 0 0;color:#c9d1d9;font-size:24px;">[WEEKDAY, DATE]</h1>
         </td></tr>
 
-        <!-- Today's Schedule -->
+        <!-- Today -->
         <tr><td style="padding:24px 32px 0;">
-          <h2 style="margin:0 0 12px;font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#1a1a2e;">📅 Today</h2>
-          [For each event: <p style="margin:0 0 8px;padding:10px 14px;background:#f0f4ff;border-left:3px solid #4a6fa5;border-radius:4px;font-size:14px;color:#333;"><strong>[TIME]</strong> — [Title]</p>]
-          [If no events: <p style="margin:0;color:#999;font-size:14px;font-style:italic;">No events today</p>]
+          <h2 style="margin:0 0 12px;font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#58a6ff;">📅 Today</h2>
+          [For each calendar event: <p style="margin:0 0 8px;padding:10px 14px;background:#1c2128;border-left:3px solid #58a6ff;border-radius:4px;font-size:14px;color:#c9d1d9;"><strong>[TIME]</strong> — [Title]</p>]
+          [For each on-call shift: <p style="margin:0 0 8px;padding:10px 14px;background:#1c2128;border-left:3px solid #d29922;border-radius:4px;font-size:14px;color:#c9d1d9;"><strong>[TIME]</strong> — <span style="color:#d29922;font-weight:700;">[ON CALL]</span> On-Call Shift</p>]
+          [For each Todoist task due today: <p style="margin:0 0 8px;padding:10px 14px;background:#1c2128;border-left:3px solid #3fb950;border-radius:4px;font-size:14px;color:#c9d1d9;"><span style="color:#3fb950;font-weight:700;">[TASK]</span> [Title]</p>]
+          [If nothing: <p style="margin:0;color:#8b949e;font-size:14px;font-style:italic;">Nothing scheduled today</p>]
         </td></tr>
 
         <!-- Inbox Tasks -->
         <tr><td style="padding:20px 32px 0;">
-          <h2 style="margin:0 0 12px;font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#1a1a2e;">✅ Inbox Tasks</h2>
+          <h2 style="margin:0 0 12px;font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#58a6ff;">✅ Inbox Tasks</h2>
 
           [If overdue:]
-          <p style="margin:0 0 6px;font-size:11px;font-weight:700;text-transform:uppercase;color:#c0392b;letter-spacing:0.5px;">Overdue</p>
-          [For each: <p style="margin:0 0 6px;padding:8px 12px;background:#fff5f5;border-left:3px solid #e74c3c;border-radius:4px;font-size:14px;color:#333;">[Title] <span style="color:#e74c3c;font-size:12px;">[due date]</span></p>]
+          <p style="margin:0 0 6px;font-size:11px;font-weight:700;text-transform:uppercase;color:#f85149;letter-spacing:0.5px;">Overdue</p>
+          [For each: <p style="margin:0 0 6px;padding:8px 12px;background:#1c2128;border-left:3px solid #f85149;border-radius:4px;font-size:14px;color:#c9d1d9;">[Title] <span style="color:#f85149;font-size:12px;">[due date]</span></p>]
 
           [If due today:]
-          <p style="margin:12px 0 6px;font-size:11px;font-weight:700;text-transform:uppercase;color:#e67e22;letter-spacing:0.5px;">Due Today</p>
-          [For each: <p style="margin:0 0 6px;padding:8px 12px;background:#fffaf0;border-left:3px solid #f39c12;border-radius:4px;font-size:14px;color:#333;">[Title]</p>]
-
-          [If upcoming:]
-          <p style="margin:12px 0 6px;font-size:11px;font-weight:700;text-transform:uppercase;color:#27ae60;letter-spacing:0.5px;">Upcoming</p>
-          [For each: <p style="margin:0 0 6px;padding:8px 12px;background:#f0fff4;border-left:3px solid #2ecc71;border-radius:4px;font-size:14px;color:#333;">[Title] <span style="color:#888;font-size:12px;">[due date]</span></p>]
+          <p style="margin:12px 0 6px;font-size:11px;font-weight:700;text-transform:uppercase;color:#d29922;letter-spacing:0.5px;">Due Today</p>
+          [For each: <p style="margin:0 0 6px;padding:8px 12px;background:#1c2128;border-left:3px solid #d29922;border-radius:4px;font-size:14px;color:#c9d1d9;">[Title]</p>]
 
           [If no due date:]
-          <p style="margin:12px 0 6px;font-size:11px;font-weight:700;text-transform:uppercase;color:#888;letter-spacing:0.5px;">No Due Date</p>
-          [For each: <p style="margin:0 0 6px;padding:8px 12px;background:#fafafa;border-left:3px solid #ccc;border-radius:4px;font-size:14px;color:#333;">[Title]</p>]
+          <p style="margin:12px 0 6px;font-size:11px;font-weight:700;text-transform:uppercase;color:#8b949e;letter-spacing:0.5px;">No Due Date</p>
+          [For each: <p style="margin:0 0 6px;padding:8px 12px;background:#1c2128;border-left:3px solid #30363d;border-radius:4px;font-size:14px;color:#c9d1d9;">[Title]</p>]
         </td></tr>
 
         <!-- Plant Watering -->
         <tr><td style="padding:20px 32px 0;">
-          <h2 style="margin:0 0 12px;font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#1a1a2e;">🌱 Plant Watering</h2>
-          [For each plant needing water: <p style="margin:0 0 6px;padding:8px 12px;background:#f0fff4;border-left:3px solid #27ae60;border-radius:4px;font-size:14px;color:#333;"><strong>[DATE]</strong> — Water [Plant Name]</p>]
-          [If none: <p style="margin:0;color:#999;font-size:14px;font-style:italic;">All plants are happy!</p>]
+          <h2 style="margin:0 0 12px;font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#58a6ff;">🌱 Plant Watering</h2>
+          [For each plant needing water: <p style="margin:0 0 6px;padding:8px 12px;background:#1c2128;border-left:3px solid #3fb950;border-radius:4px;font-size:14px;color:#c9d1d9;"><strong>[DATE]</strong> — Water [Plant Name]</p>]
+          [If none: <p style="margin:0;color:#8b949e;font-size:14px;font-style:italic;">All plants are happy!</p>]
         </td></tr>
 
         <!-- Quick Wins -->
         <tr><td style="padding:20px 32px 0;">
-          <h2 style="margin:0 0 12px;font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#1a1a2e;">⚡ Quick Wins</h2>
-          [For each: <p style="margin:0 0 6px;padding:8px 12px;background:#fafafa;border-radius:4px;font-size:14px;color:#333;">[Title] <span style="color:#888;font-size:12px;">~[X] min</span></p>]
+          <h2 style="margin:0 0 12px;font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#58a6ff;">⚡ Quick Wins</h2>
+          [For each: <p style="margin:0 0 6px;padding:8px 12px;background:#1c2128;border-radius:4px;font-size:14px;color:#c9d1d9;">[Title] <span style="color:#8b949e;font-size:12px;">~[X] min</span></p>]
           [If none: omit this section entirely]
         </td></tr>
 
         <!-- Coming Up -->
         <tr><td style="padding:20px 32px 0;">
-          <h2 style="margin:0 0 12px;font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#1a1a2e;">📆 Coming Up</h2>
-          [For each calendar event: <p style="margin:0 0 6px;padding:8px 12px;background:#f0f4ff;border-left:3px solid #4a6fa5;border-radius:4px;font-size:14px;color:#333;"><strong>[DATE]</strong> — [Title]</p>]
-          [For each on-call shift: <p style="margin:0 0 6px;padding:8px 12px;background:#fff8f0;border-left:3px solid #e67e22;border-radius:4px;font-size:14px;color:#333;"><strong>[DATE]</strong> — <span style="color:#e67e22;font-weight:700;">[ON CALL]</span> On-Call Shift</p>]
-          [For each Todoist task: <p style="margin:0 0 6px;padding:8px 12px;background:#f0fff4;border-left:3px solid #2ecc71;border-radius:4px;font-size:14px;color:#333;"><strong>[DATE]</strong> — <span style="color:#27ae60;font-weight:700;">[TASK]</span> [Title]</p>]
+          <h2 style="margin:0 0 12px;font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#58a6ff;">📆 Coming Up</h2>
+          [For each calendar event: <p style="margin:0 0 6px;padding:8px 12px;background:#1c2128;border-left:3px solid #58a6ff;border-radius:4px;font-size:14px;color:#c9d1d9;"><strong>[DATE]</strong> — [Title]</p>]
+          [For each on-call shift: <p style="margin:0 0 6px;padding:8px 12px;background:#1c2128;border-left:3px solid #d29922;border-radius:4px;font-size:14px;color:#c9d1d9;"><strong>[DATE]</strong> — <span style="color:#d29922;font-weight:700;">[ON CALL]</span> On-Call Shift</p>]
+          [For each Todoist task: <p style="margin:0 0 6px;padding:8px 12px;background:#1c2128;border-left:3px solid #3fb950;border-radius:4px;font-size:14px;color:#c9d1d9;"><strong>[DATE]</strong> — <span style="color:#3fb950;font-weight:700;">[TASK]</span> [Title]</p>]
           [All sorted chronologically, strictly within 30 days, max 15 entries total]
         </td></tr>
 
         <!-- Footer -->
-        <tr><td style="padding:24px 32px;border-top:1px solid #eee;">
-          <p style="margin:0;color:#aaa;font-size:12px;text-align:center;">Generated by your Daily Briefing Agent</p>
+        <tr><td style="padding:24px 32px;border-top:1px solid #30363d;">
+          <p style="margin:0;color:#484f58;font-size:12px;text-align:center;">Generated by your Daily Briefing Agent</p>
         </td></tr>
 
       </table>

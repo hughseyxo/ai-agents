@@ -133,7 +133,7 @@ def rank_and_filter(tasks: list[dict], available_minutes: int) -> list[dict]:
         return (overdue, priority, due)
 
     eligible.sort(key=sort_key)
-    return eligible[:3]
+    return eligible[:8]
 
 
 def format_results(tasks: list[dict], minutes: int) -> str:
