@@ -9,3 +9,9 @@ agents/__pycache__/
 data/agents.db
 docs/agent-notes.md
 docs/security-audit-agent.md
+*.mp4
+*.mkv
+*.avi
+*.mov
+__pycache__/
+skills/mealsave/pot-provider/

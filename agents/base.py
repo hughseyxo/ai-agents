@@ -12,6 +12,11 @@ from .db import AgentDB, DEFAULT_DB_PATH
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
+class LLMTimeoutError(RuntimeError):
+    """Raised when an LLM CLI call times out."""
+    pass
+
+
 class BaseAgent:
     """
     Base for all scheduled agents.
@@ -58,6 +63,7 @@ class BaseAgent:
         fn = step["fn"]
         fallback = step.get("fallback")
         retries = step.get("retries", self.max_retries)
+        side_effects = step.get("side_effects", False)
 
         for attempt in range(retries + 1):
             try:
@@ -65,6 +71,18 @@ class BaseAgent:
                 self.context[name] = result
                 self.db.record_step(self.run_id, name, "success")
                 return
+            except LLMTimeoutError as e:
+                # If a step with side effects times out, do NOT retry.
+                # The side effect (e.g. sending an email) might have already happened.
+                self.errors.append((name, attempt, str(e)))
+                self.db.record_step(self.run_id, name, "error", error=str(e))
+                if side_effects:
+                    print(f"[{self.name}] Step '{name}' timed out and has side effects. Skipping retry to avoid duplication.", file=sys.stderr)
+                    break
+                
+                if attempt < retries:
+                    time.sleep(2 ** attempt)
+                    continue
             except Exception as e:
                 self.errors.append((name, attempt, str(e)))
                 self.db.record_step(self.run_id, name, "error", error=str(e))
@@ -123,7 +141,12 @@ class BaseAgent:
     _NON_RETRIABLE = ["context_length", "invalid_request", "too long"]
 
     def synthesize(self, prompt: str) -> str:
-        """Invoke LLM CLI with MCP access. Tries Claude first, falls back to Gemini."""
+        """Invoke LLM CLI with MCP access. Tries Claude first, falls back to Gemini.
+
+        Timeouts are terminal — they do NOT trigger failover. A killed CLI may
+        have already executed MCP side effects (sent email, created tasks);
+        retrying on a second provider would duplicate them.
+        """
         last_error = None
         for provider in self.PROVIDERS:
             p_prompt = self._adapt_prompt_for_gemini(prompt) if provider["adapt_prompt"] else prompt
@@ -131,7 +154,7 @@ class BaseAgent:
             try:
                 result = subprocess.run(
                     cmd, capture_output=True, text=True,
-                    cwd=str(REPO_ROOT), timeout=300,
+                    cwd=str(REPO_ROOT), timeout=600,
                 )
                 if result.returncode == 0 and result.stdout.strip():
                     print(f"[synthesize] {provider['name']} succeeded", file=sys.stderr)
@@ -146,8 +169,9 @@ class BaseAgent:
                 print(f"[synthesize] {last_error}", file=sys.stderr)
 
             except subprocess.TimeoutExpired:
-                last_error = f"{provider['name']} timed out after 300s"
-                print(f"[synthesize] {last_error}", file=sys.stderr)
+                msg = f"{provider['name']} timed out after 600s"
+                print(f"[synthesize] {msg}", file=sys.stderr)
+                raise LLMTimeoutError(msg)
 
         raise RuntimeError(f"All LLM providers failed. Last error: {last_error}")
 

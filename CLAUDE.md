@@ -48,6 +48,9 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 ├── scripts/            # Shell helper scripts (e.g. Google token check)
 ├── skills/             # Claude Code custom skills
 │   ├── mealsave/               # Save recipes to Mealie instance
+│   │   ├── mealsave.py         # Main extraction logic (Schema.org, YouTube, TikTok, Trafilatura)
+│   │   ├── mealsave_bot.py     # Telegram bot for remote saving
+│   │   └── check-yt-auth.sh    # YouTube cookie expiry check
 │   └── free-time/              # Suggest best tasks for a free time window
 ├── mcp-servers/        # Custom MCP servers (calendar, gmail auth)
 ├── tests/              # pytest test suite (run: pytest tests/)
@@ -55,11 +58,14 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 │   ├── test_weather.py         # Open-Meteo weather fetch tests
 │   ├── test_plant_weather.py   # Watering adjustment logic tests
 │   ├── test_daily_briefing.py  # Daily briefing integration tests
-│   └── test_security_audit.py  # Cloudflare IP + Shodan exposure tests
+│   ├── test_security_audit.py  # Cloudflare IP + Shodan exposure tests
+│   └── test_mealsave_tiktok.py # TikTok caption metadata fetch tests
 ├── docs/               # Design docs (mandatory for non-trivial changes)
 │   ├── llm-failover.md         # Claude→Gemini failover design doc
-│   └── weather-aware-plant-watering.md  # Weather-based watering adjustments
+│   ├── weather-aware-plant-watering.md  # Weather-based watering adjustments
+│   └── mealsave-tiktok-and-telegram.md  # TikTok OCR + Telegram bot design
 ├── free_time_bot.py    # Telegram bot: free-time task advisor (systemd service)
+├── mealsave-bot.service # Telegram bot: recipe saver (systemd service)
 ├── plant.sh            # CLI tool: manage plant watering tracker (add/list/remove)
 ├── run-agent.sh        # Single entrypoint for all agents
 └── credentials.json    # Google OAuth credentials (DO NOT commit secrets)
@@ -68,8 +74,16 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 # Agent Conventions
 - Agents are Python classes in `agents/` extending `BaseAgent`
 - **Dual-CLI rule:** All agent Python code must be runnable by both Claude and Gemini CLI. No Claude-specific or Gemini-specific dependencies in Python. LLM-specific adaptations happen in `BaseAgent.synthesize()` only.
-- Execution model: Python handles lifecycle, state (SQLite), retry, dedup, and deterministic logic (e.g. plant watering, weather). LLM CLI (with MCP tools) handles data fetching, formatting, and email sending. Exception: `security_audit.py` is mostly deterministic (subprocess + web APIs for Cloudflare/Shodan checks, no LLM CLI or MCP).
-- **LLM failover:** `BaseAgent.synthesize()` tries Claude CLI first, falls back to Gemini CLI on infrastructure failure (rate limits, timeouts, quota). Prompts are adapted at runtime for Gemini (tool name remapping, ToolSearch stripping, WebFetch→curl). See `docs/llm-failover.md` for details.
+- Execution model: Python handles lifecycle, state (SQLite), retry, dedup, and deterministic logic (e.g. plant watering, weather, RSS fetching). LLM CLI (with MCP tools) handles data synthesis, formatting, and email sending.
+- **LLM failover & Timeouts:** `BaseAgent.synthesize()` tries Claude CLI first, falls back to Gemini CLI on infrastructure failure (rate limits, timeouts, quota). Prompts are adapted at runtime for Gemini.
+  - **Timeouts:** A 600s timeout is applied to LLM calls. If a step marked with `side_effects: True` times out, the agent skips retries to avoid duplicate actions (e.g. sending multiple emails).
+
+# Security & Git Workflow
+- **Security Audit Before Push:** Gemini MUST run the security audit agent (`run-agent.sh security-audit`) before every `git push` to a public branch. If any "Critical" or "High" severity findings are found in unpushed or staged changes (Check 16), the push MUST be aborted until fixed or explicitly exempted by the user.
+- **Atomic Commits:** Prefer small, focused commits with clear descriptions.
+- **No Secrets:** Never commit `.env`, `credentials.json`, or any files containing API keys or private data.
+- **Media Files:** Do not commit `.mp4`, `.mkv`, or other large media files downloaded by agents.
+
 - Run via: `run-agent.sh <agent-name>` or `python3 -m agents <agent-name>`
 - Each agent declares its own cron schedule; `python3 -m agents install-cron` writes crontab entries
 - Agent state lives in `data/agents.db` (SQLite) — never store secrets there

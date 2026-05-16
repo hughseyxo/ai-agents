@@ -6,7 +6,7 @@ allowed-tools: Bash,Read,Write
 
 # mealsave
 
-Saves a recipe URL to the user's self-hosted Mealie instance with no manual intervention.
+Saves a recipe URL (Schema.org, YouTube, TikTok, or generic) to the user's self-hosted Mealie instance with no manual intervention.
 Returns the Mealie recipe URL on success, or fails with a clear error.
 
 ## When Invoked
@@ -14,7 +14,7 @@ Returns the Mealie recipe URL on success, or fails with a clear error.
 Run the script with the venv Python:
 
 ```bash
-~/.claude/skills/mealsave/.venv/bin/python ~/.claude/skills/mealsave/mealsave.py <url>
+/home/cian/git/ai-agents/skills/mealsave/.venv/bin/python /home/cian/git/ai-agents/skills/mealsave/mealsave.py <url>
 ```
 
 ## Interpreting Output
@@ -29,9 +29,10 @@ Run the script with the venv Python:
 2. Checks Mealie is reachable
 3. Checks for duplicate (same `orgURL`)
 4. Tries Mealie's built-in scraper (`/api/recipes/create-url`) — handles most schema.org recipe sites natively
-5. Falls back to YouTube transcript → Claude LLM extraction for YouTube URLs
-6. Falls back to trafilatura text extraction → Claude LLM extraction for any other URL Mealie couldn't handle
-7. Always sets `orgURL` for traceability
+5. **TikTok Path**: Fetches metadata; if caption is sufficient, saves. Else, downloads video, transcribes audio (Whisper), performs OCR (Tesseract), and synthesizes recipe via Claude.
+6. **YouTube Path**: Fetches transcript via `yt-dlp` (using PO token provider if needed) → Claude LLM extraction.
+7. **Generic Path**: Falls back to trafilatura text extraction → Claude LLM extraction for any other URL Mealie couldn't handle.
+8. Always sets `orgURL` for traceability
 
 ## Setup Check
 

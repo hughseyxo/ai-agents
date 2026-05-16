@@ -154,17 +154,21 @@ class TestSynthesize:
         assert result == "gemini output"
 
     @patch("agents.base.subprocess.run")
-    def test_falls_back_on_timeout(self, mock_run):
+    def test_claude_timeout_is_terminal_no_failover(self, mock_run):
+        """Timeouts must NOT trigger Gemini failover: if Claude was mid-way
+        through MCP side effects (sending email, creating tasks) when killed,
+        running Gemini would duplicate those side effects."""
         mock_run.side_effect = [
-            subprocess.TimeoutExpired(cmd="claude", timeout=300),
+            subprocess.TimeoutExpired(cmd="claude", timeout=600),
             mock_result(stdout="gemini output"),
         ]
         agent = make_agent()
 
-        result = agent.synthesize("test prompt")
+        with pytest.raises(RuntimeError, match="timed out"):
+            agent.synthesize("test prompt")
 
-        assert result == "gemini output"
-        assert mock_run.call_count == 2
+        # Critically: Gemini must NOT be invoked
+        assert mock_run.call_count == 1
 
     @patch("agents.base.subprocess.run")
     def test_raises_when_both_providers_fail(self, mock_run):
@@ -253,21 +257,10 @@ class TestSynthesize:
         assert "mcp__todoist__find-tasks" in claude_prompt
 
     @patch("agents.base.subprocess.run")
-    def test_timeout_is_300_seconds(self, mock_run):
+    def test_timeout_is_600_seconds(self, mock_run):
         mock_run.return_value = mock_result(stdout="output")
         agent = make_agent()
 
         agent.synthesize("test")
 
-        assert mock_run.call_args[1]["timeout"] == 300
-
-    @patch("agents.base.subprocess.run")
-    def test_both_timeout_raises(self, mock_run):
-        mock_run.side_effect = [
-            subprocess.TimeoutExpired(cmd="claude", timeout=300),
-            subprocess.TimeoutExpired(cmd="gemini", timeout=300),
-        ]
-        agent = make_agent()
-
-        with pytest.raises(RuntimeError, match="All LLM providers failed"):
-            agent.synthesize("test")
+        assert mock_run.call_args[1]["timeout"] == 600

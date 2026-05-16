@@ -33,7 +33,8 @@ class DailyBriefingAgent(BaseAgent):
         return [
             {"name": "weather", "fn": self._fetch_weather},
             {"name": "plants", "fn": self._check_plants},
-            {"name": "briefing", "fn": self._run_briefing},
+            {"name": "briefing", "fn": self._run_briefing, "side_effects": True},
+            {"name": "save_plants", "fn": self._save_plants},
         ]
 
     # --- Weather (Python — deterministic, no LLM needed) ---
@@ -62,7 +63,10 @@ class DailyBriefingAgent(BaseAgent):
         tasks_to_create = []
         updated = False
 
-        for plant in plants:
+        # Copy plants to avoid mutating state before we're sure we want to save
+        updated_plants = json.loads(json.dumps(plants))
+
+        for plant in updated_plants:
             last_watered = datetime.strptime(plant["last_watered"], "%Y-%m-%d").date()
             base_date = last_watered + timedelta(days=plant["frequency_days"])
 
@@ -94,10 +98,22 @@ class DailyBriefingAgent(BaseAgent):
                 plant["last_watered"] = next_water.isoformat()
                 updated = True
 
-        if updated:
-            self.set_state("plants", plants)
+        return {
+            "plants": upcoming_watering,
+            "tasks_to_create": tasks_to_create,
+            "updated_all_plants": updated_plants if updated else None
+        }
 
-        return {"plants": upcoming_watering, "tasks_to_create": tasks_to_create}
+    def _save_plants(self):
+        """Persist updated plant dates only if briefing succeeded."""
+        if "briefing" in self._failed_steps:
+            return "Skipped saving plant state because briefing failed"
+
+        plants_data = self.context.get("plants")
+        if plants_data and plants_data.get("updated_all_plants"):
+            self.set_state("plants", plants_data["updated_all_plants"])
+            return "Saved updated plant states"
+        return "No plant states to update"
 
     # --- Briefing (Claude CLI with MCP) ---
 

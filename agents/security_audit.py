@@ -1014,13 +1014,17 @@ class SecurityAuditAgent(BaseAgent):
             return
 
         secret_patterns = [
-            (r"(?:API_KEY|SECRET_KEY|SECRET|TOKEN|PASSWORD|PRIVATE_KEY|AUTH_TOKEN)\s*[=:]\s*['\"]?\S{8,}", "API key/secret/token"),
+            (r"(?:API_KEY|SECRET_KEY|SECRET|TOKEN|PASSWORD|PRIVATE_KEY|AUTH_TOKEN)\s*[=:]\s*['\"]?[A-Za-z0-9/\+_\-]{8,}", "Generic API key/secret/token"),
             (r"sk-[a-zA-Z0-9]{20,}", "OpenAI/Stripe secret key"),
             (r"ghp_[a-zA-Z0-9]{36}", "GitHub personal access token"),
+            (r"AIza[0-9A-Za-z-_]{35}", "Google API key"),
+            (r"AKIA[0-9A-Z]{16}", "AWS Access Key ID"),
             (r"-----BEGIN (?:RSA |EC |DSA )?PRIVATE KEY-----", "Private key"),
             (r"ANTHROPIC_API_KEY\s*=\s*\S+", "Anthropic API key"),
             (r"\b100\.\d{1,3}\.\d{1,3}\.\d{1,3}\b", "Tailscale IP address"),
             (r"\bhtpasswd\b.*\$apr1\$", "htpasswd hash"),
+            (r"(?:mongo|postgres|redis|mysql)://[^:]+:[^@]+@", "Database connection string with credentials"),
+            (r"xox[baprs]-[0-9]{12}-[0-9]{12}-[a-zA-Z0-9]{24}", "Slack Token"),
         ]
 
         sensitive_gitignore_entries = [

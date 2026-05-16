@@ -5,9 +5,8 @@ Saves recipe URLs to your self-hosted Mealie instance in one command.
 **Supports:**
 - Recipe websites with schema.org markup (handled by Mealie's built-in scraper)
 - YouTube videos with captions (transcript → Claude LLM extraction)
+- TikTok videos (whisper audio transcript + tesseract OCR keyframes → Claude LLM extraction)
 - Generic blog posts and recipe pages (trafilatura → Claude LLM extraction)
-
-**v1 does not support TikTok.** Most TikToks have no captions and recipes are baked into video frames — extraction is unreliable. Use Mealie's UI for those.
 
 ---
 
@@ -19,7 +18,16 @@ Saves recipe URLs to your self-hosted Mealie instance in one command.
 - Click your user icon → **Manage Your API Tokens**
 - Create a token named `mealsave`, copy it
 
-### 2. Create the config file
+### 2. Install System Dependencies
+
+TikTok extraction requires `ffmpeg` and `tesseract`:
+
+```bash
+sudo apt update
+sudo apt install ffmpeg tesseract-ocr libtesseract-dev
+```
+
+### 3. Create the config file
 
 ```bash
 mkdir -p ~/.config/mealsave
@@ -30,20 +38,39 @@ chmod 600 ~/.config/mealsave/.env
 Edit `~/.config/mealsave/.env`:
 ```
 MEALIE_URL=http://localhost:9000
-MEALIE_TOKEN=<paste your token here>
+MEALIE_TOKEN=YOUR_MEALIE_TOKEN_HERE
+TELEGRAM_BOT_TOKEN=YOUR_TELEGRAM_BOT_TOKEN_HERE
+TELEGRAM_USER_ID=YOUR_TELEGRAM_ID_HERE
 ```
 
-### 3. Create the Python venv and install dependencies
+### 4. Create the Python venv and install dependencies
 
 ```bash
-cd ~/.claude/skills/mealsave
+cd ~/git/ai-agents/skills/mealsave
 python3 -m venv .venv
-.venv/bin/pip install --quiet requests youtube-transcript-api trafilatura lxml_html_clean yt-dlp
+.venv/bin/pip install --quiet requests youtube-transcript-api trafilatura lxml_html_clean yt-dlp openai-whisper pytesseract python-telegram-bot bgutil-ytdlp-pot-provider
 ```
 
-This installs only what's needed into an isolated venv — nothing system-wide.
+### 5. Set up YouTube PO Token Provider (Required for YouTube)
 
-### 4. Set up YouTube cookies (required for YouTube URLs on VPS/server IPs)
+YouTube blocks most automated subtitle downloads. The `bgutil` provider bypasses this by generating Proof-of-Origin tokens.
+
+1. **Install Node helper:**
+   ```bash
+   cd ~/git/ai-agents/skills/mealsave
+   git clone --single-branch --branch 1.3.1 https://github.com/Brainicism/bgutil-ytdlp-pot-provider.git pot-provider
+   cd pot-provider/server
+   npm ci
+   npx tsc
+   ```
+
+2. **Verify setup:**
+   ```bash
+   ~/git/ai-agents/skills/mealsave/check-yt-auth.sh
+   ```
+   You should see `OK` for both the Python plugin and Node helper.
+
+### 6. Set up YouTube cookies (Backup/Fallback)
 
 YouTube blocks subtitle downloads from server/VPS IPs unless you pass cookies from a logged-in browser session. This is a one-time setup:
 
@@ -58,11 +85,11 @@ YouTube blocks subtitle downloads from server/VPS IPs unless you pass cookies fr
 
 Without this file, YouTube URLs will fail with a clear error telling you what to do.
 
-### 4. Smoke test
+### 7. Smoke test
 
 ```bash
-~/.claude/skills/mealsave/.venv/bin/python \
-  ~/.claude/skills/mealsave/mealsave.py \
+/home/cian/git/ai-agents/skills/mealsave/.venv/bin/python \
+  /home/cian/git/ai-agents/skills/mealsave/mealsave.py \
   https://www.seriouseats.com/the-best-roast-potatoes-ever-recipe
 ```
 
@@ -72,24 +99,24 @@ You should see a URL like `http://localhost:9000/g/home/r/the-best-roast-potatoe
 
 ## Usage
 
-In Claude Code:
-
+### In Claude Code / Terminal
 ```
 /mealsave https://www.seriouseats.com/the-best-roast-potatoes-ever-recipe
 /mealsave https://www.youtube.com/watch?v=<video-id>
+/mealsave https://www.tiktok.com/@user/video/<id>
 ```
 
-Or in natural language:
-- "save this recipe: <url>"
-- "add to mealie: <url>"
+### Via Telegram Bot
+Forward any recipe link to your `mealsave_bot`. It will process it in the background and reply with the Mealie link.
 
 ---
 
 ## How it works
 
 1. **Mealie scraper first** — `POST /api/recipes/create-url`. Handles most schema.org recipe sites natively and is instant. Sets `orgURL` so you can trace back to the source.
-2. **YouTube fallback** — fetches captions via `youtube-transcript-api`, then runs a Claude extraction pass (`claude -p`) to produce structured recipe JSON.
-3. **Generic page fallback** — `trafilatura` strips ads/nav to get article text, then Claude extracts the recipe.
+2. **TikTok path** — uses `yt-dlp` to download, `whisper` for audio, and `ffmpeg` + `tesseract` for OCR on keyframes.
+3. **YouTube path** — fetches captions via `yt-dlp`.
+4. **Generic page path** — `trafilatura` strips ads/nav to get article text, then Claude extracts the recipe.
 
 If extraction produces zero ingredients *and* zero instructions, the recipe is not saved — you get a clear error instead of junk in Mealie.
 
@@ -100,17 +127,6 @@ Duplicate detection: if a recipe with the same source URL already exists in Meal
 ## LLM note
 
 Recipe extraction uses the `claude` CLI (`claude -p`). This is already available in your Claude Code session — no separate API key needed.
-
----
-
-## TikTok (v2 — not implemented)
-
-TikTok extraction would require:
-- `yt-dlp` to download video
-- `openai-whisper` for audio transcription
-- `tesseract` for OCR on video frames
-
-This is gated as a future v2 feature due to reliability concerns (most cooking TikToks have no captions, recipes are demonstrated visually). Use Mealie's native URL import for any TikTok that has a recipe URL in the description.
 
 ---
 

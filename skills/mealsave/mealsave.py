@@ -253,8 +253,13 @@ def fetch_youtube_transcript(url: str) -> str:
     if not video_id:
         die(f"Could not extract YouTube video ID from: {url}")
 
-    venv_ytdlp = Path.home() / ".claude/skills/mealsave/.venv/bin/yt-dlp"
+    # Use venv relative to this script
+    base_dir = Path(__file__).parent
+    venv_ytdlp = base_dir / ".venv" / "bin" / "yt-dlp"
     ytdlp_bin = str(venv_ytdlp) if venv_ytdlp.exists() else "yt-dlp"
+
+    # Path to bgutil-ytdlp-pot-provider server
+    pot_server_home = base_dir / "pot-provider" / "server"
 
     cookies = youtube_cookies_path()
     if cookies:
@@ -269,19 +274,26 @@ def fetch_youtube_transcript(url: str) -> str:
             "--sub-lang", "en",
             "--sub-format", "vtt",
             # Use Node.js to solve YouTube's n-challenge (required on VPS/server IPs).
-            # Deno is the yt-dlp default but is usually not installed on servers.
             "--no-js-runtimes",
             "--js-runtimes", "node",
+            # Use remote components for better JS challenge solving
+            "--remote-components", "ejs:github",
             "--output", f"{tmpdir}/sub",
         ]
+
+        # Use the bgutil-ytdlp-pot-provider plugin if present
+        if pot_server_home.exists():
+            cmd += ["--extractor-args", "youtube:player_client=web,mweb"]
+            cmd += ["--extractor-args", f"youtubepot-bgutilscript:server_home={pot_server_home}"]
+
         if cookies:
             cmd += ["--cookies", str(cookies)]
         cmd.append(url)
 
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=90)
         except FileNotFoundError:
-            die("yt-dlp not found. Run: ~/.claude/skills/mealsave/.venv/bin/pip install yt-dlp")
+            die(f"yt-dlp not found at {ytdlp_bin}. Run: {base_dir}/.venv/bin/pip install yt-dlp")
         except subprocess.TimeoutExpired:
             die("yt-dlp timed out fetching subtitles.")
 
@@ -298,7 +310,7 @@ def fetch_youtube_transcript(url: str) -> str:
                     "using the 'Get cookies.txt LOCALLY' browser extension, then retry. "
                     "See README for details."
                 )
-            die(f"No subtitles downloaded. yt-dlp said: {stderr[-300:]}")
+            die(f"No subtitles downloaded. yt-dlp stderr:\n{stderr[-500:]}")
 
         with open(vtt_files[0], encoding="utf-8") as f:
             vtt = f.read()
@@ -353,9 +365,10 @@ def fetch_generic_text(url: str) -> str:
     try:
         import trafilatura
     except ImportError:
+        base_dir = Path(__file__).parent
         die(
             "trafilatura not installed. "
-            "Run: ~/.claude/skills/mealsave/.venv/bin/pip install trafilatura lxml_html_clean"
+            f"Run: {base_dir}/.venv/bin/pip install trafilatura lxml_html_clean"
         )
 
     # Try trafilatura's built-in fetcher first
@@ -409,11 +422,14 @@ def llm_extract(text: str, source_hint: str = "") -> dict:
     prompt = LLM_PROMPT.format(hint=hint, text=text[:8000])
 
     try:
+        # cwd=$HOME isolates the subprocess from project-local Claude hooks
+        # (e.g. Stop hooks that would otherwise hijack the recipe-JSON output).
         result = subprocess.run(
             ["claude", "-p", prompt],
             capture_output=True,
             text=True,
             timeout=90,
+            cwd=str(Path.home()),
         )
     except FileNotFoundError:
         die("'claude' CLI not found in PATH. Is Claude Code installed?")
@@ -512,6 +528,136 @@ def is_youtube(url: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# TikTok extraction (path 4)
+# ---------------------------------------------------------------------------
+
+def is_tiktok(url: str) -> bool:
+    host = urlparse(url).netloc.lower()
+    host = re.sub(r"^(www\.|m\.|vm\.|vt\.)", "", host)
+    return "tiktok.com" in host
+
+
+def fetch_tiktok_metadata(url: str) -> dict:
+    """Fetch TikTok metadata (title, description, uploader) via yt-dlp.
+
+    Returns {} on any failure — non-fatal because the caller can fall through
+    to the AV pipeline. Recipe text often lives in the description.
+    """
+    base_dir = Path(__file__).parent
+    venv_ytdlp = base_dir / ".venv" / "bin" / "yt-dlp"
+    ytdlp_bin = str(venv_ytdlp) if venv_ytdlp.exists() else "yt-dlp"
+    cmd = [ytdlp_bin, "--dump-json", "--skip-download", "--quiet", "--no-warnings", url]
+    try:
+        result = subprocess.run(cmd, capture_output=True, check=True, timeout=30, text=True)
+        info = json.loads(result.stdout)
+        return {
+            "title": info.get("title") or "",
+            "description": info.get("description") or "",
+            "uploader": info.get("uploader") or "",
+        }
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, json.JSONDecodeError) as e:
+        print(f"[mealsave] TikTok metadata fetch failed (non-fatal): {e}", file=sys.stderr)
+        return {}
+
+
+def fetch_tiktok_video(url: str, tmpdir: str) -> str:
+    """Download TikTok video via yt-dlp. Returns path to video file."""
+    base_dir = Path(__file__).parent
+    venv_ytdlp = base_dir / ".venv" / "bin" / "yt-dlp"
+    ytdlp_bin = str(venv_ytdlp) if venv_ytdlp.exists() else "yt-dlp"
+
+    output_tmpl = os.path.join(tmpdir, "tiktok.%(ext)s")
+    cmd = [
+        ytdlp_bin,
+        "--quiet",
+        "--no-warnings",
+        "--output", output_tmpl,
+        # TikTok sometimes needs specific user-agent or cookies but often works with just this
+        url
+    ]
+
+    try:
+        subprocess.run(cmd, check=True, timeout=120)
+    except subprocess.CalledProcessError as e:
+        die(f"Failed to download TikTok video: {e}")
+    except subprocess.TimeoutExpired:
+        die("TikTok download timed out.")
+
+    # Find the downloaded file
+    for f in os.listdir(tmpdir):
+        if f.startswith("tiktok."):
+            return os.path.join(tmpdir, f)
+
+    die("TikTok video not found after download.")
+
+
+def transcribe_audio(video_path: str) -> str:
+    """Transcribe audio using whisper."""
+    try:
+        import whisper
+        import warnings
+        warnings.filterwarnings("ignore", message="FP16 is not supported on CPU")
+    except ImportError:
+        base_dir = Path(__file__).parent
+        die(f"openai-whisper not installed. Run: {base_dir}/.venv/bin/pip install openai-whisper")
+
+    print("[mealsave] Transcribing audio with Whisper (base model)...", file=sys.stderr)
+    try:
+        # Load model (base is fast and usually sufficient for recipes)
+        model = whisper.load_model("base")
+        result = model.transcribe(video_path)
+        return result.get("text", "").strip()
+    except Exception as e:
+        print(f"[mealsave] Whisper transcription failed: {e}", file=sys.stderr)
+        return ""
+
+
+def extract_text_from_video(video_path: str, tmpdir: str) -> str:
+    """Extract frames on scene changes and run OCR."""
+    try:
+        import pytesseract
+        from PIL import Image
+    except ImportError:
+        die("pytesseract/Pillow not installed. Run: ~/.claude/skills/mealsave/.venv/bin/pip install pytesseract Pillow")
+
+    frames_dir = os.path.join(tmpdir, "frames")
+    os.makedirs(frames_dir, exist_ok=True)
+
+    print("[mealsave] Extracting keyframes with ffmpeg...", file=sys.stderr)
+    # Extract frames where scene change > 0.1
+    cmd = [
+        "ffmpeg", "-i", video_path,
+        "-vf", "select='gt(scene,0.1)'",
+        "-vsync", "vfr",
+        os.path.join(frames_dir, "frame_%04d.jpg")
+    ]
+    try:
+        subprocess.run(cmd, capture_output=True, check=True, timeout=120)
+    except subprocess.CalledProcessError as e:
+        print(f"[mealsave] ffmpeg frame extraction failed: {e.stderr.decode()}", file=sys.stderr)
+        return ""
+
+    print("[mealsave] Running OCR on keyframes...", file=sys.stderr)
+    all_text = []
+    seen_lines = set()
+
+    frame_files = sorted([f for f in os.listdir(frames_dir) if f.endswith(".jpg")])
+    for frame_file in frame_files:
+        frame_path = os.path.join(frames_dir, frame_file)
+        try:
+            text = pytesseract.image_to_string(Image.open(frame_path))
+            for line in text.splitlines():
+                line = line.strip()
+                if len(line) > 5 and line not in seen_lines:
+                    seen_lines.add(line)
+                    all_text.append(line)
+        except Exception as e:
+            print(f"[mealsave] OCR failed for {frame_file}: {e}", file=sys.stderr)
+
+    return "\n".join(all_text)
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -540,7 +686,59 @@ def main():
 
     print("[mealsave] Mealie scraper didn't handle this URL, falling back to extraction...")
 
-    # Path 2: YouTube — transcript → LLM
+    # Path 2: TikTok — caption first, AV fallback
+    if is_tiktok(url):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmpdir:
+            print(f"[mealsave] Processing TikTok URL: {url}")
+
+            # Path 2a: caption-first — most TikTok recipes live in the description
+            meta = fetch_tiktok_metadata(url)
+            caption_text = ""
+            if meta:
+                caption_text = (
+                    f"TITLE: {meta['title']}\n"
+                    f"UPLOADER: {meta['uploader']}\n"
+                    f"DESCRIPTION:\n{meta['description']}"
+                )
+                if meta["description"].strip():
+                    print("[mealsave] Trying caption-first extraction...")
+                    data = llm_extract(caption_text, "TikTok caption/description")
+                    if data.get("recipeIngredient") and data.get("recipeInstructions"):
+                        slug = create_from_data(mealie_url, token, data, url)
+                        print(f"{mealie_url}/g/home/r/{slug}")
+                        sys.exit(0)
+                    print("[mealsave] Caption alone insufficient, falling back to AV extraction...")
+
+            # Path 2b: AV pipeline (whisper + OCR), with caption appended for extra signal
+            video_path = fetch_tiktok_video(url, tmpdir)
+            transcript = transcribe_audio(video_path)
+            ocr_text = extract_text_from_video(video_path, tmpdir)
+
+            if not transcript.strip() and not ocr_text.strip() and not caption_text.strip():
+                die("Transcription, OCR, and caption all empty. Cannot extract a recipe.")
+
+            combined_text = (
+                f"{caption_text}\n\n"
+                f"AUDIO TRANSCRIPT:\n{transcript}\n\n"
+                f"VIDEO OCR TEXT:\n{ocr_text}"
+            )
+
+            print("[mealsave] Extracting recipe with Claude...")
+            data = llm_extract(combined_text, "TikTok video (caption + audio + OCR)")
+
+            if not data.get("recipeIngredient") and not data.get("recipeInstructions"):
+                die(
+                    "LLM extraction produced an empty recipe "
+                    "(no ingredients, no instructions). "
+                    "Try saving it manually in Mealie's UI."
+                )
+
+            slug = create_from_data(mealie_url, token, data, url)
+            print(f"{mealie_url}/g/home/r/{slug}")
+            sys.exit(0)
+
+    # Path 3: YouTube — transcript → LLM
     if is_youtube(url):
         print("[mealsave] Fetching YouTube transcript...")
         transcript = fetch_youtube_transcript(url)

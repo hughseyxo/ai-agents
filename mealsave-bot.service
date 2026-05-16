@@ -1,0 +1,13 @@
+[Unit]
+Description=Mealsave Telegram Bot
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/cian/git/ai-agents/skills/mealsave
+ExecStart=/home/cian/git/ai-agents/skills/mealsave/.venv/bin/python -u /home/cian/git/ai-agents/skills/mealsave/mealsave_bot.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

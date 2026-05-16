@@ -35,19 +35,29 @@ Single change point. Try Claude → on infrastructure failure → try Gemini.
 synthesize(prompt)
   ├── Try claude CLI
   │   ├── Success → return output
-  │   └── Failure (rate limit / timeout / empty output / quota)
+  │   ├── Timeout → raise (terminal, no failover — see below)
+  │   └── Failure (rate limit / empty output / quota)
   │       └── Adapt prompt for Gemini
   │           └── Try gemini CLI
   │               ├── Success → return output
+  │               ├── Timeout → raise
   │               └── Failure → raise RuntimeError
   └── Non-retriable error (context_length, invalid_request)
       └── raise immediately (would fail on Gemini too)
 ```
 
 **Failure detection:**
-- Non-zero exit + stderr matching: rate limit, 429, quota, billing, connection, timeout, 502, 503
-- `subprocess.TimeoutExpired` (adding 300s timeout — currently none)
+- Non-zero exit + stderr matching: rate limit, 429, quota, billing, connection, 502, 503
 - Zero exit but empty stdout (partial failure mode)
+- `subprocess.TimeoutExpired` at 600s → **terminal, no failover**
+
+**Why timeouts don't fail over:** A timed-out CLI may have already executed
+non-idempotent MCP side effects (sent email, created Todoist tasks, written
+calendar events) before being killed. Running a second provider with the same
+prompt would duplicate those effects. Confirmed in production 2026-05-15:
+Claude timed out at 300s after sending the news briefing email; Gemini ran on
+failover and sent a second copy. Fix: timeout raises terminally, and the 300s
+window was raised to 600s so legitimate long runs aren't truncated.
 
 **Prompt adaptation for Gemini** (`_adapt_prompt_for_gemini()`):
 - Strip ToolSearch instructions
