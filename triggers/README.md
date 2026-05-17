@@ -4,11 +4,13 @@ These JSON files define Claude Code RemoteTrigger entries — on-demand tasks th
 
 ## Triggers
 
-| File | Name | Description |
-|------|------|-------------|
-| `run-briefing-agent.json` | run-briefing-agent | Manually run the daily briefing agent |
-| `check-agent-health.json` | check-agent-health | Check all agents' last run status from agents.db |
-| `security-audit.json` | security-audit | Run the 18-check security audit agent on demand |
+| File | Name | Description | Cloud-runnable? |
+|------|------|-------------|----------------|
+| `run-briefing-agent.json` | run-briefing-agent | Manually run the daily briefing on demand | ✅ Yes (Calendar + Gmail + Todoist) |
+| `check-agent-health.json` | check-agent-health | Check all agents' last run status from agents.db | ❌ No — needs server SQLite. Use MCP bridge: `list_agents()` |
+| `security-audit.json` | security-audit | Run the 18-check security audit agent on demand | ❌ No — needs server shell. Use MCP bridge: `exec_shell("bash run-agent.sh security-audit")` |
+
+> **Note:** RemoteTriggers run on claude.ai cloud infrastructure — they can access the git repo and cloud MCP connections (Gmail, Calendar, Todoist) but cannot reach the server's SQLite database, Tailscale network, or local services. Tasks requiring server access should be run via the MCP bridge from laptop Claude Code instead.
 
 ## Creating / Updating Triggers
 
@@ -31,9 +33,10 @@ Update this section after creation:
 
 | Name | Trigger ID |
 |------|-----------|
-| run-briefing-agent | _not yet created_ |
-| check-agent-health | _not yet created_ |
-| security-audit | _not yet created_ |
+| Daily Briefing (scheduled 05:00 UTC) | `trig_01RFF8uoxNmr3WnobMGZJFza` |
+| run-briefing-agent (on demand) | `trig_01A2SKJz7xJDccejzoBYQK2p` |
+| check-agent-health | N/A — use MCP bridge |
+| security-audit | N/A — use MCP bridge |
 
 ## Invoking from the Laptop
 
