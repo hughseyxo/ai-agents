@@ -37,12 +37,20 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 │   ├── runner.py               # CLI: python3 -m agents <command>
 │   ├── weather.py              # Open-Meteo weather client (Leiden default, no API key)
 │   ├── plant_weather.py        # Weather-based watering adjustment logic (pure functions)
-│   ├── daily_briefing.py       # Daily briefing agent (schedule: 05:05 UTC / 07:05 CEST)
-│   ├── news_briefing.py        # News briefing agent (schedule: 05:00 UTC / 07:00 CEST)
+│   ├── daily_briefing.py       # Daily briefing agent (schedule: 05:05 UTC / 07:05 CEST, model: claude-sonnet-4-6)
+│   ├── news_briefing.py        # News briefing agent (schedule: 05:00 UTC / 07:00 CEST, model: claude-haiku-4-5)
 │   ├── security_audit.py       # Security audit agent — 18 checks: 12 system + 4 seedbox + 2 web (Cloudflare IP validation, Shodan InternetDB). Schedule: Sunday 06:00 UTC / 08:00 CEST. Seedbox configs live in ~/git/yopflix (private repo).
 │   └── prompts/                # LLM CLI synthesis prompt templates
 │       ├── daily_briefing.md
 │       └── news_briefing.md
+├── telegram-bot/       # Server concierge Telegram bot (OpenRouter-backed)
+│   ├── bot.py                  # Bot: polling, auth gate, tool-use loop, model fallback
+│   ├── tools.py                # Tool functions: get_agent_status, get_plant_status, get_yopflix_status, get_system_health, get_cron_schedule, get_agent_logs
+│   ├── concierge-bot.service   # systemd user service (symlinked to ~/.config/systemd/user/)
+│   ├── test_bot.py             # Bot handler tests (auth, tool-use loop)
+│   ├── test_tools.py           # Tool function unit tests (mocked deps)
+│   ├── .env                    # Private API keys (gitignored): TELEGRAM_BOT_TOKEN, OPENROUTER_API_KEY, TELEGRAM_USER_ID
+│   └── .env.example            # Template for setup
 ├── data/               # SQLite database (gitignored)
 ├── output/             # Finished deliverables (reports, drafts, analysis)
 ├── scripts/            # Shell helper scripts (e.g. Google token check)
@@ -52,7 +60,8 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 │   │   ├── mealsave_bot.py     # Telegram bot for remote saving
 │   │   └── check-yt-auth.sh    # YouTube cookie expiry check
 │   └── free-time/              # Suggest best tasks for a free time window
-├── mcp-servers/        # Custom MCP servers (calendar, gmail auth)
+├── mcp-servers/        # Custom MCP servers (calendar, gmail auth) + bridge_server.py (HTTP MCP over Tailscale for laptop access)
+├── triggers/           # RemoteTrigger definitions (JSON) — on-demand tasks fired from any Claude Code session. See triggers/README.md for IDs and usage.
 ├── tests/              # pytest test suite (run: pytest tests/)
 │   ├── test_synthesize.py      # Failover + prompt adaptation tests
 │   ├── test_weather.py         # Open-Meteo weather fetch tests
@@ -63,7 +72,16 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 ├── docs/               # Design docs (mandatory for non-trivial changes)
 │   ├── llm-failover.md         # Claude→Gemini failover design doc
 │   ├── weather-aware-plant-watering.md  # Weather-based watering adjustments
-│   └── mealsave-tiktok-and-telegram.md  # TikTok OCR + Telegram bot design
+│   ├── mealsave-tiktok-and-telegram.md  # TikTok OCR + Telegram bot design
+│   ├── hermes-evaluation.md    # Summary of failed CLI-proxy/local-inference efforts
+│   ├── openrouter-telegram-bot.md # OpenRouter bot architecture (superseded by concierge)
+│   ├── telegram-bots.md        # Overview of all Telegram bots, status, failure history
+│   ├── mcp-bridge.md           # MCP bridge server design (Tailscale HTTP, 7 tools)
+│   └── superpowers/
+│       ├── specs/
+│       │   └── 2026-05-17-server-concierge-bot-design.md  # Concierge bot spec
+│       └── plans/
+│           └── 2026-05-17-laptop-server-bridge.md  # Laptop↔server bridge implementation plan
 ├── free_time_bot.py    # Telegram bot: free-time task advisor (systemd service)
 ├── mealsave-bot.service # Telegram bot: recipe saver (systemd service)
 ├── plant.sh            # CLI tool: manage plant watering tracker (add/list/remove)
@@ -75,6 +93,7 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 - Agents are Python classes in `agents/` extending `BaseAgent`
 - **Dual-CLI rule:** All agent Python code must be runnable by both Claude and Gemini CLI. No Claude-specific or Gemini-specific dependencies in Python. LLM-specific adaptations happen in `BaseAgent.synthesize()` only.
 - Execution model: Python handles lifecycle, state (SQLite), retry, dedup, and deterministic logic (e.g. plant watering, weather, RSS fetching). LLM CLI (with MCP tools) handles data synthesis, formatting, and email sending.
+- **Model selection:** Set `model = "claude-sonnet-4-6"` (or haiku/opus) on the agent class to pass `--model` to the Claude CLI. Default `None` lets CLI pick. Briefings use Sonnet/Haiku for cost; security-audit stays on default (Opus).
 - **LLM failover & Timeouts:** `BaseAgent.synthesize()` tries Claude CLI first, falls back to Gemini CLI on infrastructure failure (rate limits, timeouts, quota). Prompts are adapted at runtime for Gemini.
   - **Timeouts:** A 600s timeout is applied to LLM calls. If a step marked with `side_effects: True` times out, the agent skips retries to avoid duplicate actions (e.g. sending multiple emails).
 
@@ -113,3 +132,12 @@ Configured for both Claude (`.mcp.json`) and Gemini (`gemini mcp` project scope)
 - **Google Calendar** — local stdio MCP (`mcp-servers/calendar_server.py`). Event listing, creation, scheduling
 - **Gmail** — local stdio MCP (`mcp-servers/gmail_server.py`). Search threads, send/draft emails, label management
 - **Google Drive** — file access (authenticated via OAuth, Claude-native only)
+
+# Server Concierge Telegram Bot
+- **Role:** Natural-language interface to query server status. Ask about agent runs, plant watering, yopflix/seedbox, system health, cron schedules, and logs.
+- **Backend:** OpenRouter free tier with model fallback: `deepseek/deepseek-chat-v3-0324:free` → `google/gemma-3-27b-it:free` → `meta-llama/llama-3.3-70b-instruct:free`
+- **Auth:** `TELEGRAM_USER_ID` env var — all other users silently ignored
+- **Tool use:** LLM calls tool functions in `tools.py` to fetch live data; results injected back into conversation (max 3 tool-use iterations per message)
+- **Service:** `concierge-bot.service` (systemd user service, `~/.config/systemd/user/`)
+- **Note:** OpenRouter free models are the only viable LLM backend — Anthropic/Google API keys require separate paid API plans, not covered by Pro subscriptions
+- **Design doc:** `docs/superpowers/specs/2026-05-17-server-concierge-bot-design.md`

@@ -1,0 +1,8 @@
+{
+  "name": "security-audit",
+  "description": "Run the security audit agent on demand (18 checks: system, seedbox, web)",
+  "enabled": true,
+  "model": "claude-sonnet-4-6",
+  "allowed_tools": ["Bash", "Read"],
+  "prompt": "Run the security audit agent: cd /home/cian/git/ai-agents && bash run-agent.sh security-audit\n\nReport full output and highlight Critical/High findings."
+}

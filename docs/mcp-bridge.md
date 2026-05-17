@@ -4,7 +4,7 @@
 
 **Design decisions:**
 - HTTP MCP transport (not stdio) so the laptop can connect over the network
-- Binds to Tailscale IP only (`100.96.86.73:4242`) — no public internet exposure
+- Binds to Tailscale IP only (`yopflix.tailed77a8.ts.net:4242`) — no public internet exposure
 - Bearer token auth (shared secret) — never transmitted over public internet thanks to Tailscale
 - Python stdlib only (no third-party deps) — keeps the server lightweight and dependency-free
 - Systemd user service for auto-start and automatic restart on failure
@@ -14,7 +14,7 @@
 ```
 Laptop Claude Code
   └─ ~/.mcp.json → mcpServers.server-bridge (HTTP, Tailscale IP)
-       └─ POST http://100.96.86.73:4242/mcp (Bearer token)
+       └─ POST http://yopflix.tailed77a8.ts.net:4242/mcp (Bearer token)
             └─ mcp-servers/bridge_server.py
                  ├─ list_agents / get_agent_status / run_agent → data/agents.db + run-agent.sh
                  ├─ exec_shell → subprocess.run (restricted to /home/cian/, blocklist)
@@ -43,7 +43,7 @@ Laptop Claude Code
    ```json
    "server-bridge": {
      "type": "http",
-     "url": "http://100.96.86.73:4242/mcp",
+     "url": "http://yopflix.tailed77a8.ts.net:4242/mcp",
      "headers": { "Authorization": "Bearer ${MCP_BRIDGE_TOKEN}" }
    }
    ```

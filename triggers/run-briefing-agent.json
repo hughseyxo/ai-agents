@@ -1,0 +1,8 @@
+{
+  "name": "run-briefing-agent",
+  "description": "Manually trigger the daily briefing agent on demand",
+  "enabled": true,
+  "model": "claude-sonnet-4-6",
+  "allowed_tools": ["Bash", "Read"],
+  "prompt": "Run the daily briefing agent: cd /home/cian/git/ai-agents && bash run-agent.sh daily-briefing\n\nReport the output summary or any errors."
+}

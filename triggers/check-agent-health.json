@@ -1,0 +1,8 @@
+{
+  "name": "check-agent-health",
+  "description": "Query agents.db for last run status of all agents, flag any that haven't run in 25+ hours",
+  "enabled": true,
+  "model": "claude-haiku-4-5",
+  "allowed_tools": ["Bash"],
+  "prompt": "Check all agents health:\nsqlite3 /home/cian/git/ai-agents/data/agents.db \"SELECT agent, status, started_at, error FROM runs GROUP BY agent HAVING started_at = MAX(started_at) ORDER BY agent;\"\n\nAlso check crontab: crontab -l | grep ai-agents\n\nReport: last run time+status per agent, any agent not run in 25+ hours, cron installed Y/N, PASS/FAIL summary."
+}

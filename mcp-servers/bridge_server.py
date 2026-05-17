@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-HTTP MCP Bridge Server — listens on Tailscale interface only (100.96.86.73:4242).
+HTTP MCP Bridge Server — listens on Tailscale interface only (yopflix.tailed77a8.ts.net:4242).
 Exposes 7 tools: run_agent, list_agents, get_agent_status, exec_shell,
 read_file, write_file, list_directory.
 Auth: Bearer token from MCP_BRIDGE_TOKEN env var.
@@ -10,6 +10,7 @@ Start: python3 mcp-servers/bridge_server.py
 import json
 import os
 import re
+import socket
 import sqlite3
 import subprocess
 import sys
@@ -17,7 +18,8 @@ from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
-BIND_HOST = "100.96.86.73"
+TAILSCALE_HOSTNAME = "yopflix.tailed77a8.ts.net"
+BIND_HOST = socket.gethostbyname(TAILSCALE_HOSTNAME)
 BIND_PORT = 4242
 BRIDGE_TOKEN = os.environ.get("MCP_BRIDGE_TOKEN", "")
 REPO_ROOT = Path(__file__).resolve().parent.parent
