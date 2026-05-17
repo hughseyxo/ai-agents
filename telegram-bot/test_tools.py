@@ -1,0 +1,328 @@
+"""Tests for server concierge tool functions.
+
+All external dependencies (AgentDB, subprocess, psutil, file I/O) are mocked.
+Each test describes the expected output contract, not implementation details.
+"""
+import json
+import sys
+from datetime import date, timedelta
+from pathlib import Path
+from unittest.mock import MagicMock, patch, mock_open
+
+import pytest
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from tools import (
+    get_agent_status,
+    get_plant_status,
+    get_yopflix_status,
+    get_system_health,
+    get_cron_schedule,
+    get_agent_logs,
+)
+
+FAKE_PLANTS = [
+    {"name": "Monstera", "frequency_days": 10, "last_watered": "2026-05-10", "location": "indoor"},
+    {"name": "Aloe Vera", "frequency_days": 14, "last_watered": "2026-05-15", "location": "indoor"},
+    {"name": "Lavender", "frequency_days": 7, "last_watered": "2026-05-05", "location": "outdoor"},
+]
+
+
+# ---------------------------------------------------------------------------
+# get_agent_status
+# ---------------------------------------------------------------------------
+
+def test_get_agent_status_shows_all_agents():
+    mock_db = MagicMock()
+    mock_db.get_last_run.side_effect = lambda agent: {
+        "agent": agent,
+        "started_at": "2026-05-17 05:05:00",
+        "status": "success",
+        "error": None,
+    }
+    with patch("tools.AgentDB", return_value=mock_db):
+        result = get_agent_status()
+    assert "daily-briefing" in result
+    assert "news-briefing" in result
+    assert "security-audit" in result
+
+
+def test_get_agent_status_shows_status_and_time():
+    mock_db = MagicMock()
+    mock_db.get_last_run.return_value = {
+        "agent": "daily-briefing",
+        "started_at": "2026-05-17 05:05:00",
+        "status": "success",
+        "error": None,
+    }
+    with patch("tools.AgentDB", return_value=mock_db):
+        result = get_agent_status()
+    assert "success" in result
+    assert "2026-05-17" in result
+
+
+def test_get_agent_status_shows_failure_with_error():
+    mock_db = MagicMock()
+    mock_db.get_last_run.return_value = {
+        "agent": "daily-briefing",
+        "started_at": "2026-05-17 05:05:00",
+        "status": "failure",
+        "error": "API timeout",
+    }
+    with patch("tools.AgentDB", return_value=mock_db):
+        result = get_agent_status()
+    assert "failure" in result
+    assert "API timeout" in result
+
+
+def test_get_agent_status_handles_never_run_agent():
+    mock_db = MagicMock()
+    mock_db.get_last_run.return_value = None
+    with patch("tools.AgentDB", return_value=mock_db):
+        result = get_agent_status()
+    assert "never run" in result.lower()
+
+
+def test_get_agent_status_handles_db_error():
+    with patch("tools.AgentDB", side_effect=Exception("db locked")):
+        result = get_agent_status()
+    assert "unavailable" in result.lower() or "error" in result.lower()
+
+
+# ---------------------------------------------------------------------------
+# get_plant_status
+# ---------------------------------------------------------------------------
+
+def test_get_plant_status_lists_all_plants():
+    mock_db = MagicMock()
+    mock_db.get_state.return_value = FAKE_PLANTS
+    with patch("tools.AgentDB", return_value=mock_db):
+        result = get_plant_status()
+    assert "Monstera" in result
+    assert "Aloe Vera" in result
+    assert "Lavender" in result
+
+
+def test_get_plant_status_shows_next_watering_date():
+    mock_db = MagicMock()
+    mock_db.get_state.return_value = [
+        {"name": "Monstera", "frequency_days": 10, "last_watered": "2026-05-10", "location": "indoor"}
+    ]
+    with patch("tools.AgentDB", return_value=mock_db):
+        result = get_plant_status()
+    assert "2026-05-20" in result
+
+
+def test_get_plant_status_flags_overdue():
+    mock_db = MagicMock()
+    # Last watered 10 days ago with 7-day frequency → overdue by 3 days
+    overdue_date = (date.today() - timedelta(days=10)).isoformat()
+    mock_db.get_state.return_value = [
+        {"name": "Lavender", "frequency_days": 7, "last_watered": overdue_date, "location": "outdoor"}
+    ]
+    with patch("tools.AgentDB", return_value=mock_db):
+        result = get_plant_status()
+    assert "overdue" in result.lower() or "!" in result
+
+
+def test_get_plant_status_handles_empty_plant_list():
+    mock_db = MagicMock()
+    mock_db.get_state.return_value = []
+    with patch("tools.AgentDB", return_value=mock_db):
+        result = get_plant_status()
+    assert "no plants" in result.lower() or result.strip() != ""
+
+
+def test_get_plant_status_handles_db_error():
+    with patch("tools.AgentDB", side_effect=Exception("db error")):
+        result = get_plant_status()
+    assert "unavailable" in result.lower() or "error" in result.lower()
+
+
+# ---------------------------------------------------------------------------
+# get_yopflix_status
+# ---------------------------------------------------------------------------
+
+FAKE_CONFIG_YAML = """
+services:
+  - name: sonarr
+    enabled: true
+  - name: radarr
+    enabled: true
+  - name: lidarr
+    enabled: false
+"""
+
+FAKE_DOCKER_PS = "sonarr\tUp 2 hours\nradarr\tUp 2 hours\n"
+FAKE_DF = "Filesystem      Size  Used Avail Use% Mounted on\n/dev/sda1       1.8T  1.2T  600G  68% /data/media\n"
+
+
+def test_get_yopflix_status_shows_enabled_services():
+    with (
+        patch("tools.YOPFLIX_CONFIG", "/fake/config.yaml"),
+        patch("builtins.open", mock_open(read_data=FAKE_CONFIG_YAML)),
+        patch("tools.subprocess.run") as mock_run,
+    ):
+        mock_run.side_effect = [
+            MagicMock(stdout=FAKE_DOCKER_PS, returncode=0),
+            MagicMock(stdout=FAKE_DF, returncode=0),
+        ]
+        result = get_yopflix_status()
+    assert "sonarr" in result
+    assert "radarr" in result
+
+
+def test_get_yopflix_status_shows_disabled_services():
+    with (
+        patch("tools.YOPFLIX_CONFIG", "/fake/config.yaml"),
+        patch("builtins.open", mock_open(read_data=FAKE_CONFIG_YAML)),
+        patch("tools.subprocess.run") as mock_run,
+    ):
+        mock_run.side_effect = [
+            MagicMock(stdout=FAKE_DOCKER_PS, returncode=0),
+            MagicMock(stdout=FAKE_DF, returncode=0),
+        ]
+        result = get_yopflix_status()
+    assert "lidarr" in result
+
+
+def test_get_yopflix_status_shows_disk_usage():
+    with (
+        patch("tools.YOPFLIX_CONFIG", "/fake/config.yaml"),
+        patch("builtins.open", mock_open(read_data=FAKE_CONFIG_YAML)),
+        patch("tools.subprocess.run") as mock_run,
+    ):
+        mock_run.side_effect = [
+            MagicMock(stdout=FAKE_DOCKER_PS, returncode=0),
+            MagicMock(stdout=FAKE_DF, returncode=0),
+        ]
+        result = get_yopflix_status()
+    assert "68%" in result or "1.2T" in result or "600G" in result
+
+
+def test_get_yopflix_status_handles_docker_unavailable():
+    with (
+        patch("tools.YOPFLIX_CONFIG", "/fake/config.yaml"),
+        patch("builtins.open", mock_open(read_data=FAKE_CONFIG_YAML)),
+        patch("tools.subprocess.run", side_effect=FileNotFoundError("docker not found")),
+    ):
+        result = get_yopflix_status()
+    assert "docker" in result.lower()
+
+
+def test_get_yopflix_status_handles_missing_config():
+    with (
+        patch("tools.YOPFLIX_CONFIG", "/nonexistent/config.yaml"),
+        patch("builtins.open", side_effect=FileNotFoundError),
+        patch("tools.subprocess.run") as mock_run,
+    ):
+        mock_run.return_value = MagicMock(stdout="", returncode=0)
+        result = get_yopflix_status()
+    assert "unavailable" in result.lower() or "not found" in result.lower() or "config" in result.lower()
+
+
+# ---------------------------------------------------------------------------
+# get_system_health
+# ---------------------------------------------------------------------------
+
+def test_get_system_health_shows_cpu_and_ram():
+    mock_mem = MagicMock()
+    mock_mem.percent = 42.5
+    mock_mem.used = 4 * 1024 ** 3
+    mock_mem.total = 8 * 1024 ** 3
+    with (
+        patch("tools.psutil.cpu_percent", return_value=15.3),
+        patch("tools.psutil.virtual_memory", return_value=mock_mem),
+        patch("tools.psutil.boot_time", return_value=1747000000.0),
+    ):
+        result = get_system_health()
+    assert "15" in result or "15.3" in result
+    assert "42" in result or "42.5" in result
+
+
+def test_get_system_health_shows_uptime():
+    import time
+    boot_time = time.time() - (3 * 86400 + 2 * 3600)  # 3 days, 2 hours ago
+    mock_mem = MagicMock(percent=30.0, used=2 * 1024 ** 3, total=8 * 1024 ** 3)
+    with (
+        patch("tools.psutil.cpu_percent", return_value=5.0),
+        patch("tools.psutil.virtual_memory", return_value=mock_mem),
+        patch("tools.psutil.boot_time", return_value=boot_time),
+    ):
+        result = get_system_health()
+    assert "3" in result  # at least "3 days" appears
+
+
+def test_get_system_health_handles_psutil_error():
+    with patch("tools.psutil.cpu_percent", side_effect=Exception("psutil error")):
+        result = get_system_health()
+    assert "unavailable" in result.lower() or "error" in result.lower()
+
+
+# ---------------------------------------------------------------------------
+# get_cron_schedule
+# ---------------------------------------------------------------------------
+
+FAKE_CRONTAB = """
+0 9 * * 1 ~/.claude/skills/mealsave/check-yt-auth.sh
+# --- ai-agents managed ---
+5 5 * * * /home/cian/git/ai-agents/run-agent.sh daily-briefing >> /home/cian/git/ai-agents/output/cron.log 2>&1
+0 5 * * * /home/cian/git/ai-agents/run-agent.sh news-briefing >> /home/cian/git/ai-agents/output/cron.log 2>&1
+# --- end ai-agents ---
+"""
+
+
+def test_get_cron_schedule_shows_agent_schedules():
+    with patch("tools.subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(stdout=FAKE_CRONTAB, returncode=0)
+        result = get_cron_schedule()
+    assert "daily-briefing" in result
+    assert "news-briefing" in result
+
+
+def test_get_cron_schedule_shows_human_readable_time():
+    with patch("tools.subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(stdout=FAKE_CRONTAB, returncode=0)
+        result = get_cron_schedule()
+    assert "07:05" in result or "07:00" in result or "CEST" in result or "UTC" in result
+
+
+def test_get_cron_schedule_handles_no_crontab():
+    with patch("tools.subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(stdout="no crontab for cian", returncode=1)
+        result = get_cron_schedule()
+    assert "no schedule" in result.lower() or "crontab" in result.lower()
+
+
+# ---------------------------------------------------------------------------
+# get_agent_logs
+# ---------------------------------------------------------------------------
+
+FAKE_LOG = "\n".join([
+    f"2026-05-17 05:05:0{i} [daily-briefing] step {i}" for i in range(10)
+] + [
+    f"2026-05-17 05:00:0{i} [news-briefing] step {i}" for i in range(10)
+])
+
+
+def test_get_agent_logs_returns_last_lines():
+    with patch("tools.LOG_PATH", "/fake/cron.log"):
+        with patch("builtins.open", mock_open(read_data=FAKE_LOG)):
+            result = get_agent_logs()
+    assert "daily-briefing" in result or "news-briefing" in result
+
+
+def test_get_agent_logs_filters_by_agent_name():
+    with patch("tools.LOG_PATH", "/fake/cron.log"):
+        with patch("builtins.open", mock_open(read_data=FAKE_LOG)):
+            result = get_agent_logs("daily-briefing")
+    assert "daily-briefing" in result
+    assert "news-briefing" not in result
+
+
+def test_get_agent_logs_handles_missing_log():
+    with patch("tools.LOG_PATH", "/nonexistent/cron.log"):
+        with patch("builtins.open", side_effect=FileNotFoundError):
+            result = get_agent_logs()
+    assert "no log" in result.lower() or "not found" in result.lower() or "unavailable" in result.lower()

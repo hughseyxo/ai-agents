@@ -1,0 +1,14 @@
+[Unit]
+Description=Server Concierge Telegram Bot
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/cian/git/ai-agents/telegram-bot
+EnvironmentFile=/home/cian/git/ai-agents/telegram-bot/.env
+ExecStart=/home/cian/git/ai-agents/telegram-bot/.venv/bin/python -u bot.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
