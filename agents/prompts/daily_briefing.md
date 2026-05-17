@@ -9,16 +9,7 @@ BEFORE starting, read docs/agent-notes.md if it exists — it contains learnings
 AFTER completing, append a dated entry to docs/agent-notes.md (create if needed) with: API failures, workarounds applied, MCP tool issues, Todoist API quirks, anything that saves tokens next run. Format: `## {{date}} — Daily Briefing` followed by bullet points.
 
 ## Step 1: Import MCP tools
-Use ToolSearch to load required tools:
-- Search `"todoist find-tasks"` for Todoist
-- Search `"google_calendar gcal_list_events"` for Google Calendar
-- Search `"gmail gmail_send"` for Gmail
-
-**Todoist retry:** If Todoist tools are not found on first attempt, retry up to 3 times with 10-second pauses.
-
-**Todoist REST API fallback:** If MCP is still unavailable after 3 retries, fall back to the Todoist REST API directly. Use WebFetch (or Bash with curl) to call:
-- `GET https://api.todoist.com/api/v1/tasks?project_id=6Crf3cH2RF5v86wc` with header `Authorization: Bearer $TODOIST_API_TOKEN`
-- Read the TODOIST_API_TOKEN from the environment variable (it's exported by the shell script)
+Load via ToolSearch as needed: `todoist` (find-tasks, find-tasks-by-date, add-tasks), `google_calendar` (gcal_list_events), `gmail` (gmail_send).
 
 ## Step 2: Get today's date
 Note today's date and the date 30 days from now in YYYY-MM-DD format.
@@ -87,50 +78,15 @@ Call `mcp__todoist__find-tasks` with `projectId: "6Crf3cH2RF5v86wc"`, `limit: 50
 The agent has pre-computed plant watering data (see "Pre-computed Plant Data" section below).
 If there are plant tasks to create, check if each task already exists in project 6Crf3cH2RF5v86wc first (search by content matching "Water [Plant Name]"), then create any missing ones via `mcp__todoist__add-tasks` with priority p4.
 
-## Step 7: Format the markdown report
-This is your final text output. Output ONLY this content — no commentary before or after.
-
-```
-# Daily Briefing — [DATE]
-
-## Today
-- [TIME] — [Event Title]                    (calendar events)
-- [TIME] — [ON CALL] On-Call Shift           (on-call shifts)
-- [TASK] [Task title]                        (Todoist tasks due today)
-- (If nothing: "Nothing scheduled today")
-
-## Inbox Tasks
-### Overdue
-- [Task title] (Due: [date]) 🔴
-
-### Due Today
-- [Task title] 🟡
-
-### No Due Date
-- [Task title]
-
-## Plant Watering
-- [DATE] — Water [Plant Name] [adjusted: reason if present]
-- (If no plants need water soon: "All plants are happy!")
-- (If a plant has an [adjusted: ...] note, include that reason in the output)
-
-## Quick Wins (estimated < 30 min)
-- [Task title] (~[X] min)
-
-## Coming Up (next 30 days)
-- [DATE] — [Event Title]              (calendar events)
-- [DATE] — [ON CALL] On-Call Shift    (on-call shifts)
-- [DATE] — [TASK] [Task title]        (Todoist tasks)
-```
+## Step 7: Build and send HTML email
+Build the email body as HTML with inline CSS only using the template below, then send via `mcp__gmail__gmail_send`. After sending, your final text output MUST be the exact HTML you sent — nothing else, no preamble, no summary.
 
 **Coming Up rules:**
-- Merge calendar events + on-call shifts + Todoist tasks
-- Sort chronologically
+- Merge calendar events + on-call shifts + Todoist tasks, sort chronologically
 - **Strictly within 30 days from today — nothing beyond**
 - Cap at 15 entries total
 
-## Step 8: Build and send HTML email
-Build the email body as HTML with inline CSS only, then send via `mcp__gmail__gmail_send`:
+Gmail send args:
 - to: `cianohughes@gmail.com`
 - subject: `Daily Briefing — [WEEKDAY, DATE]`
 - mimeType: `text/html`
@@ -220,4 +176,4 @@ If Gmail fails, note it in the report but do not stop.
 - Do NOT run any git commands
 - Keep estimates clearly labelled as estimates
 - **Coming Up section: strictly within 30 days from today, no exceptions**
-- Your final text output MUST be the markdown report only — no preamble, no "Done", no summary
+- Your final text output MUST be the HTML you sent — no preamble, no "Done", no summary
