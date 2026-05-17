@@ -26,6 +26,7 @@ class BaseAgent:
     name: str = ""
     schedule: str = ""  # cron expression, e.g. "5 7 * * *"
     max_retries: int = 2
+    model: str | None = None  # Claude model override (e.g. "claude-sonnet-4-6"); None = CLI default
 
     def __init__(self, db_path: str | Path = DEFAULT_DB_PATH):
         self.db = AgentDB(db_path)
@@ -150,7 +151,10 @@ class BaseAgent:
         last_error = None
         for provider in self.PROVIDERS:
             p_prompt = self._adapt_prompt_for_gemini(prompt) if provider["adapt_prompt"] else prompt
-            cmd = provider["cmd_prefix"] + [p_prompt] + provider["cmd_suffix"]
+            cmd = list(provider["cmd_prefix"]) + [p_prompt] + list(provider["cmd_suffix"])
+            # Inject --model only for Claude; Gemini Pro is free-tier and ignored here
+            if provider["name"] == "claude" and self.model:
+                cmd += ["--model", self.model]
             try:
                 result = subprocess.run(
                     cmd, capture_output=True, text=True,

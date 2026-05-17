@@ -20,6 +20,7 @@ from .base import BaseAgent, REPO_ROOT
 class NewsBriefingAgent(BaseAgent):
     name = "news-briefing"
     schedule = "0 5 * * *"
+    model = "claude-haiku-4-5"
 
     FEEDS = {
         "International": [

@@ -264,3 +264,45 @@ class TestSynthesize:
         agent.synthesize("test")
 
         assert mock_run.call_args[1]["timeout"] == 600
+
+    @patch("agents.base.subprocess.run")
+    def test_default_model_passes_no_model_flag(self, mock_run):
+        """BaseAgent.model is None by default — preserves current behaviour."""
+        mock_run.return_value = mock_result(stdout="output")
+        agent = make_agent()
+        assert agent.model is None
+
+        agent.synthesize("test")
+
+        cmd = mock_run.call_args[0][0]
+        assert "--model" not in cmd
+
+    @patch("agents.base.subprocess.run")
+    def test_model_attribute_injects_claude_model_flag(self, mock_run):
+        mock_run.return_value = mock_result(stdout="output")
+        agent = make_agent()
+        agent.model = "claude-sonnet-4-6"
+
+        agent.synthesize("test")
+
+        cmd = mock_run.call_args[0][0]
+        assert "--model" in cmd
+        assert cmd[cmd.index("--model") + 1] == "claude-sonnet-4-6"
+
+    @patch("agents.base.subprocess.run")
+    def test_model_attribute_does_not_pollute_gemini_cmd(self, mock_run):
+        """When Claude fails and Gemini takes over, the Claude --model flag
+        must not leak into the Gemini command."""
+        mock_run.side_effect = [
+            mock_result(returncode=1, stderr="rate limit"),
+            mock_result(stdout="gemini output"),
+        ]
+        agent = make_agent()
+        agent.model = "claude-haiku-4-5"
+
+        agent.synthesize("test")
+
+        gemini_cmd = mock_run.call_args_list[1][0][0]
+        assert gemini_cmd[0] == "gemini"
+        assert "--model" not in gemini_cmd
+        assert "claude-haiku-4-5" not in gemini_cmd

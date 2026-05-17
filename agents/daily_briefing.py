@@ -19,6 +19,7 @@ PERSONAL_PROJECT_ID = "6Crf3cH2RF5v86wc"
 class DailyBriefingAgent(BaseAgent):
     name = "daily-briefing"
     schedule = "5 5 * * *"
+    model = "claude-sonnet-4-6"
 
     def plan(self):
         last = self.last_run()
@@ -133,8 +134,8 @@ class DailyBriefingAgent(BaseAgent):
         # Claude CLI has MCP access — it fetches calendar, todoist, formats, and sends
         output = self.synthesize(prompt)
 
-        # Save markdown output
-        output_path = REPO_ROOT / "output" / f"daily-briefing-{today}.md"
+        # Save HTML output (model emits the same HTML it sent via gmail_send)
+        output_path = REPO_ROOT / "output" / f"daily-briefing-{today}.html"
         output_path.write_text(output)
 
         self.mark_seen("email_sent", today)
