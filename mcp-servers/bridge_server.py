@@ -23,7 +23,7 @@ BRIDGE_TOKEN = os.environ.get("MCP_BRIDGE_TOKEN", "")
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DB_PATH = REPO_ROOT / "data" / "agents.db"
 AGENT_REGISTRY = ["daily-briefing", "news-briefing", "security-audit"]
-ALLOWED_PATH_PREFIX = "/home/cian"
+ALLOWED_PATH_PREFIX = "/home/cian/"
 DEFAULT_WORKING_DIR = "/home/cian"
 BLOCKED_PATTERNS = [
     "rm -rf /", "rm -rf ~", "dd if=", "mkfs", ":(){", ":(){ ",
@@ -49,10 +49,14 @@ def tool_list_agents(_args: dict) -> str:
                 result.append(dict(row))
             else:
                 result.append({"agent": agent, "status": "never_run"})
-        conn.close()
         return json.dumps(result, indent=2)
     except Exception as e:
         return json.dumps({"error": str(e)})
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
 
 
 def tool_get_agent_status(args: dict) -> str:
@@ -123,7 +127,7 @@ def tool_exec_shell(args: dict) -> str:
         if pattern in cmd_lower:
             return json.dumps({"error": f"Blocked: matches safety pattern '{pattern}'"})
     resolved = str(Path(working_dir).resolve())
-    if not resolved.startswith(ALLOWED_PATH_PREFIX):
+    if not (resolved + "/").startswith(ALLOWED_PATH_PREFIX):
         return json.dumps({"error": f"working_dir must be under {ALLOWED_PATH_PREFIX}"})
     try:
         result = subprocess.run(
@@ -146,7 +150,7 @@ def tool_read_file(args: dict) -> str:
     if not path:
         return json.dumps({"error": "path is required"})
     resolved = str(Path(path).expanduser().resolve())
-    if not resolved.startswith(ALLOWED_PATH_PREFIX):
+    if not (resolved + "/").startswith(ALLOWED_PATH_PREFIX):
         return json.dumps({"error": f"path must be under {ALLOWED_PATH_PREFIX}"})
     try:
         content = Path(resolved).read_text(errors="replace")
@@ -163,7 +167,7 @@ def tool_write_file(args: dict) -> str:
     if not path:
         return json.dumps({"error": "path is required"})
     resolved = str(Path(path).expanduser().resolve())
-    if not resolved.startswith(ALLOWED_PATH_PREFIX):
+    if not (resolved + "/").startswith(ALLOWED_PATH_PREFIX):
         return json.dumps({"error": f"path must be under {ALLOWED_PATH_PREFIX}"})
     if len(content) > 10_000_000:
         return json.dumps({"error": "content too large (max 10MB)"})
@@ -179,7 +183,7 @@ def tool_write_file(args: dict) -> str:
 def tool_list_directory(args: dict) -> str:
     path = args.get("path", DEFAULT_WORKING_DIR).strip()
     resolved = str(Path(path).expanduser().resolve())
-    if not resolved.startswith(ALLOWED_PATH_PREFIX):
+    if not (resolved + "/").startswith(ALLOWED_PATH_PREFIX):
         return json.dumps({"error": f"path must be under {ALLOWED_PATH_PREFIX}"})
     try:
         entries = []
