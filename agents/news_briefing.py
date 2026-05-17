@@ -38,6 +38,9 @@ class NewsBriefingAgent(BaseAgent):
         "Leiden": [
             ("Google News Leiden", "https://news.google.com/rss/search?q=Leiden+Netherlands&hl=en"),
         ],
+        "Mullingar": [
+            ("Google News Mullingar", "https://news.google.com/rss/search?q=Mullingar+Westmeath&hl=en"),
+        ],
         "Tech": [
             ("The Verge", "https://news.google.com/rss/search?q=site:theverge.com&hl=en"),
             ("TechCrunch", "https://techcrunch.com/feed/"),
@@ -184,6 +187,9 @@ class NewsBriefingAgent(BaseAgent):
         # 4. Leiden
         leiden = [a for a in articles if a['category'] == "Leiden"][:15] # Cap Leiden to 15 to keep prompt size sane
 
+        # 4b. Mullingar
+        mullingar = [a for a in articles if a['category'] == "Mullingar"][:10]
+
         # 5. Tech & Gaming
         tech_all = [a for a in articles if a['category'] in ["Tech", "Gaming"]]
         
@@ -222,6 +228,7 @@ class NewsBriefingAgent(BaseAgent):
             "Ireland": ireland,
             "Netherlands": netherlands,
             "Leiden & Local": leiden,
+            "Mullingar": mullingar,
             "Tech": selected_tech,
             "Gaming": selected_gaming,
             "SRE / Infrastructure": selected_sre

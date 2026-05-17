@@ -40,6 +40,7 @@ D. BBC World: https://feeds.bbci.co.uk/news/world/rss.xml
 E. DutchNews: https://www.dutchnews.nl/feed/
 F. NL Times: https://nltimes.nl/feed (fallback: https://news.google.com/rss/search?q=Netherlands&hl=en)
 G. Google News Leiden: https://news.google.com/rss/search?q=Leiden+Netherlands&hl=en
+O. Google News Mullingar: https://news.google.com/rss/search?q=Mullingar+Westmeath&hl=en
 H. The Verge: https://news.google.com/rss/search?q=site:theverge.com&hl=en
 I. TechCrunch: https://techcrunch.com/feed/
 J. Hacker News: https://hnrss.org/frontpage?count=10&points=100
@@ -57,6 +58,8 @@ N. HN SRE: https://hnrss.org/frontpage?q=kubernetes+OR+linux+OR+incident+OR+post
 **Netherlands** (Feeds E+F): Merge, dedup, newest first. Cap 8.
 
 **Leiden & Local** (Feed G): All results. If none, note it.
+
+**Mullingar** (Feed O): All results, cap 10. If none, omit section.
 
 **Tech** (Feeds H+I+J+L+M): Exclude gaming articles. Prefer The Verge — ensure 2+ Verge articles if available. 5-6 stories. [BREAKING] flag if pubDate < 3 hours ago.
 
@@ -84,6 +87,10 @@ N. HN SRE: https://hnrss.org/frontpage?q=kubernetes+OR+linux+OR+incident+OR+post
   [link]
 
 ## Leiden & Local
+- **[Headline]** — [summary]
+  [link]
+
+## Mullingar
 - **[Headline]** — [summary]
   [link]
 
@@ -143,6 +150,14 @@ Use this exact structure with inline CSS. Omit SRE section if no qualifying item
         <tr><td style="padding:20px 32px 0;">
           <h2 style="margin:0 0 12px;font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#1a1a2e;">Leiden & Local</h2>
           <p style="margin:0 0 10px;padding:10px 14px;background:#f0f4ff;border-left:3px solid #4a6fa5;border-radius:4px;font-size:14px;color:#333;">
+            <a href="[LINK]" style="color:#1a1a2e;text-decoration:none;font-weight:700;">[HEADLINE]</a><br/>
+            <span style="color:#666;font-size:13px;">[SUMMARY]</span>
+          </p>
+        </td></tr>
+        <!-- Mullingar section: omit entirely if no results -->
+        <tr><td style="padding:20px 32px 0;">
+          <h2 style="margin:0 0 12px;font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#1a1a2e;">Mullingar</h2>
+          <p style="margin:0 0 10px;padding:10px 14px;background:#f0fff8;border-left:3px solid #16a085;border-radius:4px;font-size:14px;color:#333;">
             <a href="[LINK]" style="color:#1a1a2e;text-decoration:none;font-weight:700;">[HEADLINE]</a><br/>
             <span style="color:#666;font-size:13px;">[SUMMARY]</span>
           </p>
