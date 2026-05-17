@@ -1,0 +1,14 @@
+[Unit]
+Description=MCP Bridge Server (Tailscale HTTP)
+After=network.target tailscaled.service
+
+[Service]
+Type=simple
+WorkingDirectory=/home/cian/git/ai-agents
+EnvironmentFile=/home/cian/git/ai-agents/mcp-servers/.env.bridge
+ExecStart=/usr/bin/python3 -u mcp-servers/bridge_server.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
