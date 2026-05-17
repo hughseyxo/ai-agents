@@ -1,45 +1,65 @@
-# RemoteTrigger Definitions
+# Agent Operations via MCP Bridge
 
-These JSON files define Claude Code RemoteTrigger entries — on-demand tasks that can be fired from any Claude Code session (laptop or server) sharing the same account.
+Run any server-side agent from your laptop Claude Code session using the `server-bridge` MCP tools.
+The bridge executes commands on the server over Tailscale — no cloud indirection, no auth issues.
 
-## Triggers
+## Prerequisites
 
-| File | Name | Description | Cloud-runnable? |
-|------|------|-------------|----------------|
-| `run-briefing-agent.json` | run-briefing-agent | Manually run the daily briefing on demand | ✅ Yes (Calendar + Gmail + Todoist) |
-| `check-agent-health.json` | check-agent-health | Check all agents' last run status from agents.db | ❌ No — needs server SQLite. Use MCP bridge: `list_agents()` |
-| `security-audit.json` | security-audit | Run the 18-check security audit agent on demand | ❌ No — needs server shell. Use MCP bridge: `exec_shell("bash run-agent.sh security-audit")` |
+`server-bridge` must be connected in your Claude Code session. Verify with:
+```
+list_agents()
+```
+Expected: array of daily-briefing, news-briefing, security-audit with last run times.
 
-> **Note:** RemoteTriggers run on claude.ai cloud infrastructure — they can access the git repo and cloud MCP connections (Gmail, Calendar, Todoist) but cannot reach the server's SQLite database, Tailscale network, or local services. Tasks requiring server access should be run via the MCP bridge from laptop Claude Code instead.
+## Running Agents
 
-## Creating / Updating Triggers
-
-Triggers are managed via the `RemoteTrigger` tool in a Claude Code session. To create from a definition file:
+### Daily Briefing (on demand)
 
 ```
-ToolSearch("select:RemoteTrigger")
-RemoteTrigger(action="create", body={ ...contents of the JSON file... })
+exec_shell("bash run-agent.sh daily-briefing", working_dir="/home/cian/git/ai-agents")
 ```
 
-To list existing triggers and their IDs:
-```
-RemoteTrigger(action="list")
-```
+Sends briefing email, saves report to `output/daily-briefing-YYYY-MM-DD.md`.
+Also runs automatically via cron at 07:05 CEST (05:05 UTC) daily.
 
-## Trigger IDs
-
-Once created, trigger IDs are assigned by the platform (format: `trig_01XXX`).
-Update this section after creation:
-
-| Name | Trigger ID |
-|------|-----------|
-| Daily Briefing (scheduled 05:00 UTC) | `trig_01RFF8uoxNmr3WnobMGZJFza` |
-| run-briefing-agent (on demand) | `trig_01A2SKJz7xJDccejzoBYQK2p` |
-| check-agent-health | N/A — use MCP bridge |
-| security-audit | N/A — use MCP bridge |
-
-## Invoking from the Laptop
+### News Briefing (on demand)
 
 ```
-RemoteTrigger(action="run", trigger_id="trig_01XXX")
+exec_shell("bash run-agent.sh news-briefing", working_dir="/home/cian/git/ai-agents")
 ```
+
+Runs automatically at 07:00 CEST (05:00 UTC) daily.
+
+### Security Audit (on demand)
+
+```
+exec_shell("bash run-agent.sh security-audit", working_dir="/home/cian/git/ai-agents")
+```
+
+18 checks: system hardening, seedbox, web exposure. Runs automatically Sundays 08:00 CEST.
+
+## Checking Agent Status
+
+```
+list_agents()                              # last run status for all agents
+get_agent_status("daily-briefing")        # last 5 runs + step-level detail
+get_agent_status("news-briefing")
+get_agent_status("security-audit")
+```
+
+## Reading Output
+
+```
+read_file("/home/cian/git/ai-agents/output/daily-briefing-2026-05-17.md")
+exec_shell("ls -lt output/ | head -10", working_dir="/home/cian/git/ai-agents")
+exec_shell("tail -50 output/cron.log", working_dir="/home/cian/git/ai-agents")
+```
+
+## Why Not RemoteTriggers?
+
+RemoteTriggers run on claude.ai cloud infrastructure — they can't reach the Tailscale network,
+the local SQLite database, or the Google OAuth tokens on the server. The MCP bridge runs
+commands directly on the server, so all local resources are available.
+
+The scheduled Daily Briefing trigger (`trig_01RFF8uoxNmr3WnobMGZJFza`) still runs at 05:00 UTC
+via cron on the server — that path is unaffected.

@@ -61,7 +61,7 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 │   │   └── check-yt-auth.sh    # YouTube cookie expiry check
 │   └── free-time/              # Suggest best tasks for a free time window
 ├── mcp-servers/        # Custom MCP servers (calendar, gmail auth) + bridge_server.py (HTTP MCP over Tailscale for laptop access)
-├── triggers/           # RemoteTrigger definitions (JSON) — on-demand tasks fired from any Claude Code session. See triggers/README.md for IDs and usage.
+├── triggers/           # Agent operation docs — how to run agents on demand via the MCP bridge from laptop Claude Code. See triggers/README.md.
 ├── tests/              # pytest test suite (run: pytest tests/)
 │   ├── test_synthesize.py      # Failover + prompt adaptation tests
 │   ├── test_weather.py         # Open-Meteo weather fetch tests
