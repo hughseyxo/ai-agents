@@ -9,6 +9,7 @@ Start: python3 mcp-servers/bridge_server.py
 
 import json
 import os
+import re
 import sqlite3
 import subprocess
 import sys
@@ -66,7 +67,6 @@ def tool_get_agent_status(args: dict) -> str:
             (agent_name,),
         ).fetchall()
         if not runs:
-            conn.close()
             return json.dumps({"error": f"No runs found for agent: {agent_name}"})
         result = []
         for run in runs:
@@ -77,14 +77,19 @@ def tool_get_agent_status(args: dict) -> str:
             ).fetchall()
             d["steps"] = [dict(s) for s in steps]
             result.append(d)
-        conn.close()
         return json.dumps(result, indent=2)
     except Exception as e:
         return json.dumps({"error": str(e)})
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
 
 
 def tool_run_agent(args: dict) -> str:
     agent_name = args.get("agent_name", "").strip()
+    task = args.get("task", "").strip()
     if not agent_name:
         return json.dumps({"error": "agent_name is required"})
     if agent_name not in AGENT_REGISTRY:
@@ -101,6 +106,7 @@ def tool_run_agent(args: dict) -> str:
             "status": "started",
             "agent": agent_name,
             "pid": proc.pid,
+            "task": task or None,
             "note": "Running in background. Use get_agent_status to check progress.",
         })
     except Exception as e:
@@ -112,7 +118,7 @@ def tool_exec_shell(args: dict) -> str:
     working_dir = args.get("working_dir", DEFAULT_WORKING_DIR).strip()
     if not command:
         return json.dumps({"error": "command is required"})
-    cmd_lower = command.lower()
+    cmd_lower = re.sub(r'\s+', ' ', command.lower()).strip()
     for pattern in BLOCKED_PATTERNS:
         if pattern in cmd_lower:
             return json.dumps({"error": f"Blocked: matches safety pattern '{pattern}'"})
@@ -159,6 +165,8 @@ def tool_write_file(args: dict) -> str:
     resolved = str(Path(path).expanduser().resolve())
     if not resolved.startswith(ALLOWED_PATH_PREFIX):
         return json.dumps({"error": f"path must be under {ALLOWED_PATH_PREFIX}"})
+    if len(content) > 10_000_000:
+        return json.dumps({"error": "content too large (max 10MB)"})
     try:
         p = Path(resolved)
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -183,7 +191,14 @@ def tool_list_directory(args: dict) -> str:
                 "size": stat.st_size if entry.is_file() else None,
                 "modified": datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat(),
             })
-        return json.dumps({"path": resolved, "entries": entries})
+        truncated = False
+        if len(entries) > 500:
+            entries = entries[:500]
+            truncated = True
+        result = {"path": resolved, "entries": entries}
+        if truncated:
+            result["note"] = "Truncated at 500 entries"
+        return json.dumps(result)
     except Exception as e:
         return json.dumps({"error": str(e)})
 
@@ -321,6 +336,7 @@ class MCPBridgeHandler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_GET(self):
+        # /health is intentionally unauthenticated (liveness check)
         if self.path == "/health":
             self._json(200, {"status": "ok", "server": "mcp-bridge"})
         else:
