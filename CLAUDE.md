@@ -41,10 +41,12 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 │   ├── daily_briefing.py       # Daily briefing agent (schedule: 04:05 UTC / 06:05 CEST, model: claude-sonnet-4-6)
 │   ├── news_briefing.py        # News briefing agent (schedule: 04:00 UTC / 06:00 CEST, model: claude-haiku-4-5, Claude primary). Steps: fetch_news → translate_dutch (NOS Binnenland articles) → news_briefing (send email). HTML/markdown pre-built in Python; LLM only sends email. Sources: BBC, RTE/TheJournal/Irish Times(Google News), DutchNews/NLTimes/NOS(Dutch→translated), Leiden/Mullingar(Google News), Verge/TC/HN/ARS/Register, Polygon, HN SRE.
 │   ├── security_audit.py       # Security audit agent — 18 checks: 12 system + 4 seedbox + 2 web (Cloudflare IP validation, Shodan InternetDB). Schedule: Sunday 06:00 UTC / 08:00 CEST. Seedbox configs live in ~/git/yopflix (private repo).
+│   ├── commit_security.py      # Commit security agent (on-demand) — LLM-based scan of git diff for secrets/vulnerabilities. run_hook() used by .git/hooks/pre-push; blocks push on Critical/High. Also runnable via CLI.
 │   ├── travel_agent.py         # Travel agent (on-demand) — search mode: finds flights/hotels/activities; plan mode: itinerary from existing bookings. model: claude-sonnet-4-6. Design doc: docs/travel-agent.md
 │   └── prompts/                # LLM CLI synthesis prompt templates
 │       ├── daily_briefing.md
 │       ├── news_briefing.md
+│       ├── commit_security.md       # Prompt for commit diff security analysis
 │       ├── travel_agent_search.md   # Search mode: find flights, hotels, activities
 │       └── travel_agent_plan.md     # Plan mode: day-by-day itinerary from existing bookings
 ├── telegram-bot/       # Server concierge Telegram bot (OpenRouter-backed)
