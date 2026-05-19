@@ -71,14 +71,15 @@ class CommitSecurityAgent(BaseAgent):
             print(f"[commit-security] LLM analysis failed ({e}) — allowing push.", file=sys.stderr)
             return []
 
-        original = output.strip()
-        text = original
+        text = output.strip()
         if text.startswith("```"):
             text = re.sub(r"^```[a-z]*\n?", "", text)
             text = re.sub(r"\n?```$", "", text.strip())
-        # If fence stripping left nothing, try the original
-        if not text.strip():
-            text = original
+        text = text.strip()
+
+        # Empty after stripping = LLM returned an empty code block → no findings
+        if not text:
+            return []
 
         try:
             data = json.loads(text)
