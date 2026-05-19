@@ -143,6 +143,42 @@ class TestCheckPlantsWithWeather:
         assert isinstance(result, dict)
 
 
+class TestCheckPlantsIdempotent:
+    def test_check_plants_does_not_return_updated_all_plants(self):
+        """_check_plants must not return updated_all_plants — no state mutation."""
+        today = datetime.now(timezone.utc).date()
+        last_watered = (today - timedelta(days=5)).isoformat()
+        plants = [{"name": "Monstera", "frequency_days": 10,
+                    "last_watered": last_watered, "location": "indoor"}]
+
+        agent = _make_agent_with_plants(plants, NORMAL_WEATHER)
+        result = agent._check_plants()
+
+        assert "updated_all_plants" not in result or result.get("updated_all_plants") is None
+
+    def test_check_plants_is_idempotent_across_save(self):
+        """After save_plants persists the result, a second run should produce the same tasks.
+
+        Regression test for: advancing last_watered to a future date breaks daily recalculation.
+        """
+        today = datetime.now(timezone.utc).date()
+        last_watered = (today - timedelta(days=5)).isoformat()
+        plants = [{"name": "Monstera", "frequency_days": 10,
+                    "last_watered": last_watered, "location": "indoor"}]
+
+        agent = _make_agent_with_plants(plants, NORMAL_WEATHER)
+        result1 = agent._check_plants()
+
+        # Simulate _save_plants persisting whatever _check_plants returned
+        if result1.get("updated_all_plants"):
+            agent.set_state("plants", result1["updated_all_plants"])
+
+        result2 = agent._check_plants()
+
+        # Both runs must produce the same upcoming watering and task due dates
+        assert result1["tasks_to_create"] == result2["tasks_to_create"]
+
+
 class TestFetchWeatherStep:
     @patch("agents.daily_briefing.fetch_weather")
     def test_fetch_weather_step_stores_in_context(self, mock_fetch):

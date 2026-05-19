@@ -4,7 +4,6 @@ Python handles: lifecycle, SQLite state, plant watering logic, weather, dedup.
 LLM CLI (with MCP access) handles: calendar/todoist fetching, formatting, email sending.
 """
 
-import json
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -35,7 +34,6 @@ class DailyBriefingAgent(BaseAgent):
             {"name": "weather", "fn": self._fetch_weather},
             {"name": "plants", "fn": self._check_plants},
             {"name": "briefing", "fn": self._run_briefing, "side_effects": True},
-            {"name": "save_plants", "fn": self._save_plants},
         ]
 
     # --- Weather (Python — deterministic, no LLM needed) ---
@@ -62,16 +60,11 @@ class DailyBriefingAgent(BaseAgent):
         today = datetime.now(timezone.utc).date()
         upcoming_watering = []
         tasks_to_create = []
-        updated = False
 
-        # Copy plants to avoid mutating state before we're sure we want to save
-        updated_plants = json.loads(json.dumps(plants))
-
-        for plant in updated_plants:
+        for plant in plants:
             last_watered = datetime.strptime(plant["last_watered"], "%Y-%m-%d").date()
             base_date = last_watered + timedelta(days=plant["frequency_days"])
 
-            # Apply weather adjustment if weather data is available
             if weather:
                 next_water, reason = adjust_watering_date(
                     base_date, plant["frequency_days"], plant, weather)
@@ -96,25 +89,11 @@ class DailyBriefingAgent(BaseAgent):
                     "task_content": f"Water {plant['name']}",
                     "due_date": next_water.isoformat(),
                 })
-                plant["last_watered"] = next_water.isoformat()
-                updated = True
 
         return {
             "plants": upcoming_watering,
             "tasks_to_create": tasks_to_create,
-            "updated_all_plants": updated_plants if updated else None
         }
-
-    def _save_plants(self):
-        """Persist updated plant dates only if briefing succeeded."""
-        if "briefing" in self._failed_steps:
-            return "Skipped saving plant state because briefing failed"
-
-        plants_data = self.context.get("plants")
-        if plants_data and plants_data.get("updated_all_plants"):
-            self.set_state("plants", plants_data["updated_all_plants"])
-            return "Saved updated plant states"
-        return "No plant states to update"
 
     # --- Briefing (Claude CLI with MCP) ---
 
