@@ -33,7 +33,7 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 # Project Structure
 ```
 ├── agents/             # Python agent framework (replacing workflows)
-│   ├── base.py                 # BaseAgent class — lifecycle, retry, state, LLM failover
+│   ├── base.py                 # BaseAgent class — lifecycle, retry, state, LLM failover. Set `providers` class attr to override provider order per-agent.
 │   ├── db.py                   # SQLite wrapper (AgentDB)
 │   ├── runner.py               # CLI: python3 -m agents <command>
 │   ├── weather.py              # Open-Meteo weather client (Leiden default, no API key)
@@ -67,7 +67,8 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 ├── mcp-servers/        # Custom MCP servers (calendar, gmail auth) + bridge_server.py (HTTP MCP over Tailscale for laptop access)
 ├── triggers/           # Agent operation docs — how to run agents on demand via the MCP bridge from laptop Claude Code. See triggers/README.md.
 ├── tests/              # pytest test suite (run: pytest tests/)
-│   ├── test_synthesize.py      # Failover + prompt adaptation tests
+│   ├── test_synthesize.py      # Failover + prompt adaptation + providers override tests
+│   ├── test_news_briefing.py   # RSS parsing, dedup, Dutch translation, HTML/markdown builder tests
 │   ├── test_weather.py         # Open-Meteo weather fetch tests
 │   ├── test_plant_weather.py   # Watering adjustment logic tests
 │   ├── test_daily_briefing.py  # Daily briefing integration tests
@@ -99,7 +100,8 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 - **Dual-CLI rule:** All agent Python code must be runnable by both Claude and Gemini CLI. No Claude-specific or Gemini-specific dependencies in Python. LLM-specific adaptations happen in `BaseAgent.synthesize()` only.
 - Execution model: Python handles lifecycle, state (SQLite), retry, dedup, and deterministic logic (e.g. plant watering, weather, RSS fetching). LLM CLI (with MCP tools) handles data synthesis, formatting, and email sending.
 - **Model selection:** Set `model = "claude-sonnet-4-6"` (or haiku/opus) on the agent class. `BaseAgent.synthesize()` maps these to appropriate Gemini models when using Gemini, or passes them directly to Claude.
-- **LLM failover & Timeouts:** `BaseAgent.synthesize()` tries Gemini CLI first, falls back to Claude CLI on failure. Prompts are adapted at runtime for Gemini.
+- **Per-agent provider override:** Set `providers = [...]` on the agent class to change provider order. Default is Gemini-first; `news_briefing` overrides to Claude-first. See `BaseAgent.PROVIDERS` for the full list.
+- **LLM failover & Timeouts:** `BaseAgent.synthesize()` tries providers in order, adapting prompts for Gemini at runtime.
   - **Timeouts:** A 600s timeout is applied to LLM calls. If a step marked with `side_effects: True` times out, the agent skips retries to avoid duplicate actions (e.g. sending multiple emails).
 - **On-demand agents:** Set `schedule = ""` — they won't appear in crontab but can be triggered manually or via Telegram bot. Pass extra args via `configure(args)` called by `cmd_run` in runner.py.
 
