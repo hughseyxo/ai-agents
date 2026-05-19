@@ -156,26 +156,47 @@ class TestCheckPlantsIdempotent:
 
         assert "updated_all_plants" not in result or result.get("updated_all_plants") is None
 
-    def test_check_plants_is_idempotent_across_save(self):
-        """After save_plants persists the result, a second run should produce the same tasks.
+    def test_task_created_only_on_watering_day(self):
+        """Tasks are created only when days_until <= 0; email preview shows 7-day window."""
+        today = datetime.now(timezone.utc).date()
 
-        Regression test for: advancing last_watered to a future date breaks daily recalculation.
+        # Plant due in 3 days — visible in preview, no task yet
+        plants_future = [{"name": "Monstera", "frequency_days": 10,
+                           "last_watered": (today - timedelta(days=7)).isoformat(),
+                           "location": "indoor"}]
+        agent = _make_agent_with_plants(plants_future, NORMAL_WEATHER)
+        result = agent._check_plants()
+        assert len(result["plants"]) == 1        # shows in preview
+        assert len(result["tasks_to_create"]) == 0  # no task yet
+
+        # Plant due today — task created
+        plants_today = [{"name": "Monstera", "frequency_days": 10,
+                          "last_watered": (today - timedelta(days=10)).isoformat(),
+                          "location": "indoor"}]
+        agent2 = _make_agent_with_plants(plants_today, NORMAL_WEATHER)
+        result2 = agent2._check_plants()
+        assert len(result2["tasks_to_create"]) == 1
+
+    def test_check_plants_is_idempotent_across_save(self):
+        """Regression: advancing last_watered broke daily recalculation.
+
+        Uses a plant due today so tasks_to_create is non-empty on both runs.
         """
         today = datetime.now(timezone.utc).date()
-        last_watered = (today - timedelta(days=5)).isoformat()
+        # Plant due exactly today (last_watered = 10 days ago, freq = 10)
+        last_watered = (today - timedelta(days=10)).isoformat()
         plants = [{"name": "Monstera", "frequency_days": 10,
                     "last_watered": last_watered, "location": "indoor"}]
 
         agent = _make_agent_with_plants(plants, NORMAL_WEATHER)
         result1 = agent._check_plants()
 
-        # Simulate _save_plants persisting whatever _check_plants returned
+        # Simulate old _save_plants persisting mutated data (the bug we fixed)
         if result1.get("updated_all_plants"):
             agent.set_state("plants", result1["updated_all_plants"])
 
         result2 = agent._check_plants()
 
-        # Both runs must produce the same upcoming watering and task due dates
         assert result1["tasks_to_create"] == result2["tasks_to_create"]
 
 

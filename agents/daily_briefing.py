@@ -149,6 +149,7 @@ class DailyBriefingAgent(BaseAgent):
                     entry["adjustment"] = reason
                 upcoming_watering.append(entry)
 
+            if days_until <= 0:
                 tasks_to_create.append({
                     "name": plant["name"],
                     "task_content": f"Water {plant['name']}",

@@ -80,12 +80,9 @@ From the fetched inbox tasks (overdue or due today), identify up to 5 "Quick Win
 
 ## Step 6: Handle plant watering tasks
 The agent has pre-computed plant watering data (see "Pre-computed Plant Data" section below).
-Weather adjustments are recalculated daily, so existing tasks may need their due date updated.
+Tasks are only created on the morning of the watering day, so weather is always current.
 
-For each plant task in the "Plant Todoist Tasks" section:
-1. Search project `6Crf3cH2RF5v86wc` for an existing incomplete task whose content matches "Water [Plant Name]" (use `mcp__todoist__find-tasks` with `projectId: "6Crf3cH2RF5v86wc"`).
-2. If found: reschedule it to the new due date using `mcp__todoist__reschedule-tasks`. This is idempotent if the date hasn't changed and preserves any recurrence.
-3. If not found: create it using `mcp__todoist__add-tasks` with priority p4.
+If there are plant tasks to create, check if each task already exists in project 6Crf3cH2RF5v86wc first (search by content matching "Water [Plant Name]"), then create any missing ones via `mcp__todoist__add-tasks` with priority p4.
 
 ## Step 7: Build and send HTML email
 Build the email body as HTML with inline CSS only using the template below, then send via `mcp__gmail__gmail_send`. After sending, your final text output MUST be the exact HTML you sent — nothing else, no preamble, no summary.
@@ -175,7 +172,7 @@ Gmail send args:
 If Gmail fails, note it in the report but do not stop.
 
 ## Constraints
-- Do NOT mark any Todoist tasks as complete or delete them. The only permitted modification is rescheduling due dates of plant watering tasks via `reschedule-tasks` (step 6 above)
+- Do NOT mark any Todoist tasks as complete, modify, or delete them — read-only except for creating plant watering tasks in step 6
 - Do NOT include tasks from named Todoist projects — Inbox only
 - Do NOT delete or modify any calendar events
 - Do NOT run any git commands
