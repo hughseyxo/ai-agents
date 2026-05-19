@@ -4,6 +4,7 @@ Usage:
     python3 -m agents.runner daily-briefing     # run one agent
     python3 -m agents.runner --list             # list agents + schedules
     python3 -m agents.runner --install-cron     # write crontab entries
+    python3 -m agents.runner --cancel-cron      # remove all scheduled agent tasks
     python3 -m agents.runner --history <agent>  # show recent runs
 """
 
@@ -86,6 +87,47 @@ def cmd_history(args):
     db.close()
 
 
+def cmd_cancel_cron(args):
+    marker_start = "# --- ai-agents managed ---"
+    marker_end = "# --- end ai-agents ---"
+
+    try:
+        result = subprocess.run(["crontab", "-l"], capture_output=True, text=True)
+        existing = result.stdout if result.returncode == 0 else ""
+    except FileNotFoundError:
+        print("crontab not available on this system", file=sys.stderr)
+        sys.exit(1)
+
+    filtered = []
+    removed = []
+    skipping = False
+    for line in existing.splitlines():
+        if line.strip() == marker_start:
+            skipping = True
+            continue
+        if line.strip() == marker_end:
+            skipping = False
+            continue
+        if skipping:
+            removed.append(line)
+        else:
+            filtered.append(line)
+
+    if not removed:
+        print("No ai-agents scheduled tasks found in crontab.")
+        return
+
+    new_crontab = "\n".join(filtered).rstrip("\n") + "\n"
+    proc = subprocess.run(["crontab", "-"], input=new_crontab, text=True)
+    if proc.returncode == 0:
+        print("Cancelled scheduled tasks:")
+        for line in removed:
+            print(f"  {line}")
+    else:
+        print("Failed to update crontab", file=sys.stderr)
+        sys.exit(1)
+
+
 def cmd_install_cron(args):
     agents = _all_agents()
     run_agent = REPO_ROOT / "run-agent.sh"
@@ -161,8 +203,11 @@ def main():
     # Install cron
     subparsers.add_parser("install-cron", help="Write crontab entries for all agents")
 
+    # Cancel cron
+    subparsers.add_parser("cancel-cron", help="Remove all agent scheduled tasks from crontab")
+
     # Allow `python -m agents daily-briefing` as shorthand for `run`
-    if len(sys.argv) > 1 and sys.argv[1] not in ("run", "list", "history", "install-cron", "-h", "--help"):
+    if len(sys.argv) > 1 and sys.argv[1] not in ("run", "list", "history", "install-cron", "cancel-cron", "-h", "--help"):
         sys.argv.insert(1, "run")
 
     args = parser.parse_args()
@@ -176,6 +221,7 @@ def main():
         "list": cmd_list,
         "history": cmd_history,
         "install-cron": cmd_install_cron,
+        "cancel-cron": cmd_cancel_cron,
     }
     cmds[args.command](args)
 
