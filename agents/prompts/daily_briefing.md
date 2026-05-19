@@ -70,9 +70,13 @@ Use `mcp__todoist__find-tasks-by-date` with `startDate: "today"`, `daysCount: 30
 ## Step 5: Fetch Inbox tasks from Todoist
 Call `mcp__todoist__find-tasks` with `projectId: "6Crf3cH2RF5v86wc"`, `limit: 50` to retrieve only incomplete Inbox tasks.
 - Include task priority and due date where available
+- **FILTER OUT all tasks that do NOT have a due date.**
 - Order by: overdue first, then by priority (p1 → p4), then by due date
 - Do NOT include tasks from any named projects
 - Tasks due today should be included in BOTH the "Today" section AND the "Due Today" subsection under Inbox Tasks
+
+## Step 5.5: Identify Quick Wins
+From the fetched inbox tasks (overdue or due today), identify up to 5 "Quick Wins" — tasks that likely take less than 15 minutes to complete (e.g. phone calls, quick emails, simple bookings, brief lookups). Provide a rough estimate of the time for each.
 
 ## Step 6: Handle plant watering tasks
 The agent has pre-computed plant watering data (see "Pre-computed Plant Data" section below).
@@ -126,10 +130,6 @@ Gmail send args:
           [If due today:]
           <p style="margin:12px 0 6px;font-size:11px;font-weight:700;text-transform:uppercase;color:#d29922;letter-spacing:0.5px;">Due Today</p>
           [For each: <p style="margin:0 0 6px;padding:8px 12px;background:#1c2128;border-left:3px solid #d29922;border-radius:4px;font-size:14px;color:#c9d1d9;">[Title]</p>]
-
-          [If no due date:]
-          <p style="margin:12px 0 6px;font-size:11px;font-weight:700;text-transform:uppercase;color:#8b949e;letter-spacing:0.5px;">No Due Date</p>
-          [For each: <p style="margin:0 0 6px;padding:8px 12px;background:#1c2128;border-left:3px solid #30363d;border-radius:4px;font-size:14px;color:#c9d1d9;">[Title]</p>]
         </td></tr>
 
         <!-- Plant Watering -->

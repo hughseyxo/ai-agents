@@ -1,12 +1,14 @@
 """News Briefing Agent.
 
-Python handles: RSS fetching, parsing, dedup, and selection.
-LLM CLI (with MCP access) handles: Formatting the final report and sending the email.
+Python handles: RSS fetching, parsing, dedup, selection, HTML/markdown building.
+LLM CLI (with MCP access) handles: sending the pre-built email only.
 """
 
+import html as html_lib
 import json
 import re
 import sys
+import time
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -19,8 +21,10 @@ from .base import BaseAgent, REPO_ROOT
 
 class NewsBriefingAgent(BaseAgent):
     name = "news-briefing"
-    schedule = "0 5 * * *"
+    schedule = "0 4 * * *"
     model = "claude-haiku-4-5"
+    # Claude primary, Gemini fallback (default PROVIDERS is Gemini-first)
+    providers = list(reversed(BaseAgent.PROVIDERS))
 
     FEEDS = {
         "International": [
@@ -29,11 +33,12 @@ class NewsBriefingAgent(BaseAgent):
         "Ireland": [
             ("RTE", "https://www.rte.ie/feeds/rss/?index=/news"),
             ("TheJournal", "https://www.thejournal.ie/feed/"),
-            ("Irish Times", "https://www.irishtimes.com/cmlink/the-irish-times-news-1.1319192"),
+            ("Irish Times", "https://news.google.com/rss/search?q=site:irishtimes.com&hl=en"),
         ],
         "Netherlands": [
             ("DutchNews", "https://www.dutchnews.nl/feed/"),
-            ("NL Times", "https://news.google.com/rss/search?q=Netherlands&hl=en"),
+            ("NL Times", "https://nltimes.nl/feed"),
+            ("NOS (Dutch)", "https://feeds.nos.nl/nosnieuwsbinnenland"),
         ],
         "Leiden": [
             ("Google News Leiden", "https://news.google.com/rss/search?q=Leiden+Netherlands&hl=en"),
@@ -56,6 +61,35 @@ class NewsBriefingAgent(BaseAgent):
         ]
     }
 
+    # Section display order and CSS styles (bg_color, border_color) — used in <style> block
+    SECTION_STYLES = {
+        "International":        ("#f5f0ff", "#8e44ad"),
+        "Ireland":              ("#f0fff4", "#2ecc71"),
+        "Netherlands":          ("#fff8f0", "#e67e22"),
+        "Leiden & Local":       ("#f0f4ff", "#4a6fa5"),
+        "Mullingar":            ("#f0fff8", "#16a085"),
+        "Tech":                 ("#f0f7ff", "#3498db"),
+        "Gaming":               ("#f5f0ff", "#9b59b6"),
+        "SRE / Infrastructure": ("#fff5f5", "#e74c3c"),
+    }
+
+    SECTION_CSS_CLASS = {
+        "International":        "c-intl",
+        "Ireland":              "c-ie",
+        "Netherlands":          "c-nl",
+        "Leiden & Local":       "c-leiden",
+        "Mullingar":            "c-mullingar",
+        "Tech":                 "c-tech",
+        "Gaming":               "c-gaming",
+        "SRE / Infrastructure": "c-sre",
+    }
+
+    # Sources that publish in Dutch and need LLM translation
+    DUTCH_LANGUAGE_SOURCES = {"NOS (Dutch)"}
+
+    # Sections with source attribution in output
+    SOURCE_SECTIONS = {"Ireland", "Netherlands", "Tech", "Gaming", "SRE / Infrastructure"}
+
     def plan(self):
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         return {
@@ -64,8 +98,9 @@ class NewsBriefingAgent(BaseAgent):
 
     def steps(self):
         return [
-            {"name": "fetch_news", "fn": self._fetch_news},
-            {"name": "news_briefing", "fn": self._run_briefing, "side_effects": True},
+            {"name": "fetch_news",      "fn": self._fetch_news},
+            {"name": "translate_dutch", "fn": self._translate_dutch_step},
+            {"name": "news_briefing",   "fn": self._run_briefing, "side_effects": True},
         ]
 
     def report(self) -> str:
@@ -83,20 +118,63 @@ class NewsBriefingAgent(BaseAgent):
         }
         for category, feeds in self.FEEDS.items():
             for source_name, url in feeds:
-                try:
-                    resp = requests.get(url, headers=headers, timeout=15)
-                    if resp.status_code == 200:
-                        articles = self._parse_rss(resp.text, source_name, category)
-                        all_articles.extend(articles)
-                    else:
-                        print(f"[{self.name}] Failed to fetch {source_name}: {resp.status_code}", file=sys.stderr)
-                except Exception as e:
-                    print(f"[{self.name}] Error fetching {source_name}: {e}", file=sys.stderr)
+                for attempt in range(2):
+                    try:
+                        resp = requests.get(url, headers=headers, timeout=15)
+                        if resp.status_code == 200:
+                            articles = self._parse_rss(resp.text, source_name, category)
+                            all_articles.extend(articles)
+                            break
+                        elif resp.status_code >= 500 and attempt == 0:
+                            time.sleep(3)
+                            continue
+                        else:
+                            print(f"[{self.name}] Failed to fetch {source_name}: {resp.status_code}", file=sys.stderr)
+                            break
+                    except Exception as e:
+                        print(f"[{self.name}] Error fetching {source_name}: {e}", file=sys.stderr)
+                        break
 
-        # Process and select news
         selected = self._select_news(all_articles)
         self.context["news_data"] = selected
         return {"count": sum(len(items) for items in selected.values())}
+
+    def _translate_dutch_step(self):
+        """Translate Dutch-language article titles and descriptions to English."""
+        news_data = self.context.get("news_data", {})
+        nl_articles = news_data.get("Netherlands", [])
+
+        dutch = [(i, a) for i, a in enumerate(nl_articles) if a.get("source") in self.DUTCH_LANGUAGE_SOURCES]
+        if not dutch:
+            return {"translated": 0}
+
+        batch = [{"i": i, "title": a["title"], "description": a.get("description", "")} for i, a in dutch]
+        prompt = (
+            "Translate these Dutch news headlines and summaries to English. "
+            "Return ONLY a JSON array: [{\"i\": 0, \"title\": \"...\", \"description\": \"...\"}]. "
+            "Keep titles concise.\n\n" + json.dumps(batch)
+        )
+        try:
+            result = self.synthesize(prompt)
+            text = result.strip()
+            # Strip markdown code fences if LLM wrapped the JSON
+            if text.startswith("```"):
+                text = re.sub(r'^```[a-z]*\n?', '', text)
+                text = re.sub(r'\n?```\s*$', '', text).strip()
+            # Find JSON array in response in case of preamble
+            match = re.search(r'\[[\s\S]*\]', text)
+            if match:
+                text = match.group(0)
+            translations = json.loads(text)
+            articles_copy = list(nl_articles)
+            for t in translations:
+                idx = t["i"]
+                articles_copy[idx] = {**articles_copy[idx], "title": t["title"], "description": t["description"]}
+            news_data["Netherlands"] = articles_copy
+        except Exception as e:
+            print(f"[{self.name}] Dutch translation failed, keeping originals: {e}", file=sys.stderr)
+
+        return {"translated": len(dutch)}
 
     def _parse_rss(self, xml_content: str, source_name: str, category: str) -> List[Dict]:
         try:
@@ -104,21 +182,24 @@ class NewsBriefingAgent(BaseAgent):
             channel = root.find('channel')
             if channel is None:
                 return []
-            
+
             items = []
             for item in channel.findall('item'):
                 title = item.find('title').text if item.find('title') is not None else ""
                 link = item.find('link').text if item.find('link') is not None else ""
                 description = item.find('description').text if item.find('description') is not None else ""
                 pub_date_str = item.find('pubDate').text if item.find('pubDate') is not None else ""
-                
-                # Clean HTML from description
+
+                description = description.replace('&nbsp;', ' ')
                 description = re.sub('<[^<]+?>', '', description)
-                description = description.replace('\n', ' ').strip()
-                if len(description) > 250:
+                description = re.sub(r'\s+', ' ', description).strip()
+                # Drop Google News echo descriptions: just title text + source attribution
+                title_text = re.sub(r'\s*-\s*[^-]+$', '', title).strip()
+                if len(title_text) >= 15 and description.startswith(title_text[:20]):
+                    description = ""
+                elif len(description) > 250:
                     description = description[:247] + "..."
-                
-                # Parse date
+
                 pub_date = self._parse_date(pub_date_str)
 
                 items.append({
@@ -163,36 +244,32 @@ class NewsBriefingAgent(BaseAgent):
             return (now - dt) < timedelta(hours=3)
 
         def dedup(items):
-            seen_titles = set()
+            seen = set()
             unique = []
             for a in items:
-                normalized_title = re.sub(r'\W+', '', a['title'].lower())
-                if normalized_title not in seen_titles:
-                    seen_titles.add(normalized_title)
+                # Strip trailing " - Publisher" (Google News RSS format) before comparing
+                clean = re.sub(r'\s*-\s*[^-]+$', '', a['title'])
+                key = re.sub(r'\W+', '', clean.lower())
+                if key not in seen:
+                    seen.add(key)
                     unique.append(a)
             return unique
 
-        # 1. International
         international = [a for a in articles if a['category'] == "International"]
         international = sorted(international, key=lambda x: x['pub_datetime'] or now, reverse=True)[:5]
 
-        # 2. Ireland
         ireland = [a for a in articles if a['category'] == "Ireland"]
         ireland = dedup(sorted(ireland, key=lambda x: x['pub_datetime'] or now, reverse=True))[:7]
 
-        # 3. Netherlands
         netherlands = [a for a in articles if a['category'] == "Netherlands"]
         netherlands = dedup(sorted(netherlands, key=lambda x: x['pub_datetime'] or now, reverse=True))[:8]
 
-        # 4. Leiden
-        leiden = [a for a in articles if a['category'] == "Leiden"][:15] # Cap Leiden to 15 to keep prompt size sane
+        leiden = [a for a in articles if a['category'] == "Leiden"][:5]
 
-        # 4b. Mullingar
-        mullingar = [a for a in articles if a['category'] == "Mullingar"][:10]
+        mullingar = [a for a in articles if a['category'] == "Mullingar"][:5]
 
-        # 5. Tech & Gaming
         tech_all = [a for a in articles if a['category'] in ["Tech", "Gaming"]]
-        
+
         def is_gaming(a):
             if a['category'] == "Gaming": return True
             gaming_keywords = ['gaming', 'game', 'nintendo', 'playstation', 'xbox', 'steam', 'valve', 'rpg', 'fps', 'mmo']
@@ -202,7 +279,6 @@ class NewsBriefingAgent(BaseAgent):
         tech_items = [a for a in tech_all if not is_gaming(a)]
         gaming_items = [a for a in tech_all if is_gaming(a)]
 
-        # Tech selection (prefer Verge)
         verge_tech = [a for a in tech_items if a['source'] == 'The Verge']
         other_tech = [a for a in tech_items if a['source'] != 'The Verge']
         verge_tech = sorted(verge_tech, key=lambda x: x['pub_datetime'] or now, reverse=True)
@@ -211,10 +287,8 @@ class NewsBriefingAgent(BaseAgent):
         remaining_tech = sorted(verge_tech[2:] + other_tech, key=lambda x: x['pub_datetime'] or now, reverse=True)
         selected_tech += remaining_tech[:(6 - len(selected_tech))]
 
-        # Gaming selection
         selected_gaming = dedup(sorted(gaming_items, key=lambda x: x['pub_datetime'] or now, reverse=True))[:4]
 
-        # 6. SRE
         sre_candidates = [a for a in articles if a['category'] == "SRE"]
         selected_sre = []
         for a in sre_candidates:
@@ -234,7 +308,6 @@ class NewsBriefingAgent(BaseAgent):
             "SRE / Infrastructure": selected_sre
         }
 
-        # Add flags and remove datetime
         for section in report_data.values():
             for a in section:
                 a['breaking'] = is_breaking(a)
@@ -242,8 +315,97 @@ class NewsBriefingAgent(BaseAgent):
 
         return report_data
 
+    def _build_markdown(self, news_data: Dict[str, List[Dict]], today: str) -> str:
+        """Build the markdown report from pre-selected news data."""
+        lines = [f"# News Briefing — {today}", ""]
+        optional_skip = {"Mullingar", "SRE / Infrastructure"}
+
+        for section, articles in news_data.items():
+            if not articles and section in optional_skip:
+                continue
+            lines.append(f"## {section}")
+            if not articles:
+                lines.append("_No items._")
+            else:
+                for a in articles:
+                    breaking = "[BREAKING] " if a.get("breaking") else ""
+                    title = a.get("title", "")
+                    link = a.get("link", "")
+                    desc = a.get("description", "")
+                    source = a.get("source", "")
+                    source_tag = f" ({source})" if section in self.SOURCE_SECTIONS and source else ""
+                    summary = f" — {desc}" if desc else ""
+                    lines.append(f"- **{breaking}{title}**{source_tag}{summary}")
+                    lines.append(f"  {link}")
+            lines.append("")
+
+        return "\n".join(lines).rstrip() + "\n"
+
+    def _build_html_email(self, news_data: Dict[str, List[Dict]], today: str) -> str:
+        """Build the full HTML email from pre-selected news data."""
+        optional_skip = {"Mullingar", "SRE / Infrastructure"}
+
+        # Build section-specific card colours from SECTION_STYLES
+        color_rules = ""
+        for section, (bg, border) in self.SECTION_STYLES.items():
+            cls = self.SECTION_CSS_CLASS.get(section, "c-default")
+            color_rules += f".{cls}{{background:{bg};border-left-color:{border}}}.{cls} .src{{color:{border}}}"
+
+        css = (
+            "body{margin:0;padding:0;background:#f4f4f4;font-family:Arial,sans-serif}"
+            "table.wrap{background:#f4f4f4;padding:24px 0}"
+            "table.inner{background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.08)}"
+            ".hdr{background:#1a1a2e;padding:28px 32px}"
+            ".hdr-lbl{margin:0;color:#a0a8c0;font-size:13px;letter-spacing:1px;text-transform:uppercase}"
+            ".hdr-date{margin:4px 0 0;color:#fff;font-size:24px}"
+            ".sec{padding:20px 32px 0}"
+            ".sec-h{margin:0 0 12px;font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#1a1a2e}"
+            ".card{margin:0 0 10px;padding:10px 14px;border-left:3px solid;border-radius:4px;font-size:14px;color:#333}"
+            ".card a{color:#1a1a2e;text-decoration:none;font-weight:700}"
+            ".src{font-size:11px;font-weight:700}"
+            ".desc{color:#666;font-size:13px}"
+            ".ftr{padding:24px 32px;border-top:1px solid #eee}"
+            ".ftr p{margin:0;color:#aaa;font-size:12px;text-align:center}"
+            ".c-default{background:#f9f9f9;border-left-color:#999}"
+            + color_rules
+        )
+
+        def article_html(a: Dict, css_class: str, show_source: bool) -> str:
+            breaking = "[BREAKING] " if a.get("breaking") else ""
+            title = html_lib.escape(a.get("title", ""))
+            link = html_lib.escape(a.get("link", ""))
+            desc = html_lib.escape(a.get("description", ""))
+            source = html_lib.escape(a.get("source", ""))
+            source_tag = f'<span class="src"> {source}</span>' if show_source and source else ""
+            desc_tag = f'<br/><span class="desc">{desc}</span>' if desc else ""
+            return f'<p class="card {css_class}"><a href="{link}">{breaking}{title}</a>{source_tag}{desc_tag}</p>'
+
+        sections_html = ""
+        for section, articles in news_data.items():
+            if not articles and section in optional_skip:
+                continue
+            css_class = self.SECTION_CSS_CLASS.get(section, "c-default")
+            show_source = section in self.SOURCE_SECTIONS
+            articles_html = "".join(article_html(a, css_class, show_source) for a in articles)
+            sections_html += (
+                f'<tr><td class="sec">'
+                f'<h2 class="sec-h">{html_lib.escape(section)}</h2>'
+                f'{articles_html}</td></tr>'
+            )
+
+        return (
+            f'<!DOCTYPE html><html><head><meta charset="utf-8"><style>{css}</style></head>'
+            f'<body><table class="wrap" width="100%" cellpadding="0" cellspacing="0">'
+            f'<tr><td align="center"><table class="inner" width="600" cellpadding="0" cellspacing="0">'
+            f'<tr><td class="hdr"><p class="hdr-lbl">News Briefing</p>'
+            f'<h1 class="hdr-date">{html_lib.escape(today)}</h1></td></tr>'
+            f'{sections_html}'
+            f'<tr><td class="ftr"><p>Generated by your News Briefing Agent</p></td></tr>'
+            f'</table></td></tr></table></body></html>'
+        )
+
     def _run_briefing(self):
-        """Invoke Claude CLI to format and send email with pre-parsed data."""
+        """Build email/report in Python, then invoke LLM only to send the email."""
         today = self.context["plan"]["today"]
 
         if self.is_duplicate("email_sent", today):
@@ -255,22 +417,18 @@ class NewsBriefingAgent(BaseAgent):
             print(f"[{self.name}] No news items found, skipping", file=sys.stderr)
             return {"skipped": True, "reason": "no_news"}
 
-        prompt_path = REPO_ROOT / "agents" / "prompts" / "news_briefing.md"
-        base_prompt = prompt_path.read_text()
-        
-        # Remove Steps 2 & 3 (fetching/parsing) from prompt since we did it in Python
-        prompt = re.sub(r'## Step 2: Fetch RSS feeds.*?## Step 4: Send email', '## Step 2: Format and Send email', base_prompt, flags=re.DOTALL)
-        # Remove RSS Feeds section
-        prompt = re.sub(r'# RSS Feeds.*?# Section Rules', '# Section Rules', prompt, flags=re.DOTALL)
-        
-        prompt = prompt.replace("{{TODAY}}", today)
-        prompt += f"\n\n## PRE-PARSED NEWS DATA (JSON)\n{json.dumps(news_data, indent=2)}\n"
-        prompt += "\n**INSTRUCTIONS:** Use the provided JSON data to build the report and send the email. Do NOT fetch any feeds yourself. Follow all section rules and formatting instructions."
-
-        output = self.synthesize(prompt)
+        markdown = self._build_markdown(news_data, today)
+        html_email = self._build_html_email(news_data, today)
 
         output_path = REPO_ROOT / "output" / f"daily-news-briefing-{today}.md"
-        output_path.write_text(output)
+        output_path.write_text(markdown)
+
+        prompt_path = REPO_ROOT / "agents" / "prompts" / "news_briefing.md"
+        prompt = prompt_path.read_text()
+        prompt = prompt.replace("{{TODAY}}", today)
+        prompt = prompt.replace("{{HTML_EMAIL}}", html_email)
+
+        self.synthesize(prompt)
 
         self.mark_seen("email_sent", today)
         return {"sent": True, "output_path": str(output_path)}

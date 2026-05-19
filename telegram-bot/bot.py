@@ -15,6 +15,8 @@ from tools import (
     get_system_health,
     get_cron_schedule,
     get_agent_logs,
+    run_travel_agent,
+    get_travel_report,
 )
 
 load_dotenv()
@@ -48,13 +50,21 @@ SYSTEM_PROMPT = CONCIERGE_PATH.read_text() if CONCIERGE_PATH.exists() else (
     "You are a concierge assistant for Cian's home server. Be concise and direct."
 )
 
-TOOL_FUNCTIONS = {
+# State-reading tools — called in Gemini fallback to build context snapshot
+STATE_TOOL_FUNCTIONS = {
     "get_agent_status": get_agent_status,
     "get_plant_status": get_plant_status,
     "get_yopflix_status": get_yopflix_status,
     "get_system_health": get_system_health,
     "get_cron_schedule": get_cron_schedule,
     "get_agent_logs": lambda agent_name="": get_agent_logs(agent_name),
+    "get_travel_report": get_travel_report,
+}
+
+# All tools available to the LLM (state + action tools)
+TOOL_FUNCTIONS = {
+    **STATE_TOOL_FUNCTIONS,
+    "run_travel_agent": run_travel_agent,
 }
 
 TOOLS = [
@@ -62,7 +72,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "get_agent_status",
-            "description": "Get the last run status of all server agents (daily-briefing, news-briefing, security-audit).",
+            "description": "Get the last run status of all server agents (daily-briefing, news-briefing, security-audit, travel-agent).",
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
     },
@@ -115,13 +125,67 @@ TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "run_travel_agent",
+            "description": (
+                "Launch the travel agent in the background to research or plan a trip. "
+                "Use mode='search' to find flights, hotels, and activities. "
+                "Use mode='plan' when the user already has flights and accommodation booked and wants a day-by-day itinerary."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "destination": {
+                        "type": "string",
+                        "description": "Destination city or country (e.g. 'Barcelona', 'Japan').",
+                    },
+                    "checkin": {
+                        "type": "string",
+                        "description": "Check-in / arrival date in YYYY-MM-DD format.",
+                    },
+                    "checkout": {
+                        "type": "string",
+                        "description": "Check-out / departure date in YYYY-MM-DD format.",
+                    },
+                    "mode": {
+                        "type": "string",
+                        "enum": ["search", "plan"],
+                        "description": "search=find flights+hotels, plan=itinerary from existing bookings. Default: search.",
+                    },
+                    "origin": {
+                        "type": "string",
+                        "description": "Departure city for search mode (e.g. 'Dublin', 'Amsterdam').",
+                    },
+                    "flights": {
+                        "type": "string",
+                        "description": "Plan mode only: existing flight details as free text (e.g. 'Ryanair FR1234 DUB->BCN 06:30, return 22:00').",
+                    },
+                    "hotel": {
+                        "type": "string",
+                        "description": "Plan mode only: existing hotel booking as free text (e.g. 'H10 Marina Barcelona, 7 nights').",
+                    },
+                },
+                "required": ["destination", "checkin", "checkout"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_travel_report",
+            "description": "Check whether the latest travel research report is ready and return its filename and size.",
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
 ]
 
 
 def _call_gemini_fallback(user_message: str, system_prompt: str) -> str:
-    """Execute all tools, inject results, call Gemini CLI as a flat prompt."""
+    """Execute state-reading tools, inject results, call Gemini CLI as a flat prompt."""
     state_parts = []
-    for name, fn in TOOL_FUNCTIONS.items():
+    for name, fn in STATE_TOOL_FUNCTIONS.items():
         try:
             result = fn()
         except Exception as e:
@@ -149,7 +213,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     await update.message.reply_html(
         f"Hi {user.mention_html()}! I'm your server concierge. "
-        "Ask me about agent status, plants, yopflix, system health, cron schedules, or recent logs."
+        "Ask me about agent status, plants, yopflix, system health, cron schedules, recent logs, "
+        "or say 'search flights to Barcelona 1–7 July from Dublin' to kick off travel research."
     )
 
 

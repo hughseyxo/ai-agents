@@ -4,7 +4,8 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 
 # Multi-LLM Setup
 - This codebase is worked on by both **Claude Code** (codename: eagna) and **Gemini CLI**
-- Gemini picks up work when Claude hits rate limits, and vice versa
+- **Gemini is the primary agent** for all automated tasks to mitigate Claude usage spikes.
+- Claude acts as a fallback if Gemini fails (timeouts, logic errors, etc.).
 - **CLAUDE.md is the single source of truth** — both agents read it. Keep it updated with:
   - New files, agents, or scripts added to the project
   - New conventions or architectural decisions
@@ -37,12 +38,15 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 │   ├── runner.py               # CLI: python3 -m agents <command>
 │   ├── weather.py              # Open-Meteo weather client (Leiden default, no API key)
 │   ├── plant_weather.py        # Weather-based watering adjustment logic (pure functions)
-│   ├── daily_briefing.py       # Daily briefing agent (schedule: 05:05 UTC / 07:05 CEST, model: claude-sonnet-4-6)
-│   ├── news_briefing.py        # News briefing agent (schedule: 05:00 UTC / 07:00 CEST, model: claude-haiku-4-5)
+│   ├── daily_briefing.py       # Daily briefing agent (schedule: 04:05 UTC / 06:05 CEST, model: claude-sonnet-4-6)
+│   ├── news_briefing.py        # News briefing agent (schedule: 04:00 UTC / 06:00 CEST, model: claude-haiku-4-5, Claude primary). Steps: fetch_news → translate_dutch (NOS Binnenland articles) → news_briefing (send email). HTML/markdown pre-built in Python; LLM only sends email. Sources: BBC, RTE/TheJournal/Irish Times(Google News), DutchNews/NLTimes/NOS(Dutch→translated), Leiden/Mullingar(Google News), Verge/TC/HN/ARS/Register, Polygon, HN SRE.
 │   ├── security_audit.py       # Security audit agent — 18 checks: 12 system + 4 seedbox + 2 web (Cloudflare IP validation, Shodan InternetDB). Schedule: Sunday 06:00 UTC / 08:00 CEST. Seedbox configs live in ~/git/yopflix (private repo).
+│   ├── travel_agent.py         # Travel agent (on-demand) — search mode: finds flights/hotels/activities; plan mode: itinerary from existing bookings. model: claude-sonnet-4-6. Design doc: docs/travel-agent.md
 │   └── prompts/                # LLM CLI synthesis prompt templates
 │       ├── daily_briefing.md
-│       └── news_briefing.md
+│       ├── news_briefing.md
+│       ├── travel_agent_search.md   # Search mode: find flights, hotels, activities
+│       └── travel_agent_plan.md     # Plan mode: day-by-day itinerary from existing bookings
 ├── telegram-bot/       # Server concierge Telegram bot (OpenRouter-backed)
 │   ├── bot.py                  # Bot: polling, auth gate, tool-use loop, model fallback
 │   ├── tools.py                # Tool functions: get_agent_status, get_plant_status, get_yopflix_status, get_system_health, get_cron_schedule, get_agent_logs
@@ -77,6 +81,7 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 │   ├── openrouter-telegram-bot.md # OpenRouter bot architecture (superseded by concierge)
 │   ├── telegram-bots.md        # Overview of all Telegram bots, status, failure history
 │   ├── mcp-bridge.md           # MCP bridge server design (Tailscale HTTP, 7 tools)
+│   ├── travel-agent.md         # Travel agent design (search + plan modes, no API keys)
 │   └── superpowers/
 │       ├── specs/
 │       │   └── 2026-05-17-server-concierge-bot-design.md  # Concierge bot spec
@@ -93,9 +98,10 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 - Agents are Python classes in `agents/` extending `BaseAgent`
 - **Dual-CLI rule:** All agent Python code must be runnable by both Claude and Gemini CLI. No Claude-specific or Gemini-specific dependencies in Python. LLM-specific adaptations happen in `BaseAgent.synthesize()` only.
 - Execution model: Python handles lifecycle, state (SQLite), retry, dedup, and deterministic logic (e.g. plant watering, weather, RSS fetching). LLM CLI (with MCP tools) handles data synthesis, formatting, and email sending.
-- **Model selection:** Set `model = "claude-sonnet-4-6"` (or haiku/opus) on the agent class to pass `--model` to the Claude CLI. Default `None` lets CLI pick. Briefings use Sonnet/Haiku for cost; security-audit stays on default (Opus).
-- **LLM failover & Timeouts:** `BaseAgent.synthesize()` tries Claude CLI first, falls back to Gemini CLI on infrastructure failure (rate limits, timeouts, quota). Prompts are adapted at runtime for Gemini.
+- **Model selection:** Set `model = "claude-sonnet-4-6"` (or haiku/opus) on the agent class. `BaseAgent.synthesize()` maps these to appropriate Gemini models when using Gemini, or passes them directly to Claude.
+- **LLM failover & Timeouts:** `BaseAgent.synthesize()` tries Gemini CLI first, falls back to Claude CLI on failure. Prompts are adapted at runtime for Gemini.
   - **Timeouts:** A 600s timeout is applied to LLM calls. If a step marked with `side_effects: True` times out, the agent skips retries to avoid duplicate actions (e.g. sending multiple emails).
+- **On-demand agents:** Set `schedule = ""` — they won't appear in crontab but can be triggered manually or via Telegram bot. Pass extra args via `configure(args)` called by `cmd_run` in runner.py.
 
 # Security & Git Workflow
 - **Security Audit Before Push:** Gemini MUST run the security audit agent (`run-agent.sh security-audit`) before every `git push` to a public branch. If any "Critical" or "High" severity findings are found in unpushed or staged changes (Check 16), the push MUST be aborted until fixed or explicitly exempted by the user.
@@ -109,7 +115,7 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 - MCP servers (Todoist, Calendar, Gmail) are used via LLM CLI (Claude or Gemini), not called directly from Python. Both CLIs have identical MCP server configs — Claude via `.mcp.json`, Gemini via `gemini mcp add` (project scope).
 - Step failure handling: if a step exhausts retries, execution continues but the run is marked `partial_failure` in the DB (not `success`). Check `_failed_steps` in `report()` if you need to adjust output.
 - Agents log operational notes (feed failures, API quirks, unexpected behavior) to `docs/agent-notes.md` (gitignored) to save tokens on future runs
-- All cron schedules target 7:00 AM Amsterdam time (CEST = UTC+2, so 05:00 UTC)
+- All cron schedules target 6:00 AM Amsterdam time (CEST = UTC+2, so 04:00 UTC)
 
 # Skills
 - Skills are Claude Code interactive commands in `skills/<name>/SKILL.md`

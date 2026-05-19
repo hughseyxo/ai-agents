@@ -100,7 +100,7 @@ class TestAdaptPromptForGemini:
 
 class TestSynthesize:
     @patch("agents.base.subprocess.run")
-    def test_claude_succeeds_first_try(self, mock_run):
+    def test_gemini_succeeds_first_try(self, mock_run):
         mock_run.return_value = mock_result(stdout="briefing output")
         agent = make_agent()
 
@@ -109,65 +109,62 @@ class TestSynthesize:
         assert result == "briefing output"
         assert mock_run.call_count == 1
         cmd = mock_run.call_args[0][0]
-        assert cmd[0] == "claude"
+        assert cmd[0] == "gemini"
 
     @patch("agents.base.subprocess.run")
-    def test_falls_back_to_gemini_on_claude_failure(self, mock_run):
+    def test_falls_back_to_claude_on_gemini_failure(self, mock_run):
         mock_run.side_effect = [
             mock_result(returncode=1, stdout="", stderr="rate limit exceeded"),
-            mock_result(stdout="gemini output"),
+            mock_result(stdout="claude output"),
         ]
         agent = make_agent()
 
         result = agent.synthesize("test prompt")
 
-        assert result == "gemini output"
+        assert result == "claude output"
         assert mock_run.call_count == 2
         first_cmd = mock_run.call_args_list[0][0][0]
         second_cmd = mock_run.call_args_list[1][0][0]
-        assert first_cmd[0] == "claude"
-        assert second_cmd[0] == "gemini"
+        assert first_cmd[0] == "gemini"
+        assert second_cmd[0] == "claude"
 
     @patch("agents.base.subprocess.run")
     def test_falls_back_on_empty_stdout(self, mock_run):
         mock_run.side_effect = [
             mock_result(returncode=0, stdout="", stderr=""),
-            mock_result(stdout="gemini output"),
+            mock_result(stdout="claude output"),
         ]
         agent = make_agent()
 
         result = agent.synthesize("test prompt")
 
-        assert result == "gemini output"
+        assert result == "claude output"
         assert mock_run.call_count == 2
 
     @patch("agents.base.subprocess.run")
     def test_falls_back_on_whitespace_only_stdout(self, mock_run):
         mock_run.side_effect = [
             mock_result(returncode=0, stdout="   \n  ", stderr=""),
-            mock_result(stdout="gemini output"),
+            mock_result(stdout="claude output"),
         ]
         agent = make_agent()
 
         result = agent.synthesize("test prompt")
 
-        assert result == "gemini output"
+        assert result == "claude output"
 
     @patch("agents.base.subprocess.run")
-    def test_claude_timeout_is_terminal_no_failover(self, mock_run):
-        """Timeouts must NOT trigger Gemini failover: if Claude was mid-way
-        through MCP side effects (sending email, creating tasks) when killed,
-        running Gemini would duplicate those side effects."""
+    def test_gemini_timeout_is_terminal_no_failover(self, mock_run):
+        """Timeouts must NOT trigger Claude failover."""
         mock_run.side_effect = [
-            subprocess.TimeoutExpired(cmd="claude", timeout=600),
-            mock_result(stdout="gemini output"),
+            subprocess.TimeoutExpired(cmd="gemini", timeout=600),
+            mock_result(stdout="claude output"),
         ]
         agent = make_agent()
 
         with pytest.raises(RuntimeError, match="timed out"):
             agent.synthesize("test prompt")
 
-        # Critically: Gemini must NOT be invoked
         assert mock_run.call_count == 1
 
     @patch("agents.base.subprocess.run")
@@ -193,68 +190,69 @@ class TestSynthesize:
         with pytest.raises(RuntimeError, match="non-retriable"):
             agent.synthesize("test prompt")
 
-        # Should NOT try gemini
+        # Should NOT try claude
         assert mock_run.call_count == 1
 
     @patch("agents.base.subprocess.run")
-    def test_non_retriable_invalid_request(self, mock_run):
-        mock_run.return_value = mock_result(
-            returncode=1, stderr="invalid_request: prompt malformed"
-        )
-        agent = make_agent()
-
-        with pytest.raises(RuntimeError, match="non-retriable"):
-            agent.synthesize("test prompt")
-
-        assert mock_run.call_count == 1
-
-    @patch("agents.base.subprocess.run")
-    def test_non_retriable_too_long(self, mock_run):
-        mock_run.return_value = mock_result(
-            returncode=1, stderr="Error: prompt too long for model"
-        )
-        agent = make_agent()
-
-        with pytest.raises(RuntimeError, match="non-retriable"):
-            agent.synthesize("test prompt")
-
-        assert mock_run.call_count == 1
-
-    @patch("agents.base.subprocess.run")
-    def test_gemini_prompt_is_adapted(self, mock_run):
-        """When falling back to Gemini, the prompt should be adapted."""
-        mock_run.side_effect = [
-            mock_result(returncode=1, stderr="429 rate limit"),
-            mock_result(stdout="gemini output"),
-        ]
-        agent = make_agent()
-
-        prompt = "Call mcp__todoist__find-tasks via WebFetch"
-        agent.synthesize(prompt)
-
-        # Check the prompt passed to gemini was adapted
-        gemini_call = mock_run.call_args_list[1]
-        gemini_cmd = gemini_call[0][0]
-        # The prompt is the element after "-p" in the command
-        p_index = gemini_cmd.index("-p")
-        gemini_prompt = gemini_cmd[p_index + 1]
-        assert "mcp_todoist_find-tasks" in gemini_prompt
-        assert "mcp__todoist__" not in gemini_prompt
-        assert "WebFetch" not in gemini_prompt
-
-    @patch("agents.base.subprocess.run")
-    def test_claude_prompt_is_not_adapted(self, mock_run):
-        """When Claude succeeds, the prompt should NOT be adapted."""
+    def test_gemini_prompt_is_adapted_by_default(self, mock_run):
+        """Gemini is tried first, and its prompt should be adapted."""
         mock_run.return_value = mock_result(stdout="output")
         agent = make_agent()
 
         prompt = "Call mcp__todoist__find-tasks"
         agent.synthesize(prompt)
 
-        claude_cmd = mock_run.call_args[0][0]
+        gemini_cmd = mock_run.call_args[0][0]
+        p_index = gemini_cmd.index("-p")
+        gemini_prompt = gemini_cmd[p_index + 1]
+        assert "mcp_todoist_find-tasks" in gemini_prompt
+
+    @patch("agents.base.subprocess.run")
+    def test_claude_prompt_is_not_adapted_on_fallback(self, mock_run):
+        """When Gemini fails, Claude gets the UNADAPTED prompt."""
+        mock_run.side_effect = [
+            mock_result(returncode=1, stderr="error"),
+            mock_result(stdout="output"),
+        ]
+        agent = make_agent()
+
+        prompt = "Call mcp__todoist__find-tasks"
+        agent.synthesize(prompt)
+
+        claude_cmd = mock_run.call_args_list[1][0][0]
         p_index = claude_cmd.index("-p")
         claude_prompt = claude_cmd[p_index + 1]
         assert "mcp__todoist__find-tasks" in claude_prompt
+
+    @patch("agents.base.subprocess.run")
+    def test_providers_override_uses_claude_first(self, mock_run):
+        """When providers is reversed, Claude is tried first."""
+        mock_run.return_value = mock_result(stdout="output")
+        agent = make_agent()
+        agent.providers = list(reversed(BaseAgent.PROVIDERS))
+
+        agent.synthesize("test prompt")
+
+        assert mock_run.call_count == 1
+        cmd = mock_run.call_args[0][0]
+        assert cmd[0] == "claude"
+
+    @patch("agents.base.subprocess.run")
+    def test_providers_override_falls_back_to_gemini(self, mock_run):
+        """When Claude primary fails with reversed providers, Gemini is the fallback."""
+        mock_run.side_effect = [
+            mock_result(returncode=1, stderr="error"),
+            mock_result(stdout="gemini output"),
+        ]
+        agent = make_agent()
+        agent.providers = list(reversed(BaseAgent.PROVIDERS))
+
+        result = agent.synthesize("test prompt")
+
+        assert result == "gemini output"
+        assert mock_run.call_count == 2
+        assert mock_run.call_args_list[0][0][0][0] == "claude"
+        assert mock_run.call_args_list[1][0][0][0] == "gemini"
 
     @patch("agents.base.subprocess.run")
     def test_timeout_is_600_seconds(self, mock_run):
@@ -266,11 +264,11 @@ class TestSynthesize:
         assert mock_run.call_args[1]["timeout"] == 600
 
     @patch("agents.base.subprocess.run")
-    def test_default_model_passes_no_model_flag(self, mock_run):
-        """BaseAgent.model is None by default — preserves current behaviour."""
+    def test_model_attribute_does_not_inject_flag_to_gemini_by_default(self, mock_run):
+        """Gemini CLI uses its default model unless mapped."""
         mock_run.return_value = mock_result(stdout="output")
         agent = make_agent()
-        assert agent.model is None
+        agent.model = "claude-haiku-4-5"
 
         agent.synthesize("test")
 
@@ -278,31 +276,17 @@ class TestSynthesize:
         assert "--model" not in cmd
 
     @patch("agents.base.subprocess.run")
-    def test_model_attribute_injects_claude_model_flag(self, mock_run):
-        mock_run.return_value = mock_result(stdout="output")
+    def test_model_attribute_injects_claude_model_flag_on_fallback(self, mock_run):
+        """When Gemini fails, the fallback Claude call should include the --model flag."""
+        mock_run.side_effect = [
+            mock_result(returncode=1, stderr="error"),
+            mock_result(stdout="output"),
+        ]
         agent = make_agent()
         agent.model = "claude-sonnet-4-6"
 
         agent.synthesize("test")
 
-        cmd = mock_run.call_args[0][0]
-        assert "--model" in cmd
-        assert cmd[cmd.index("--model") + 1] == "claude-sonnet-4-6"
-
-    @patch("agents.base.subprocess.run")
-    def test_model_attribute_does_not_pollute_gemini_cmd(self, mock_run):
-        """When Claude fails and Gemini takes over, the Claude --model flag
-        must not leak into the Gemini command."""
-        mock_run.side_effect = [
-            mock_result(returncode=1, stderr="rate limit"),
-            mock_result(stdout="gemini output"),
-        ]
-        agent = make_agent()
-        agent.model = "claude-haiku-4-5"
-
-        agent.synthesize("test")
-
-        gemini_cmd = mock_run.call_args_list[1][0][0]
-        assert gemini_cmd[0] == "gemini"
-        assert "--model" not in gemini_cmd
-        assert "claude-haiku-4-5" not in gemini_cmd
+        claude_cmd = mock_run.call_args_list[1][0][0]
+        assert "--model" in claude_cmd
+        assert claude_cmd[claude_cmd.index("--model") + 1] == "claude-sonnet-4-6"

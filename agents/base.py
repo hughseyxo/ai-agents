@@ -27,6 +27,7 @@ class BaseAgent:
     schedule: str = ""  # cron expression, e.g. "5 7 * * *"
     max_retries: int = 2
     model: str | None = None  # Claude model override (e.g. "claude-sonnet-4-6"); None = CLI default
+    providers: list | None = None  # Override provider order/set; None = use PROVIDERS class default
 
     def __init__(self, db_path: str | Path = DEFAULT_DB_PATH):
         self.db = AgentDB(db_path)
@@ -121,20 +122,20 @@ class BaseAgent:
         """Format + deliver results. Override in subclass."""
         raise NotImplementedError
 
-    # --- LLM CLI synthesis (Claude → Gemini failover) ---
+    # --- LLM CLI synthesis (Gemini → Claude failover) ---
 
     PROVIDERS = [
-        {
-            "name": "claude",
-            "cmd_prefix": ["claude", "--dangerously-skip-permissions", "-p"],
-            "cmd_suffix": ["--output-format", "text"],
-            "adapt_prompt": False,
-        },
         {
             "name": "gemini",
             "cmd_prefix": ["gemini", "-y", "-p"],
             "cmd_suffix": ["-o", "text"],
             "adapt_prompt": True,
+        },
+        {
+            "name": "claude",
+            "cmd_prefix": ["claude", "--dangerously-skip-permissions", "-p"],
+            "cmd_suffix": ["--output-format", "text"],
+            "adapt_prompt": False,
         },
     ]
 
@@ -142,19 +143,22 @@ class BaseAgent:
     _NON_RETRIABLE = ["context_length", "invalid_request", "too long"]
 
     def synthesize(self, prompt: str) -> str:
-        """Invoke LLM CLI with MCP access. Tries Claude first, falls back to Gemini.
+        """Invoke LLM CLI with MCP access. Tries Gemini first, falls back to Claude.
 
         Timeouts are terminal — they do NOT trigger failover. A killed CLI may
         have already executed MCP side effects (sent email, created tasks);
         retrying on a second provider would duplicate them.
         """
         last_error = None
-        for provider in self.PROVIDERS:
+        for provider in (self.providers or self.PROVIDERS):
             p_prompt = self._adapt_prompt_for_gemini(prompt) if provider["adapt_prompt"] else prompt
             cmd = list(provider["cmd_prefix"]) + [p_prompt] + list(provider["cmd_suffix"])
-            # Inject --model only for Claude; Gemini Pro is free-tier and ignored here
+            
+            # Model selection
             if provider["name"] == "claude" and self.model:
                 cmd += ["--model", self.model]
+            # Gemini CLI default is used (managed via gemini config or CLI default)
+            
             try:
                 result = subprocess.run(
                     cmd, capture_output=True, text=True,

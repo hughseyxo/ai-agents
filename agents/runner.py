@@ -5,6 +5,11 @@ Usage:
     python3 -m agents.runner --list             # list agents + schedules
     python3 -m agents.runner --install-cron     # write crontab entries
     python3 -m agents.runner --history <agent>  # show recent runs
+
+Travel agent (on-demand, two modes):
+    python3 -m agents travel-agent --destination "Barcelona" --origin "Dublin" --checkin 2026-07-01 --checkout 2026-07-07
+    python3 -m agents travel-agent --mode plan --destination "Barcelona" --checkin 2026-07-01 --checkout 2026-07-07 \
+        --flights "Ryanair FR1234 DUB->BCN 06:30, return FR1235" --hotel "H10 Marina, 7 nights"
 """
 
 import argparse
@@ -21,6 +26,7 @@ AGENT_REGISTRY = {
     "daily-briefing": "agents.daily_briefing:DailyBriefingAgent",
     "news-briefing": "agents.news_briefing:NewsBriefingAgent",
     "security-audit": "agents.security_audit:SecurityAuditAgent",
+    "travel-agent": "agents.travel_agent:TravelAgent",
 }
 
 
@@ -56,6 +62,14 @@ def cmd_run(args):
         agent.run_fix_mode()
         return
 
+    # Pass args to agents that support configure() (e.g. travel-agent)
+    if hasattr(agent, "configure"):
+        if args.agent == "travel-agent":
+            if not args.destination or not args.checkin or not args.checkout:
+                print("travel-agent requires --destination, --checkin, and --checkout", file=sys.stderr)
+                sys.exit(1)
+        agent.configure(args)
+
     try:
         output = agent.run()
         print(output)
@@ -69,7 +83,8 @@ def cmd_list(args):
     print(f"{'AGENT':<25} {'SCHEDULE':<20}")
     print(f"{'-----':<25} {'--------':<20}")
     for cls in agents:
-        print(f"{cls.name:<25} {cls.schedule:<20}")
+        schedule = cls.schedule or "(on-demand)"
+        print(f"{cls.name:<25} {schedule:<20}")
 
 
 def cmd_history(args):
@@ -149,6 +164,15 @@ def main():
     run_parser = subparsers.add_parser("run", help="Run an agent")
     run_parser.add_argument("agent", help="Agent name")
     run_parser.add_argument("--fix", action="store_true", help="Interactive fix mode (security-audit)")
+    # Travel agent args (ignored by other agents)
+    run_parser.add_argument("--mode", choices=["search", "plan"], default="search",
+                            help="travel-agent: search=find flights+hotels, plan=itinerary from existing bookings")
+    run_parser.add_argument("--destination", help="travel-agent: destination city/country")
+    run_parser.add_argument("--origin", help="travel-agent (search mode): departure city")
+    run_parser.add_argument("--checkin", help="travel-agent: check-in date (YYYY-MM-DD)")
+    run_parser.add_argument("--checkout", help="travel-agent: check-out date (YYYY-MM-DD)")
+    run_parser.add_argument("--flights", help="travel-agent (plan mode): existing flight details as free text")
+    run_parser.add_argument("--hotel", help="travel-agent (plan mode): existing hotel booking as free text")
 
     # List agents
     subparsers.add_parser("list", help="List all agents and schedules")

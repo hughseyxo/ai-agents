@@ -15,10 +15,11 @@ import yaml
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from agents.db import AgentDB
 
-AGENTS = ["daily-briefing", "news-briefing", "security-audit"]
+AGENTS = ["daily-briefing", "news-briefing", "security-audit", "travel-agent"]
 DB_PATH = Path(__file__).parent.parent / "data" / "agents.db"
 LOG_PATH = str(Path(__file__).parent.parent / "output" / "cron.log")
 YOPFLIX_CONFIG = str(Path.home() / "git" / "yopflix" / "seedbox" / "config.yaml")
+REPO_ROOT = Path(__file__).parent.parent
 CEST_OFFSET = 2  # UTC+2
 
 
@@ -194,3 +195,71 @@ def get_agent_logs(agent_name: str = "") -> str:
         return "Log file not found."
     except Exception as e:
         return f"Logs unavailable: {e}"
+
+
+def run_travel_agent(
+    destination: str,
+    checkin: str,
+    checkout: str,
+    mode: str = "search",
+    origin: str = "",
+    flights: str = "",
+    hotel: str = "",
+) -> str:
+    """Launch the travel agent as a background subprocess."""
+    try:
+        cmd = [
+            "python3", "-m", "agents", "travel-agent",
+            "--mode", mode,
+            "--destination", destination,
+            "--checkin", checkin,
+            "--checkout", checkout,
+        ]
+        if origin:
+            cmd += ["--origin", origin]
+        if flights:
+            cmd += ["--flights", flights]
+        if hotel:
+            cmd += ["--hotel", hotel]
+
+        log_path = REPO_ROOT / "output" / "travel-agent.log"
+        with open(log_path, "a") as log:
+            subprocess.Popen(cmd, cwd=str(REPO_ROOT), stdout=log, stderr=log)
+
+        dest_slug = destination.lower().replace(" ", "-")
+        report_name = f"travel-{dest_slug}-{checkin}.html"
+
+        if mode == "plan":
+            return (
+                f"Planning your {destination} trip ({checkin}–{checkout}) in the background. "
+                f"Report will be at output/{report_name}. "
+                "Ask me 'is the travel report ready?' in a minute or two."
+            )
+        else:
+            origin_str = f"{origin} → " if origin else ""
+            return (
+                f"Searching flights and hotels for {origin_str}{destination} ({checkin}–{checkout}) in the background. "
+                f"Report will be at output/{report_name}. "
+                "Ask me 'is the travel report ready?' in a few minutes."
+            )
+    except Exception as e:
+        return f"Failed to start travel agent: {e}"
+
+
+def get_travel_report() -> str:
+    """Check whether the latest travel report is ready and return its name."""
+    try:
+        output_dir = REPO_ROOT / "output"
+        reports = sorted(
+            output_dir.glob("travel-*.html"),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+        if not reports:
+            return "No travel reports found yet. The agent may still be running."
+        latest = reports[0]
+        modified = datetime.fromtimestamp(latest.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
+        size_kb = latest.stat().st_size // 1024
+        return f"Latest travel report: {latest.name} — ready ({size_kb} KB, saved {modified})."
+    except Exception as e:
+        return f"Travel report check unavailable: {e}"

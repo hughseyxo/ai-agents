@@ -55,9 +55,12 @@ def get_access_token():
     return tokens["access_token"]
 
 
-def gmail_request(method, path, body=None):
+def gmail_request(method, path, params=None, body=None):
     token = get_access_token()
     url = f"https://gmail.googleapis.com/gmail/v1{path}"
+    if params:
+        url += "?" + urllib.parse.urlencode(params)
+    
     data = json.dumps(body).encode() if body else None
     req = urllib.request.Request(
         url,
@@ -83,7 +86,7 @@ def send_email(to, subject, body, mime_type="text/html"):
     msg["Subject"] = subject
     msg.attach(MIMEText(body, mime_type.split("/")[-1]))
     raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
-    return gmail_request("POST", "/users/me/messages/send", {"raw": raw})
+    return gmail_request("POST", "/users/me/messages/send", body={"raw": raw})
 
 
 def create_draft(to, subject, body, mime_type="text/html"):
@@ -94,7 +97,18 @@ def create_draft(to, subject, body, mime_type="text/html"):
     msg.attach(MIMEText(body, mime_type.split("/")[-1]))
     raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
     return gmail_request("POST", "/users/me/drafts",
-                         {"message": {"raw": raw}})
+                         body={"message": {"raw": raw}})
+
+
+def gmail_list_messages(query=None, max_results=10):
+    params = {"maxResults": max_results}
+    if query:
+        params["q"] = query
+    return gmail_request("GET", "/users/me/messages", params=params)
+
+
+def gmail_get_message(message_id):
+    return gmail_request("GET", f"/users/me/messages/{message_id}")
 
 
 # MCP stdio protocol
@@ -133,16 +147,24 @@ TOOLS = [
         },
     },
     {
-        "name": "gmail_create_draft",
-        "description": "Create a Gmail draft without sending.",
+        "name": "gmail_list_messages",
+        "description": "List Gmail messages matching a query.",
         "inputSchema": {
             "type": "object",
-            "required": ["to", "subject", "body"],
             "properties": {
-                "to": {"type": "string"},
-                "subject": {"type": "string"},
-                "body": {"type": "string"},
-                "mimeType": {"type": "string", "default": "text/html"},
+                "query": {"type": "string", "description": "Search query (e.g. 'subject:News')"},
+                "maxResults": {"type": "integer", "default": 10},
+            },
+        },
+    },
+    {
+        "name": "gmail_get_message",
+        "description": "Get a specific Gmail message by ID.",
+        "inputSchema": {
+            "type": "object",
+            "required": ["id"],
+            "properties": {
+                "id": {"type": "string"},
             },
         },
     },
@@ -173,6 +195,19 @@ def handle_call_tool(msg_id, name, arguments):
                 body=arguments["body"],
                 mime_type=arguments.get("mimeType", "text/html"),
             )
+            send_response(msg_id, {
+                "content": [{"type": "text", "text": json.dumps(result, indent=2)}]
+            })
+        elif name == "gmail_list_messages":
+            result = gmail_list_messages(
+                query=arguments.get("query"),
+                max_results=arguments.get("maxResults", 10),
+            )
+            send_response(msg_id, {
+                "content": [{"type": "text", "text": json.dumps(result, indent=2)}]
+            })
+        elif name == "gmail_get_message":
+            result = gmail_get_message(message_id=arguments["id"])
             send_response(msg_id, {
                 "content": [{"type": "text", "text": json.dumps(result, indent=2)}]
             })

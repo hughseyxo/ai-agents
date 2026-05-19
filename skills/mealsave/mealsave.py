@@ -421,28 +421,40 @@ def llm_extract(text: str, source_hint: str = "") -> dict:
     hint = f" ({source_hint})" if source_hint else ""
     prompt = LLM_PROMPT.format(hint=hint, text=text[:8000])
 
+    # Try Claude first (User preference: main model for mealsave)
     try:
-        # cwd=$HOME isolates the subprocess from project-local Claude hooks
-        # (e.g. Stop hooks that would otherwise hijack the recipe-JSON output).
+        print("[mealsave] Extracting recipe with Claude Sonnet...", file=sys.stderr)
         result = subprocess.run(
-            ["claude", "-p", prompt],
+            ["claude", "--dangerously-skip-permissions", "--model", "sonnet", "-p", prompt],
             capture_output=True,
             text=True,
-            timeout=90,
+            timeout=120,
             cwd=str(Path.home()),
         )
-    except FileNotFoundError:
-        die("'claude' CLI not found in PATH. Is Claude Code installed?")
-    except subprocess.TimeoutExpired:
-        die("Claude CLI timed out during recipe extraction (>90s).")
+        if result.returncode == 0 and result.stdout.strip():
+            return _parse_json_response(result.stdout)
+        print(f"[mealsave] Claude failed (rc={result.returncode}), trying Gemini fallback...", file=sys.stderr)
+    except Exception as e:
+        print(f"[mealsave] Claude error: {e}, trying Gemini fallback...", file=sys.stderr)
 
-    if result.returncode != 0:
-        err = result.stderr.strip()[:300]
-        die(f"Claude CLI exited with error: {err}")
+    # Fallback to Gemini
+    try:
+        result = subprocess.run(
+            ["gemini", "-y", "-p", prompt, "-o", "text"],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            cwd=str(Path.home()),
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return _parse_json_response(result.stdout)
+        die(f"Both LLMs failed. Gemini error: {result.stderr.strip()[:200]}")
+    except Exception as e:
+        die(f"Both LLMs failed. Gemini exception: {e}")
 
-    output = result.stdout.strip()
 
-    # Strip markdown code fences if claude wrapped the JSON
+def _parse_json_response(output: str) -> dict:
+    # Strip markdown code fences if wrapped
     output = re.sub(r"^```(?:json)?\s*", "", output, flags=re.MULTILINE)
     output = re.sub(r"\s*```\s*$", "", output, flags=re.MULTILINE)
     output = output.strip()
@@ -702,9 +714,9 @@ def main():
                     f"DESCRIPTION:\n{meta['description']}"
                 )
                 if meta["description"].strip():
-                    print("[mealsave] Trying caption-first extraction...")
                     data = llm_extract(caption_text, "TikTok caption/description")
                     if data.get("recipeIngredient") and data.get("recipeInstructions"):
+
                         slug = create_from_data(mealie_url, token, data, url)
                         print(f"{mealie_url}/g/home/r/{slug}")
                         sys.exit(0)
@@ -724,7 +736,6 @@ def main():
                 f"VIDEO OCR TEXT:\n{ocr_text}"
             )
 
-            print("[mealsave] Extracting recipe with Claude...")
             data = llm_extract(combined_text, "TikTok video (caption + audio + OCR)")
 
             if not data.get("recipeIngredient") and not data.get("recipeInstructions"):
@@ -742,7 +753,6 @@ def main():
     if is_youtube(url):
         print("[mealsave] Fetching YouTube transcript...")
         transcript = fetch_youtube_transcript(url)
-        print("[mealsave] Extracting recipe with Claude...")
         data = llm_extract(transcript, "YouTube video transcript")
 
         if not data.get("recipeIngredient") and not data.get("recipeInstructions"):
@@ -759,7 +769,6 @@ def main():
     # Path 3: Generic page — trafilatura → LLM
     print("[mealsave] Extracting text with trafilatura...")
     text = fetch_generic_text(url)
-    print("[mealsave] Extracting recipe with Claude...")
     data = llm_extract(text, "web page")
 
     if not data.get("recipeIngredient") and not data.get("recipeInstructions"):

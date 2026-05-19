@@ -18,8 +18,8 @@ PERSONAL_PROJECT_ID = "6Crf3cH2RF5v86wc"
 
 class DailyBriefingAgent(BaseAgent):
     name = "daily-briefing"
-    schedule = "5 5 * * *"
-    model = "claude-sonnet-4-6"
+    schedule = "5 4 * * *"
+    model = "claude-haiku-4-5"
 
     def plan(self):
         last = self.last_run()
