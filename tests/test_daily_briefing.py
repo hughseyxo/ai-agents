@@ -179,6 +179,110 @@ class TestCheckPlantsIdempotent:
         assert result1["tasks_to_create"] == result2["tasks_to_create"]
 
 
+class TestSyncPlantCompletions:
+    def test_updates_last_watered_from_completed_task(self):
+        """LLM reports a completed task newer than last_watered → DB is updated."""
+        today = datetime.now(timezone.utc).date()
+        last_watered = (today - timedelta(days=10)).isoformat()
+        completed_date = (today - timedelta(days=3)).isoformat()
+        plants = [{"name": "Monstera", "frequency_days": 10,
+                    "last_watered": last_watered, "location": "indoor"}]
+
+        agent = _make_agent_with_plants(plants)
+        agent.synthesize = lambda prompt: f'[{{"name": "Monstera", "completed_date": "{completed_date}"}}]'
+
+        agent._sync_plant_completions()
+
+        saved = agent.get_state("plants")
+        assert saved[0]["last_watered"] == completed_date
+
+    def test_does_not_update_if_completed_date_not_newer(self):
+        """Completed date <= last_watered → no update (already synced)."""
+        today = datetime.now(timezone.utc).date()
+        last_watered = (today - timedelta(days=3)).isoformat()
+        older_date = (today - timedelta(days=5)).isoformat()
+        plants = [{"name": "Monstera", "frequency_days": 10,
+                    "last_watered": last_watered, "location": "indoor"}]
+
+        agent = _make_agent_with_plants(plants)
+        agent.synthesize = lambda prompt: f'[{{"name": "Monstera", "completed_date": "{older_date}"}}]'
+
+        agent._sync_plant_completions()
+
+        saved = agent.get_state("plants")
+        assert saved[0]["last_watered"] == last_watered
+
+    def test_noop_on_empty_json(self):
+        """LLM returns [] → no DB changes."""
+        today = datetime.now(timezone.utc).date()
+        last_watered = (today - timedelta(days=5)).isoformat()
+        plants = [{"name": "Monstera", "frequency_days": 10,
+                    "last_watered": last_watered, "location": "indoor"}]
+
+        agent = _make_agent_with_plants(plants)
+        agent.synthesize = lambda prompt: '[]'
+
+        agent._sync_plant_completions()
+
+        saved = agent.get_state("plants")
+        assert saved[0]["last_watered"] == last_watered
+
+    def test_noop_on_bad_json(self):
+        """LLM returns non-JSON → no crash, DB unchanged."""
+        today = datetime.now(timezone.utc).date()
+        last_watered = (today - timedelta(days=5)).isoformat()
+        plants = [{"name": "Monstera", "frequency_days": 10,
+                    "last_watered": last_watered, "location": "indoor"}]
+
+        agent = _make_agent_with_plants(plants)
+        agent.synthesize = lambda prompt: 'No completed tasks found.'
+
+        agent._sync_plant_completions()  # must not raise
+
+        saved = agent.get_state("plants")
+        assert saved[0]["last_watered"] == last_watered
+
+    def test_multiple_plants_updated_independently(self):
+        """Each plant updated based on its own completion; unmentioned plants untouched."""
+        today = datetime.now(timezone.utc).date()
+        original = (today - timedelta(days=10)).isoformat()
+        monstera_done = (today - timedelta(days=3)).isoformat()
+        plants = [
+            {"name": "Monstera", "frequency_days": 10,
+             "last_watered": original, "location": "indoor"},
+            {"name": "Tomato", "frequency_days": 3,
+             "last_watered": original, "location": "outdoor"},
+        ]
+
+        agent = _make_agent_with_plants(plants)
+        agent.synthesize = lambda prompt: f'[{{"name": "Monstera", "completed_date": "{monstera_done}"}}]'
+
+        agent._sync_plant_completions()
+
+        saved = agent.get_state("plants")
+        monstera = next(p for p in saved if p["name"] == "Monstera")
+        tomato = next(p for p in saved if p["name"] == "Tomato")
+        assert monstera["last_watered"] == monstera_done
+        assert tomato["last_watered"] == original
+
+    def test_strips_markdown_fences_from_llm_output(self):
+        """LLM wraps JSON in code fences → still parsed correctly."""
+        today = datetime.now(timezone.utc).date()
+        last_watered = (today - timedelta(days=10)).isoformat()
+        completed_date = (today - timedelta(days=2)).isoformat()
+        plants = [{"name": "Monstera", "frequency_days": 10,
+                    "last_watered": last_watered, "location": "indoor"}]
+
+        agent = _make_agent_with_plants(plants)
+        fenced = f'```json\n[{{"name": "Monstera", "completed_date": "{completed_date}"}}]\n```'
+        agent.synthesize = lambda prompt: fenced
+
+        agent._sync_plant_completions()
+
+        saved = agent.get_state("plants")
+        assert saved[0]["last_watered"] == completed_date
+
+
 class TestFetchWeatherStep:
     @patch("agents.daily_briefing.fetch_weather")
     def test_fetch_weather_step_stores_in_context(self, mock_fetch):

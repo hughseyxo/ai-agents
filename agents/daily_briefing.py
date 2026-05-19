@@ -4,6 +4,8 @@ Python handles: lifecycle, SQLite state, plant watering logic, weather, dedup.
 LLM CLI (with MCP access) handles: calendar/todoist fetching, formatting, email sending.
 """
 
+import json
+import re
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -13,6 +15,21 @@ from .plant_weather import adjust_watering_date
 from .weather import fetch_weather
 
 PERSONAL_PROJECT_ID = "6Crf3cH2RF5v86wc"
+
+_SYNC_PROMPT = f"""\
+You are a data-fetch step. Your only job is to find recently completed plant watering tasks in Todoist and return JSON.
+
+Use mcp__todoist__find-completed-tasks to find completed tasks in project {PERSONAL_PROJECT_ID} completed in the last 30 days.
+
+Filter to tasks whose content starts with "Water " (case-insensitive).
+
+Return ONLY valid JSON — no markdown, no explanation, no other text:
+[{{"name": "Plant Name", "completed_date": "YYYY-MM-DD"}}]
+
+Extract "Plant Name" by stripping the "Water " prefix from the task content.
+Use the task's completion date as "completed_date" in YYYY-MM-DD format.
+If no matching completed tasks found, return: []
+"""
 
 
 class DailyBriefingAgent(BaseAgent):
@@ -32,6 +49,7 @@ class DailyBriefingAgent(BaseAgent):
     def steps(self):
         return [
             {"name": "weather", "fn": self._fetch_weather},
+            {"name": "sync_plant_completions", "fn": self._sync_plant_completions},
             {"name": "plants", "fn": self._check_plants},
             {"name": "briefing", "fn": self._run_briefing, "side_effects": True},
         ]
@@ -49,6 +67,53 @@ class DailyBriefingAgent(BaseAgent):
         return f"Briefing for {today} complete"
 
     # --- Plant watering (Python — deterministic, no LLM needed) ---
+
+    def _sync_plant_completions(self):
+        """Update last_watered for any plant whose Todoist task was marked done."""
+        plants = self.get_state("plants")
+        if not plants:
+            return {"synced": 0}
+
+        try:
+            output = self.synthesize(_SYNC_PROMPT)
+        except Exception as e:
+            print(f"[{self.name}] sync_plant_completions: synthesize failed: {e}", file=sys.stderr)
+            return {"synced": 0, "error": str(e)}
+
+        text = output.strip()
+        if text.startswith("```"):
+            text = re.sub(r"^```[a-z]*\n?", "", text)
+            text = re.sub(r"\n?```$", "", text.strip())
+
+        try:
+            completions = json.loads(text)
+        except (json.JSONDecodeError, ValueError) as e:
+            print(f"[{self.name}] sync_plant_completions: bad JSON ({e}): {text[:200]}", file=sys.stderr)
+            return {"synced": 0, "error": "bad_json"}
+
+        if not isinstance(completions, list):
+            return {"synced": 0}
+
+        plant_by_name = {p["name"].lower(): i for i, p in enumerate(plants)}
+        updated = list(plants)
+        synced = 0
+
+        for entry in completions:
+            name = entry.get("name", "")
+            completed_date = entry.get("completed_date", "")
+            if not name or not completed_date:
+                continue
+            idx = plant_by_name.get(name.lower())
+            if idx is None:
+                continue
+            if completed_date > updated[idx]["last_watered"]:
+                updated[idx] = {**updated[idx], "last_watered": completed_date}
+                synced += 1
+
+        if synced:
+            self.set_state("plants", updated)
+
+        return {"synced": synced}
 
     def _check_plants(self):
         """Calculate watering schedule with weather adjustments."""
