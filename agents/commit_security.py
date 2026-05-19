@@ -43,7 +43,7 @@ class CommitSecurityAgent(BaseAgent):
         """Get git patch for the given range, excluding binaries, capped at MAX_DIFF_BYTES."""
         result = subprocess.run(
             [
-                "git", "log", diff_range, "-p",
+                "git", "diff", diff_range,
                 "--diff-filter=ACMR",
                 "--",
                 ":!*.png", ":!*.jpg", ":!*.jpeg", ":!*.gif",
@@ -71,10 +71,14 @@ class CommitSecurityAgent(BaseAgent):
             print(f"[commit-security] LLM analysis failed ({e}) — allowing push.", file=sys.stderr)
             return []
 
-        text = output.strip()
+        original = output.strip()
+        text = original
         if text.startswith("```"):
             text = re.sub(r"^```[a-z]*\n?", "", text)
             text = re.sub(r"\n?```$", "", text.strip())
+        # If fence stripping left nothing, try the original
+        if not text.strip():
+            text = original
 
         try:
             data = json.loads(text)
