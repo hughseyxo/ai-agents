@@ -21,6 +21,7 @@ class CommitSecurityAgent(BaseAgent):
     name = "commit-security"
     schedule = ""  # on-demand only
     model = "claude-haiku-4-5"
+    providers = list(reversed(BaseAgent.PROVIDERS))  # Claude-first, Gemini fallback
 
     # --- Git hook entry point ---
 
