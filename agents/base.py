@@ -149,6 +149,12 @@ class BaseAgent:
         have already executed MCP side effects (sent email, created tasks);
         retrying on a second provider would duplicate them.
         """
+        learnings_path = REPO_ROOT / "docs" / "agent-learnings" / f"{self.name}.md"
+        if learnings_path.exists():
+            learnings = learnings_path.read_text().strip()
+            if learnings:
+                prompt = f"## Agent Learnings (apply these)\n{learnings}\n\n---\n\n{prompt}"
+
         last_error = None
         for provider in (self.providers or self.PROVIDERS):
             p_prompt = self._adapt_prompt_for_gemini(prompt) if provider["adapt_prompt"] else prompt

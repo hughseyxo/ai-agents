@@ -290,3 +290,29 @@ class TestSynthesize:
         claude_cmd = mock_run.call_args_list[1][0][0]
         assert "--model" in claude_cmd
         assert claude_cmd[claude_cmd.index("--model") + 1] == "claude-sonnet-4-6"
+
+    @patch("agents.base.subprocess.run")
+    def test_learnings_file_prepended_to_prompt(self, mock_run, tmp_path):
+        mock_run.return_value = mock_result(stdout="output")
+        agent = make_agent()
+        learnings_dir = tmp_path / "docs" / "agent-learnings"
+        learnings_dir.mkdir(parents=True)
+        (learnings_dir / f"{agent.name}.md").write_text("- Keep responses short\n")
+        with patch("agents.base.REPO_ROOT", tmp_path):
+            agent.synthesize("Do a thing")
+        cmd = mock_run.call_args[0][0]
+        prompt = cmd[cmd.index("-p") + 1]
+        assert "Agent Learnings" in prompt
+        assert "Keep responses short" in prompt
+        assert "Do a thing" in prompt
+
+    @patch("agents.base.subprocess.run")
+    def test_no_learnings_file_leaves_prompt_unchanged(self, mock_run, tmp_path):
+        mock_run.return_value = mock_result(stdout="output")
+        agent = make_agent()
+        with patch("agents.base.REPO_ROOT", tmp_path):
+            agent.synthesize("Do a thing")
+        cmd = mock_run.call_args[0][0]
+        prompt = cmd[cmd.index("-p") + 1]
+        assert "Agent Learnings" not in prompt
+        assert prompt == "Do a thing"
