@@ -29,6 +29,8 @@ class NewsBriefingAgent(BaseAgent):
     FEEDS = {
         "International": [
             ("BBC World", "https://feeds.bbci.co.uk/news/world/rss.xml"),
+            ("The Guardian", "https://www.theguardian.com/world/rss"),
+            ("AP News", "https://feeds.apnews.com/rss/apf-topnews"),
         ],
         "Ireland": [
             ("RTE", "https://www.rte.ie/feeds/rss/?index=/news"),
@@ -99,6 +101,7 @@ class NewsBriefingAgent(BaseAgent):
     def steps(self):
         return [
             {"name": "fetch_news",      "fn": self._fetch_news},
+            {"name": "score_relevance", "fn": self._score_relevance},
             {"name": "translate_dutch", "fn": self._translate_dutch_step},
             {"name": "news_briefing",   "fn": self._run_briefing, "side_effects": True},
         ]
@@ -136,7 +139,7 @@ class NewsBriefingAgent(BaseAgent):
                         break
 
         selected = self._select_news(all_articles)
-        self.context["news_data"] = selected
+        self.context["news_candidates"] = selected
         return {"count": sum(len(items) for items in selected.values())}
 
     def _translate_dutch_step(self):
@@ -154,27 +157,93 @@ class NewsBriefingAgent(BaseAgent):
             "Return ONLY a JSON array: [{\"i\": 0, \"title\": \"...\", \"description\": \"...\"}]. "
             "Keep titles concise.\n\n" + json.dumps(batch)
         )
+        for attempt in range(2):
+            try:
+                result = self.synthesize(prompt)
+                text = result.strip()
+                if text.startswith("```"):
+                    text = re.sub(r'^```[a-z]*\n?', '', text)
+                    text = re.sub(r'\n?```\s*$', '', text).strip()
+                match = re.search(r'\[[\s\S]*\]', text)
+                if match:
+                    text = match.group(0)
+                translations = json.loads(text)
+                articles_copy = list(nl_articles)
+                for t in translations:
+                    idx = t["i"]
+                    articles_copy[idx] = {**articles_copy[idx], "title": t["title"], "description": t["description"]}
+                news_data["Netherlands"] = articles_copy
+                break
+            except Exception as e:
+                if attempt == 0:
+                    print(f"[{self.name}] Dutch translation attempt 1 failed: {e}, retrying", file=sys.stderr)
+                else:
+                    print(f"[{self.name}] Dutch translation failed after 2 attempts, keeping originals", file=sys.stderr)
+
+        return {"translated": len(dutch)}
+
+    def _score_relevance(self):
+        """Rank candidate articles by newsworthiness using LLM, then finalize news_data."""
+        # Final article counts per section after scoring
+        final_counts = {
+            "International": 5, "Ireland": 7, "Netherlands": 8,
+            "Leiden & Local": 5, "Mullingar": 5, "Tech": 6,
+            "Gaming": 4, "SRE / Infrastructure": 999,
+        }
+
+        candidates = self.context.get("news_candidates", {})
+        if not candidates:
+            self.context["news_data"] = {}
+            return {"scored": 0}
+
+        payload = {
+            section: [{"i": i, "title": a["title"]} for i, a in enumerate(arts)]
+            for section, arts in candidates.items()
+            if arts
+        }
+
+        prompt = (
+            "Rank these news articles by newsworthiness — lead with the most impactful story for each region. "
+            "Consider significance, scale of impact, and relevance to people in that region. "
+            "Return ONLY a JSON object mapping each section name to an array of article indices "
+            "ordered from most to least important. Include all provided indices.\n\n"
+            + json.dumps(payload)
+        )
+
+        rankings = {}
         try:
             result = self.synthesize(prompt)
             text = result.strip()
-            # Strip markdown code fences if LLM wrapped the JSON
             if text.startswith("```"):
                 text = re.sub(r'^```[a-z]*\n?', '', text)
                 text = re.sub(r'\n?```\s*$', '', text).strip()
-            # Find JSON array in response in case of preamble
-            match = re.search(r'\[[\s\S]*\]', text)
+            match = re.search(r'\{[\s\S]*\}', text)
             if match:
                 text = match.group(0)
-            translations = json.loads(text)
-            articles_copy = list(nl_articles)
-            for t in translations:
-                idx = t["i"]
-                articles_copy[idx] = {**articles_copy[idx], "title": t["title"], "description": t["description"]}
-            news_data["Netherlands"] = articles_copy
+            rankings = json.loads(text)
         except Exception as e:
-            print(f"[{self.name}] Dutch translation failed, keeping originals: {e}", file=sys.stderr)
+            print(f"[{self.name}] Relevance scoring failed, using recency order: {e}", file=sys.stderr)
 
-        return {"translated": len(dutch)}
+        news_data = {}
+        for section, articles in candidates.items():
+            n = final_counts.get(section, 5)
+            if section in rankings and isinstance(rankings[section], list):
+                valid = [i for i in rankings[section] if isinstance(i, int) and 0 <= i < len(articles)]
+                # Append any indices the LLM omitted so no article is lost from fallback
+                seen = set(valid)
+                for i in range(len(articles)):
+                    if i not in seen:
+                        valid.append(i)
+                ranked = [articles[i] for i in valid[:n]]
+            else:
+                ranked = articles[:n]
+
+            for a in ranked:
+                a.pop('pub_datetime', None)
+            news_data[section] = ranked
+
+        self.context["news_data"] = news_data
+        return {"scored": len(rankings)}
 
     def _parse_rss(self, xml_content: str, source_name: str, category: str) -> List[Dict]:
         try:
@@ -256,17 +325,17 @@ class NewsBriefingAgent(BaseAgent):
             return unique
 
         international = [a for a in articles if a['category'] == "International"]
-        international = sorted(international, key=lambda x: x['pub_datetime'] or now, reverse=True)[:5]
+        international = sorted(international, key=lambda x: x['pub_datetime'] or now, reverse=True)[:10]
 
         ireland = [a for a in articles if a['category'] == "Ireland"]
-        ireland = dedup(sorted(ireland, key=lambda x: x['pub_datetime'] or now, reverse=True))[:7]
+        ireland = dedup(sorted(ireland, key=lambda x: x['pub_datetime'] or now, reverse=True))[:14]
 
         netherlands = [a for a in articles if a['category'] == "Netherlands"]
-        netherlands = dedup(sorted(netherlands, key=lambda x: x['pub_datetime'] or now, reverse=True))[:8]
+        netherlands = dedup(sorted(netherlands, key=lambda x: x['pub_datetime'] or now, reverse=True))[:16]
 
-        leiden = [a for a in articles if a['category'] == "Leiden"][:5]
+        leiden = [a for a in articles if a['category'] == "Leiden"][:10]
 
-        mullingar = [a for a in articles if a['category'] == "Mullingar"][:5]
+        mullingar = [a for a in articles if a['category'] == "Mullingar"][:10]
 
         tech_all = [a for a in articles if a['category'] in ["Tech", "Gaming"]]
 
@@ -283,11 +352,12 @@ class NewsBriefingAgent(BaseAgent):
         other_tech = [a for a in tech_items if a['source'] != 'The Verge']
         verge_tech = sorted(verge_tech, key=lambda x: x['pub_datetime'] or now, reverse=True)
         other_tech = sorted(other_tech, key=lambda x: x['pub_datetime'] or now, reverse=True)
+        # Cap Verge at 2 candidates to prevent source dominance in the final output
         selected_tech = verge_tech[:2]
         remaining_tech = sorted(verge_tech[2:] + other_tech, key=lambda x: x['pub_datetime'] or now, reverse=True)
-        selected_tech += remaining_tech[:(6 - len(selected_tech))]
+        selected_tech += remaining_tech[:(10 - len(selected_tech))]
 
-        selected_gaming = dedup(sorted(gaming_items, key=lambda x: x['pub_datetime'] or now, reverse=True))[:4]
+        selected_gaming = dedup(sorted(gaming_items, key=lambda x: x['pub_datetime'] or now, reverse=True))[:8]
 
         sre_candidates = [a for a in articles if a['category'] == "SRE"]
         selected_sre = []
@@ -311,7 +381,6 @@ class NewsBriefingAgent(BaseAgent):
         for section in report_data.values():
             for a in section:
                 a['breaking'] = is_breaking(a)
-                if 'pub_datetime' in a: del a['pub_datetime']
 
         return report_data
 

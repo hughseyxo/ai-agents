@@ -145,7 +145,7 @@ def test_translate_dutch_step_updates_articles(mock_synth, agent):
 
 @patch("agents.news_briefing.NewsBriefingAgent.synthesize")
 def test_translate_dutch_step_falls_back_on_bad_json(mock_synth, agent):
-    """If LLM returns unparseable JSON, original articles are preserved."""
+    """If both attempts return unparseable JSON, original articles are preserved."""
     mock_synth.return_value = "oops, not json"
     original_title = "Amsterdam overstroomt"
     agent.context["news_data"] = {
@@ -155,6 +155,7 @@ def test_translate_dutch_step_falls_back_on_bad_json(mock_synth, agent):
     }
     agent._translate_dutch_step()
     assert agent.context["news_data"]["Netherlands"][0]["title"] == original_title
+    assert mock_synth.call_count == 2  # retried once before giving up
 
 
 def test_translate_dutch_step_no_op_when_no_dutch(agent):
@@ -177,12 +178,11 @@ def test_fetch_news_integration(mock_get, agent):
     <rss version="2.0"><channel><item><title>News</title><link>url</link></item></channel></rss>"""
     mock_get.return_value = mock_response
 
-    # Mock context plan
     agent.context["plan"] = {"today": "2026-05-16"}
 
     result = agent._fetch_news()
     assert result["count"] > 0
-    assert "news_data" in agent.context
+    assert "news_candidates" in agent.context
 
 
 # --- Builder tests ---
@@ -313,3 +313,100 @@ class TestProvidersOverride:
     def test_gemini_is_fallback(self, agent):
         assert len(agent.providers) == 2
         assert agent.providers[1]["name"] == "gemini"
+
+
+# ---- International feed coverage ----
+
+def test_international_has_guardian_feed(agent):
+    intl_feeds = dict(agent.FEEDS.get("International", []))
+    assert "The Guardian" in intl_feeds
+    assert "theguardian.com" in intl_feeds["The Guardian"]
+
+
+def test_international_has_ap_feed(agent):
+    intl_feeds = dict(agent.FEEDS.get("International", []))
+    assert "AP News" in intl_feeds
+    assert "apnews.com" in intl_feeds["AP News"]
+
+
+# ---- score_relevance ----
+
+def _make_candidates(section, titles):
+    articles = [
+        {"title": t, "link": f"l{i}", "description": "", "source": "S", "breaking": False, "pub_datetime": None}
+        for i, t in enumerate(titles)
+    ]
+    base = {s: [] for s in ["International", "Ireland", "Netherlands", "Leiden & Local", "Mullingar", "Tech", "Gaming", "SRE / Infrastructure"]}
+    base[section] = articles
+    return base
+
+
+@patch("agents.news_briefing.NewsBriefingAgent.synthesize")
+def test_score_relevance_reorders_by_importance(mock_synth, agent):
+    import json as _json
+    mock_synth.return_value = _json.dumps({"International": [1, 0]})
+    agent.context["news_candidates"] = _make_candidates("International", ["Minor story", "Major crisis"])
+    agent._score_relevance()
+    intl = agent.context["news_data"]["International"]
+    assert intl[0]["title"] == "Major crisis"
+    assert intl[1]["title"] == "Minor story"
+
+
+@patch("agents.news_briefing.NewsBriefingAgent.synthesize")
+def test_score_relevance_falls_back_to_recency_on_bad_json(mock_synth, agent):
+    mock_synth.return_value = "not json at all"
+    agent.context["news_candidates"] = _make_candidates("International", ["First", "Second"])
+    agent._score_relevance()
+    intl = agent.context["news_data"]["International"]
+    assert intl[0]["title"] == "First"
+
+
+@patch("agents.news_briefing.NewsBriefingAgent.synthesize")
+def test_score_relevance_strips_pub_datetime(mock_synth, agent):
+    import json as _json
+    from datetime import datetime, timezone
+    mock_synth.return_value = _json.dumps({"International": [0]})
+    candidates = _make_candidates("International", ["Story"])
+    candidates["International"][0]["pub_datetime"] = datetime.now(timezone.utc)
+    agent.context["news_candidates"] = candidates
+    agent._score_relevance()
+    assert "pub_datetime" not in agent.context["news_data"]["International"][0]
+
+
+@patch("agents.news_briefing.NewsBriefingAgent.synthesize")
+def test_score_relevance_limits_to_final_count(mock_synth, agent):
+    import json as _json
+    titles = [f"Story {i}" for i in range(10)]
+    mock_synth.return_value = _json.dumps({"International": list(range(10))})
+    agent.context["news_candidates"] = _make_candidates("International", titles)
+    agent._score_relevance()
+    assert len(agent.context["news_data"]["International"]) == 5
+
+
+@patch("agents.news_briefing.NewsBriefingAgent.synthesize")
+def test_score_relevance_sets_news_data_on_error(mock_synth, agent):
+    """news_data must always be set even when scoring fails."""
+    mock_synth.side_effect = RuntimeError("LLM down")
+    agent.context["news_candidates"] = _make_candidates("Ireland", ["Story A", "Story B"])
+    agent._score_relevance()
+    assert "news_data" in agent.context
+
+
+# ---- Dutch translation retry ----
+
+@patch("agents.news_briefing.NewsBriefingAgent.synthesize")
+def test_translate_dutch_retries_on_bad_json(mock_synth, agent):
+    """Should retry once if first synthesize returns bad JSON, succeed on second."""
+    import json as _json
+    mock_synth.side_effect = [
+        "bad json first attempt",
+        _json.dumps([{"i": 0, "title": "Amsterdam floods", "description": "Flooding."}]),
+    ]
+    agent.context["news_data"] = {
+        "Netherlands": [
+            {"title": "Amsterdam overstroomt", "description": "Overstromingen.", "source": "NOS (Dutch)", "link": "u1", "breaking": False},
+        ]
+    }
+    agent._translate_dutch_step()
+    assert agent.context["news_data"]["Netherlands"][0]["title"] == "Amsterdam floods"
+    assert mock_synth.call_count == 2
