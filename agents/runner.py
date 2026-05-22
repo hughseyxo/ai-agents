@@ -27,6 +27,7 @@ AGENT_REGISTRY = {
     "news-briefing": "agents.news_briefing:NewsBriefingAgent",
     "security-audit": "agents.security_audit:SecurityAuditAgent",
     "travel-agent": "agents.travel_agent:TravelAgent",
+    "librarian": "agents.librarian:LibrarianAgent",
 }
 
 
@@ -165,8 +166,12 @@ def main():
     run_parser.add_argument("agent", help="Agent name")
     run_parser.add_argument("--fix", action="store_true", help="Interactive fix mode (security-audit)")
     # Travel agent args (ignored by other agents)
-    run_parser.add_argument("--mode", choices=["search", "plan"], default="search",
-                            help="travel-agent: search=find flights+hotels, plan=itinerary from existing bookings")
+    run_parser.add_argument(
+        "--mode",
+        choices=["search", "plan", "audit", "watch"],
+        default="search",
+        help="Mode: travel-agent uses search/plan; librarian uses audit/watch",
+    )
     run_parser.add_argument("--destination", help="travel-agent: destination city/country")
     run_parser.add_argument("--origin", help="travel-agent (search mode): departure city")
     run_parser.add_argument("--checkin", help="travel-agent: check-in date (YYYY-MM-DD)")
