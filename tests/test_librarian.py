@@ -104,3 +104,41 @@ def test_alert_skips_with_no_failing_agents(tmp_path):
     agent.context["check_failures"] = {"failing_agents": [], "error_details": {}}
     result = agent._alert()
     assert result.get("skipped") is True
+
+
+def test_collect_data_returns_all_agents(tmp_path):
+    agent = make_agent(tmp_path)
+    agent.context["plan"] = {"mode": "audit", "today": "2026-05-22"}
+    (tmp_path / "agents" / "prompts").mkdir(parents=True)
+    (tmp_path / "output").mkdir(parents=True)
+    with patch("agents.librarian.REPO_ROOT", tmp_path):
+        result = agent._collect_data()
+    assert result["agents_analysed"] == len(AGENT_NAMES)
+    assert "daily-briefing" in agent.context["collected"]["agent_stats"]
+
+
+def test_collect_data_samples_output_files(tmp_path):
+    agent = make_agent(tmp_path)
+    agent.context["plan"] = {"mode": "audit", "today": "2026-05-22"}
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+    (output_dir / "daily-briefing-2026-05-22.md").write_text("## Daily Briefing\nContent.")
+    (tmp_path / "agents" / "prompts").mkdir(parents=True)
+    with patch("agents.librarian.REPO_ROOT", tmp_path):
+        agent._collect_data()
+    samples = agent.context["collected"]["output_samples"]
+    assert "daily-briefing" in samples
+    assert len(samples["daily-briefing"]) == 1
+
+
+def test_collect_data_reads_existing_learnings(tmp_path):
+    agent = make_agent(tmp_path)
+    agent.context["plan"] = {"mode": "audit", "today": "2026-05-22"}
+    (tmp_path / "agents" / "prompts").mkdir(parents=True)
+    (tmp_path / "output").mkdir(parents=True)
+    ld = tmp_path / "docs" / "agent-learnings"
+    ld.mkdir(parents=True)
+    (ld / "news-briefing.md").write_text("- Keep HTML short\n")
+    with patch("agents.librarian.REPO_ROOT", tmp_path):
+        agent._collect_data()
+    assert agent.context["collected"]["learnings"]["news-briefing"] == "- Keep HTML short\n"

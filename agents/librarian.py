@@ -68,7 +68,60 @@ class LibrarianAgent(BaseAgent):
         mode = self.context["plan"]["mode"]
         return f"Librarian {mode} for {today} complete"
 
-    def _collect_data(self): raise NotImplementedError
+    def _collect_data(self) -> dict:
+        now = datetime.now(timezone.utc)
+        cutoff = (now - timedelta(days=30)).isoformat()
+
+        agent_stats: dict = {}
+        for agent_name in AGENT_NAMES:
+            runs = self.db.get_run_history(agent_name, limit=40)
+            recent = [r for r in runs if (r.get("started_at") or "") >= cutoff]
+            failures = [r for r in recent if r["status"] in ("error", "partial_failure")]
+            consecutive = 0
+            for r in runs[:10]:
+                if r["status"] in ("error", "partial_failure"):
+                    consecutive += 1
+                else:
+                    break
+            step_errors: dict[str, list[str]] = {}
+            for r in failures[:5]:
+                for s in self.db.get_step_results(r["id"]):
+                    if s["status"] == "error":
+                        step_errors.setdefault(s["step"], []).append(s.get("error") or "")
+            agent_stats[agent_name] = {
+                "total_runs": len(recent),
+                "failures": len(failures),
+                "failure_rate": round(len(failures) / max(len(recent), 1), 2),
+                "consecutive_failures": consecutive,
+                "step_errors": step_errors,
+            }
+
+        output_dir = REPO_ROOT / "output"
+        output_samples: dict[str, list[str]] = {}
+        for name, pattern in OUTPUT_PATTERNS.items():
+            files = sorted(output_dir.glob(pattern), reverse=True)[:5] if output_dir.exists() else []
+            output_samples[name] = [f.read_text()[:2000] for f in files]
+
+        prompts: dict[str, str] = {}
+        prompts_dir = REPO_ROOT / "agents" / "prompts"
+        if prompts_dir.exists():
+            for f in prompts_dir.glob("*.md"):
+                if not f.name.startswith("librarian"):
+                    prompts[f.stem] = f.read_text()[:3000]
+
+        learnings: dict[str, str] = {}
+        ld = REPO_ROOT / "docs" / "agent-learnings"
+        if ld.exists():
+            for f in ld.glob("*.md"):
+                learnings[f.stem] = f.read_text()
+
+        self.context["collected"] = {
+            "agent_stats": agent_stats,
+            "output_samples": output_samples,
+            "prompts": prompts,
+            "learnings": learnings,
+        }
+        return {"agents_analysed": len(agent_stats)}
     def _analyze(self): raise NotImplementedError
     def _apply_learnings(self): raise NotImplementedError
     def _propose_changes(self): raise NotImplementedError
