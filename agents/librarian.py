@@ -73,6 +73,41 @@ class LibrarianAgent(BaseAgent):
     def _apply_learnings(self): raise NotImplementedError
     def _propose_changes(self): raise NotImplementedError
     def _send_report(self): raise NotImplementedError
-    def _check_failures(self): raise NotImplementedError
-    def _analyze_failures(self): raise NotImplementedError
-    def _alert(self): raise NotImplementedError
+
+    def _check_failures(self) -> dict:
+        now = datetime.now(timezone.utc)
+        cutoff = (now - timedelta(hours=24)).isoformat()
+        failing = []
+        error_details: dict[str, list[str]] = {}
+
+        for agent_name in AGENT_NAMES:
+            runs = self.db.get_run_history(agent_name, limit=5)
+            recent = [r for r in runs if (r.get("finished_at") or r.get("started_at", "")) >= cutoff]
+            if len(recent) < 2:
+                continue
+            consecutive = 0
+            for r in recent:
+                if r["status"] in ("error", "partial_failure"):
+                    consecutive += 1
+                else:
+                    break
+            if consecutive >= 2:
+                failing.append(agent_name)
+                error_details[agent_name] = [
+                    r.get("error") or "" for r in recent
+                    if r["status"] in ("error", "partial_failure")
+                ][:3]
+
+        return {"failing_agents": failing, "error_details": error_details}
+
+    def _analyze_failures(self) -> dict:
+        check = self.context.get("check_failures") or {}
+        if not check.get("failing_agents"):
+            return {"skipped": True}
+        raise NotImplementedError  # implemented in Task 5
+
+    def _alert(self) -> dict:
+        check = self.context.get("check_failures") or {}
+        if not check.get("failing_agents"):
+            return {"skipped": True, "reason": "no_failures"}
+        raise NotImplementedError  # implemented in Task 7
