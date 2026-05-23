@@ -246,59 +246,90 @@ def run_travel_agent(
         return f"Failed to start travel agent: {e}"
 
 
-VIDQUEUE_PY = REPO_ROOT / "skills" / "vidqueue" / "vidqueue.py"
-VIDQUEUE_PYTHON = REPO_ROOT / "skills" / "vidqueue" / ".venv" / "bin" / "python"
+def water_plant(plant_name: str) -> str:
+    try:
+        db = AgentDB(DB_PATH)
+        plants = db.get_state("daily-briefing", "plants") or []
+        name_lower = plant_name.lower().strip()
+        match = next((p for p in plants if p["name"].lower() == name_lower), None)
+        if not match:
+            match = next((p for p in plants if name_lower in p["name"].lower()), None)
+        if not match:
+            names = ", ".join(p["name"] for p in plants)
+            db.close()
+            return f"No plant named '{plant_name}' found. Known plants: {names or 'none'}"
+        match["last_watered"] = date.today().isoformat()
+        db.set_state("daily-briefing", "plants", plants)
+        db.close()
+        return f"{match['name']} marked as watered today ({match['last_watered']})."
+    except Exception as e:
+        return f"Failed to update plant: {e}"
 
 
-def queue_tiktok(url: str) -> str:
-    """Run vidqueue.py against a TikTok URL and return a plain-text summary."""
-    python = str(VIDQUEUE_PYTHON) if VIDQUEUE_PYTHON.exists() else "python3"
+def get_all_plants() -> list[dict]:
+    try:
+        db = AgentDB(DB_PATH)
+        plants = db.get_state("daily-briefing", "plants") or []
+        db.close()
+        return plants
+    except Exception:
+        return []
+
+
+def get_plant(plant_name: str) -> dict | None:
+    name_lower = plant_name.lower().strip()
+    plants = get_all_plants()
+    match = next((p for p in plants if p["name"].lower() == name_lower), None)
+    if not match:
+        match = next((p for p in plants if name_lower in p["name"].lower()), None)
+    return match
+
+
+def save_plant_assessment(plant_name: str, summary: str) -> str:
+    try:
+        db = AgentDB(DB_PATH)
+        plants = db.get_state("daily-briefing", "plants") or []
+        name_lower = plant_name.lower().strip()
+        match = next((p for p in plants if p["name"].lower() == name_lower), None)
+        if not match:
+            match = next((p for p in plants if name_lower in p["name"].lower()), None)
+        if not match:
+            db.close()
+            return f"No plant named '{plant_name}' found — assessment not saved."
+        match["last_assessment"] = {"date": date.today().isoformat(), "summary": summary}
+        db.set_state("daily-briefing", "plants", plants)
+        db.close()
+        return f"{match['name']} assessment saved."
+    except Exception as e:
+        return f"Failed to save assessment: {e}"
+
+
+MEALSAVE_PY = REPO_ROOT / "skills" / "mealsave" / "mealsave.py"
+MEALSAVE_PYTHON = REPO_ROOT / "skills" / "mealsave" / ".venv" / "bin" / "python"
+
+
+def save_recipe(url: str) -> str:
+    python = str(MEALSAVE_PYTHON) if MEALSAVE_PYTHON.exists() else "python3"
     try:
         result = subprocess.run(
-            [python, str(VIDQUEUE_PY), url],
-            capture_output=True, text=True, timeout=300,
+            [python, str(MEALSAVE_PY), url],
+            capture_output=True, text=True, timeout=120,
             cwd=str(REPO_ROOT),
         )
     except subprocess.TimeoutExpired:
-        return "Timed out after 5 minutes — the TikTok may have needed a full video download. Try again."
+        return "Timed out saving recipe. Try again."
     except FileNotFoundError:
-        return "vidqueue not installed. Run: cd skills/vidqueue && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt"
+        return "mealsave not installed."
 
-    if result.returncode != 0:
-        combined = f"{result.stdout}\n{result.stderr}".strip()
+    output = result.stdout.strip()
+    if result.returncode != 0 or not output:
         import re as _re
-        m = _re.search(r'^ERROR:\s*(.*)$', combined, _re.MULTILINE)
-        return f"Error: {m.group(1).strip() if m else combined[-400:]}"
+        err = result.stderr.strip()
+        m = _re.search(r'^ERROR:\s*(.*)$', err or output, _re.MULTILINE)
+        return f"Error: {m.group(1).strip() if m else (err or output)[-400:]}"
+    return f"Recipe saved: {output}"
 
-    added, skipped, unresolved, playlist_url = [], [], [], None
-    for line in result.stdout.splitlines():
-        line = line.strip()
-        if line.startswith("ADDED:"):
-            parts = line.split(":", 2)
-            if len(parts) == 3:
-                added.append(f"• {parts[2]} → youtu.be/{parts[1]}")
-        elif line.startswith("SKIPPED:"):
-            skipped.append(line)
-        elif line.startswith("UNRESOLVED:"):
-            unresolved.append(line.split(":", 1)[1] if ":" in line else line)
-        elif line.startswith("PLAYLIST:"):
-            parts = line.split(":", 2)
-            if len(parts) == 3:
-                playlist_url = parts[2]
 
-    if not added and not unresolved:
-        return "No YouTube recommendations found in this TikTok."
-
-    out = []
-    if added:
-        out.append(f"Added {len(added)} video{'s' if len(added) != 1 else ''}:\n" + "\n".join(added))
-    if skipped:
-        out.append(f"Already in playlist: {len(skipped)}")
-    if unresolved:
-        out.append(f"Couldn't resolve: {', '.join(unresolved)}")
-    if playlist_url:
-        out.append(f"Playlist: {playlist_url}")
-    return "\n".join(out)
 
 
 def get_travel_report() -> str:
