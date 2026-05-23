@@ -43,15 +43,19 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 │   ├── security_audit.py       # Security audit agent — 18 checks: 12 system + 4 seedbox + 2 web (Cloudflare IP validation, Shodan InternetDB). Schedule: Sunday 06:00 UTC / 08:00 CEST. Seedbox configs live in ~/git/yopflix (private repo).
 │   ├── commit_security.py      # Commit security agent (on-demand) — LLM-based scan of git diff for secrets/vulnerabilities. run_hook() used by .git/hooks/pre-push; blocks push on Critical/High. Also runnable via CLI.
 │   ├── travel_agent.py         # Travel agent (on-demand) — search mode: finds flights/hotels/activities; plan mode: itinerary from existing bookings. model: claude-sonnet-4-6. Design doc: docs/travel-agent.md
+│   ├── librarian.py            # Librarian agent (on-demand, cron-managed: audit Sun 06:00 UTC, watch Mon-Sat 06:00 UTC). Reads agent run history + output files, calls LLM to produce findings. Auto-applies learnings (confidence ≥0.8), emails prompt proposals (0.5-0.79) with approve/reject links via bridge server.
 │   └── prompts/                # LLM CLI synthesis prompt templates
 │       ├── daily_briefing.md
 │       ├── news_briefing.md
 │       ├── commit_security.md       # Prompt for commit diff security analysis
 │       ├── travel_agent_search.md   # Search mode: find flights, hotels, activities
-│       └── travel_agent_plan.md     # Plan mode: day-by-day itinerary from existing bookings
+│       ├── travel_agent_plan.md     # Plan mode: day-by-day itinerary from existing bookings
+│       ├── librarian_audit.md       # Weekly full analysis prompt
+│       ├── librarian_watch.md       # Daily failure-scan prompt
+│       └── librarian_report.md      # Email send prompt
 ├── telegram-bot/       # Server concierge Telegram bot (OpenRouter-backed)
 │   ├── bot.py                  # Bot: polling, auth gate, tool-use loop, model fallback
-│   ├── tools.py                # Tool functions: get_agent_status, get_plant_status, get_yopflix_status, get_system_health, get_cron_schedule, get_agent_logs
+│   ├── tools.py                # Tool functions: get_agent_status, get_plant_status, get_yopflix_status, get_system_health, get_cron_schedule, get_agent_logs, queue_tiktok
 │   ├── concierge-bot.service   # systemd user service (symlinked to ~/.config/systemd/user/)
 │   ├── test_bot.py             # Bot handler tests (auth, tool-use loop)
 │   ├── test_tools.py           # Tool function unit tests (mocked deps)
@@ -66,7 +70,7 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 │   │   ├── mealsave_bot.py     # Telegram bot for remote saving
 │   │   └── check-yt-auth.sh    # YouTube cookie expiry check
 │   └── free-time/              # Suggest best tasks for a free time window
-├── mcp-servers/        # Custom MCP servers (calendar, gmail auth) + bridge_server.py (HTTP MCP over Tailscale for laptop access)
+├── mcp-servers/        # Custom MCP servers (calendar, gmail auth) + bridge_server.py (HTTP MCP over Tailscale for laptop access). GET /librarian/approve?id=&token= and /librarian/reject?id=&token= for one-click proposal approval.
 ├── triggers/           # Agent operation docs — how to run agents on demand via the MCP bridge from laptop Claude Code. See triggers/README.md.
 ├── tests/              # pytest test suite (run: pytest tests/)
 │   ├── test_synthesize.py      # Failover + prompt adaptation + providers override tests
@@ -90,6 +94,10 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 │       │   └── 2026-05-17-server-concierge-bot-design.md  # Concierge bot spec
 │       └── plans/
 │           └── 2026-05-17-laptop-server-bridge.md  # Laptop↔server bridge implementation plan
+├── skills/vidqueue/    # YouTube video essay queue from TikTok recommendations
+│   ├── SKILL.md            # Skill definition (trigger: /vidqueue <url>)
+│   ├── vidqueue.py         # Core: TikTok extraction + YouTube Data API playlist management
+│   └── requirements.txt    # Python deps (yt-dlp, whisper, pytesseract, google-api-python-client)
 ├── free_time_bot.py    # Telegram bot: free-time task advisor (systemd service)
 ├── mealsave-bot.service # Telegram bot: recipe saver (systemd service)
 ├── plant.sh            # CLI tool: manage plant watering tracker (add/list/remove)
@@ -125,6 +133,7 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 - Skills are Claude Code interactive commands in `skills/<name>/SKILL.md`
 - `mealsave` — save recipe URLs to Mealie (`/mealsave <url>`)
 - `free-time` — suggest best tasks for a free time window ("I have 30 minutes free")
+- `vidqueue` — extract YouTube video essay recommendations from a TikTok URL and add to a YouTube playlist (`/vidqueue <url>`). Mobile: send TikTok link to the concierge Telegram bot (uses `queue_tiktok` tool). Core logic: `skills/vidqueue/vidqueue.py`. Config: `~/.config/vidqueue/.env`. Auth bootstrap: `vidqueue.py --auth`.
 
 # Plant Watering Tracker
 - Data lives in `data/agents.db` (SQLite state table); CLI tool is `plant.sh` (add/list/remove/--outdoor)

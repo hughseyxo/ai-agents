@@ -246,6 +246,61 @@ def run_travel_agent(
         return f"Failed to start travel agent: {e}"
 
 
+VIDQUEUE_PY = REPO_ROOT / "skills" / "vidqueue" / "vidqueue.py"
+VIDQUEUE_PYTHON = REPO_ROOT / "skills" / "vidqueue" / ".venv" / "bin" / "python"
+
+
+def queue_tiktok(url: str) -> str:
+    """Run vidqueue.py against a TikTok URL and return a plain-text summary."""
+    python = str(VIDQUEUE_PYTHON) if VIDQUEUE_PYTHON.exists() else "python3"
+    try:
+        result = subprocess.run(
+            [python, str(VIDQUEUE_PY), url],
+            capture_output=True, text=True, timeout=300,
+            cwd=str(REPO_ROOT),
+        )
+    except subprocess.TimeoutExpired:
+        return "Timed out after 5 minutes — the TikTok may have needed a full video download. Try again."
+    except FileNotFoundError:
+        return "vidqueue not installed. Run: cd skills/vidqueue && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt"
+
+    if result.returncode != 0:
+        combined = f"{result.stdout}\n{result.stderr}".strip()
+        import re as _re
+        m = _re.search(r'^ERROR:\s*(.*)$', combined, _re.MULTILINE)
+        return f"Error: {m.group(1).strip() if m else combined[-400:]}"
+
+    added, skipped, unresolved, playlist_url = [], [], [], None
+    for line in result.stdout.splitlines():
+        line = line.strip()
+        if line.startswith("ADDED:"):
+            parts = line.split(":", 2)
+            if len(parts) == 3:
+                added.append(f"• {parts[2]} → youtu.be/{parts[1]}")
+        elif line.startswith("SKIPPED:"):
+            skipped.append(line)
+        elif line.startswith("UNRESOLVED:"):
+            unresolved.append(line.split(":", 1)[1] if ":" in line else line)
+        elif line.startswith("PLAYLIST:"):
+            parts = line.split(":", 2)
+            if len(parts) == 3:
+                playlist_url = parts[2]
+
+    if not added and not unresolved:
+        return "No YouTube recommendations found in this TikTok."
+
+    out = []
+    if added:
+        out.append(f"Added {len(added)} video{'s' if len(added) != 1 else ''}:\n" + "\n".join(added))
+    if skipped:
+        out.append(f"Already in playlist: {len(skipped)}")
+    if unresolved:
+        out.append(f"Couldn't resolve: {', '.join(unresolved)}")
+    if playlist_url:
+        out.append(f"Playlist: {playlist_url}")
+    return "\n".join(out)
+
+
 def get_travel_report() -> str:
     """Check whether the latest travel report is ready and return its name."""
     try:

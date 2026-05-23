@@ -17,6 +17,7 @@ from tools import (
     get_agent_logs,
     run_travel_agent,
     get_travel_report,
+    queue_tiktok,
 )
 
 load_dotenv()
@@ -65,6 +66,7 @@ STATE_TOOL_FUNCTIONS = {
 TOOL_FUNCTIONS = {
     **STATE_TOOL_FUNCTIONS,
     "run_travel_agent": run_travel_agent,
+    "queue_tiktok": queue_tiktok,
 }
 
 TOOLS = [
@@ -177,6 +179,26 @@ TOOLS = [
             "name": "get_travel_report",
             "description": "Check whether the latest travel research report is ready and return its filename and size.",
             "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "queue_tiktok",
+            "description": (
+                "Extract YouTube video essay recommendations from a TikTok URL and add them to the user's YouTube playlist. "
+                "Use when the user sends a TikTok link or asks to queue/save a TikTok."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "description": "The TikTok URL (tiktok.com or vm.tiktok.com link).",
+                    }
+                },
+                "required": ["url"],
+            },
         },
     },
 ]
