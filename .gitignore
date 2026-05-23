@@ -2,6 +2,10 @@
 .gemini/
 output/*
 !output/.gitkeep
+docs/agent-learnings/
+output/librarian/
+docs/librarian-memory.md
+docs/superpowers/plans/librarian-arch-*.md
 .env
 credentials.json
 mcp-servers/__pycache__/
@@ -15,4 +19,5 @@ docs/security-audit-agent.md
 *.mov
 __pycache__/
 skills/mealsave/pot-provider/
+skills/vidqueue/.venv/
 mcp-servers/.env.bridge
