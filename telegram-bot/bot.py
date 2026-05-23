@@ -4,7 +4,6 @@ import json
 import logging
 import os
 import subprocess
-import tempfile
 from pathlib import Path
 from dotenv import load_dotenv
 from openai import OpenAI, APIError
@@ -54,8 +53,8 @@ FREE_MODELS = [
 ]
 
 VISION_MODELS = [
-    "meta-llama/llama-3.2-11b-vision-instruct:free",
-    "qwen/qwen2.5-vl-7b-instruct:free",
+    "nvidia/nemotron-nano-12b-v2-vl:free",
+    "meta-llama/llama-3.2-11b-vision-instruct",
 ]
 
 PLANT_HEALTH_SYSTEM = (
@@ -316,34 +315,12 @@ def _analyze_plant_image(image_bytes: bytes, plant: dict) -> str:
         ]},
     ]
 
-    tmp_path = None
-    try:
-        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:
-            f.write(image_bytes)
-            tmp_path = f.name
-        prompt = f"{PLANT_HEALTH_SYSTEM}\n\n{user_text}"
-        res = subprocess.run(
-            ["gemini", "-y", "-p", prompt, "-o", "text", tmp_path],
-            capture_output=True, text=True, timeout=60,
-            cwd=str(Path(__file__).parent),
-        )
-        if res.returncode == 0 and res.stdout.strip():
-            return res.stdout.strip()
-        logger.warning(f"Gemini vision failed (rc={res.returncode}): {res.stderr[:200]}")
-    except Exception as e:
-        logger.warning(f"Gemini vision exception: {e}")
-    finally:
-        if tmp_path:
-            try:
-                os.unlink(tmp_path)
-            except Exception:
-                pass
-
     for model in VISION_MODELS:
         try:
             response = client.chat.completions.create(model=model, messages=messages)
             return response.choices[0].message.content or "No assessment returned."
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Vision model {model} failed: {e}")
             continue
 
     return "Plant assessment unavailable right now. Try again later."
