@@ -341,8 +341,7 @@ def _analyze_plant_image(image_bytes: bytes, plant: dict) -> str:
     finally:
         if tmp_path:
             try:
-                import os as _os
-                _os.unlink(tmp_path)
+                os.unlink(tmp_path)
             except Exception:
                 pass
 
@@ -441,7 +440,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         all_plants = get_all_plants()
         plant = _resolve_plant_name(caption, all_plants)
     if not plant:
-        names = ", ".join(p["name"] for p in get_all_plants()) or "none"
+        names = ", ".join(p["name"] for p in all_plants) or "none"
         await update.message.reply_text(
             f"No plant named '{caption}' found. Known plants: {names}"
         )
