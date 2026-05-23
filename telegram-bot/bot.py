@@ -20,6 +20,7 @@ from tools import (
     run_travel_agent,
     get_travel_report,
     water_plant,
+    add_plant,
     save_recipe,
     get_plant,
     get_all_plants,
@@ -84,6 +85,7 @@ TOOL_FUNCTIONS = {
     **STATE_TOOL_FUNCTIONS,
     "run_travel_agent": run_travel_agent,
     "water_plant": water_plant,
+    "add_plant": add_plant,
     "save_recipe": save_recipe,
 }
 
@@ -213,6 +215,32 @@ TOOLS = [
                     }
                 },
                 "required": ["plant_name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "add_plant",
+            "description": "Add a new plant to the watering tracker. Use when the user wants to track a new plant.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Name of the plant (e.g. 'Monstera Deliciosa').",
+                    },
+                    "frequency_days": {
+                        "type": "integer",
+                        "description": "How often to water the plant in days (e.g. 7 for weekly).",
+                    },
+                    "location": {
+                        "type": "string",
+                        "enum": ["indoor", "outdoor"],
+                        "description": "Whether the plant is indoors or outdoors. Default: indoor.",
+                    },
+                },
+                "required": ["name", "frequency_days"],
             },
         },
     },

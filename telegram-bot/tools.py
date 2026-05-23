@@ -246,6 +246,27 @@ def run_travel_agent(
         return f"Failed to start travel agent: {e}"
 
 
+def add_plant(name: str, frequency_days: int, location: str = "indoor") -> str:
+    try:
+        db = AgentDB(DB_PATH)
+        plants = db.get_state("daily-briefing", "plants") or []
+        name_lower = name.lower().strip()
+        if any(p["name"].lower() == name_lower for p in plants):
+            db.close()
+            return f"A plant named '{name}' already exists."
+        plants.append({
+            "name": name,
+            "frequency_days": frequency_days,
+            "last_watered": date.today().isoformat(),
+            "location": location,
+        })
+        db.set_state("daily-briefing", "plants", plants)
+        db.close()
+        return f"{name} added ({location}, water every {frequency_days} days). Last watered set to today."
+    except Exception as e:
+        return f"Failed to add plant: {e}"
+
+
 def water_plant(plant_name: str) -> str:
     try:
         db = AgentDB(DB_PATH)
