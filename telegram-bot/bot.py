@@ -316,13 +316,6 @@ def _analyze_plant_image(image_bytes: bytes, plant: dict) -> str:
         ]},
     ]
 
-    for model in VISION_MODELS:
-        try:
-            response = client.chat.completions.create(model=model, messages=messages)
-            return response.choices[0].message.content or "No assessment returned."
-        except Exception:
-            continue
-
     tmp_path = None
     try:
         with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:
@@ -344,6 +337,13 @@ def _analyze_plant_image(image_bytes: bytes, plant: dict) -> str:
                 os.unlink(tmp_path)
             except Exception:
                 pass
+
+    for model in VISION_MODELS:
+        try:
+            response = client.chat.completions.create(model=model, messages=messages)
+            return response.choices[0].message.content or "No assessment returned."
+        except Exception:
+            continue
 
     return "Plant assessment unavailable right now. Try again later."
 
