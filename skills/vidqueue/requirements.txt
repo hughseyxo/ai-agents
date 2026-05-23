@@ -1,0 +1,8 @@
+yt-dlp>=2024.11.18
+openai-whisper>=20231117
+pytesseract>=0.3.13
+Pillow>=10.0.0
+python-telegram-bot>=20.7
+google-api-python-client>=2.108.0
+google-auth-oauthlib>=1.1.0
+requests>=2.31.0
