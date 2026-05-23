@@ -329,8 +329,9 @@ def _analyze_plant_image(image_bytes: bytes, plant: dict) -> str:
         )
         if res.returncode == 0 and res.stdout.strip():
             return res.stdout.strip()
-    except Exception:
-        pass
+        logger.warning(f"Gemini vision failed (rc={res.returncode}): {res.stderr[:200]}")
+    except Exception as e:
+        logger.warning(f"Gemini vision exception: {e}")
     finally:
         if tmp_path:
             try:
