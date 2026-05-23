@@ -21,6 +21,7 @@ LOG_PATH = str(Path(__file__).parent.parent / "output" / "cron.log")
 YOPFLIX_CONFIG = str(Path.home() / "git" / "yopflix" / "seedbox" / "config.yaml")
 REPO_ROOT = Path(__file__).parent.parent
 CEST_OFFSET = 2  # UTC+2
+SUNLIGHT_VALUES = ("full sun", "partial shade", "shade")
 
 
 def get_agent_status() -> str:
@@ -64,7 +65,9 @@ def get_plant_status() -> str:
             assessed = ""
             if p.get("last_assessment"):
                 assessed = f", assessed {p['last_assessment']['date']}"
-            rows.append((next_water, f"{p['name']} ({p['location']}): next {next_water}{flag}{assessed}"))
+            sun = p.get("sunlight", "")
+            loc_str = f"{p['location']}, {sun}" if sun else p['location']
+            rows.append((next_water, f"{p['name']} ({loc_str}): next {next_water}{flag}{assessed}"))
         rows.sort()
         return "\n".join(r[1] for r in rows)
     except Exception as e:
@@ -281,7 +284,30 @@ def research_plant_watering(plant_name: str) -> str:
         return f"Research failed: {e}"
 
 
-def add_plant(name: str, frequency_days: int, location: str = "indoor") -> str:
+def research_plant_sunlight(plant_name: str) -> str:
+    prompt = (
+        f"What are the sunlight requirements for a {plant_name} plant? "
+        "Reply with exactly one of: 'full sun', 'partial shade', or 'shade'. "
+        "Reply with only that phrase and nothing else."
+    )
+    try:
+        res = subprocess.run(
+            ["gemini", "-y", "-o", "text"],
+            input=prompt,
+            capture_output=True, text=True, timeout=30,
+            cwd=str(REPO_ROOT),
+        )
+        if res.returncode == 0 and res.stdout.strip():
+            answer = res.stdout.strip().lower()
+            for val in SUNLIGHT_VALUES:
+                if val in answer:
+                    return val
+        return f"Could not determine sunlight requirements: {res.stderr[:100]}"
+    except Exception as e:
+        return f"Research failed: {e}"
+
+
+def add_plant(name: str, frequency_days: int, location: str = "indoor", sunlight: str = "") -> str:
     try:
         db = AgentDB(DB_PATH)
         plants = db.get_state("daily-briefing", "plants") or []
@@ -294,15 +320,17 @@ def add_plant(name: str, frequency_days: int, location: str = "indoor") -> str:
             "frequency_days": frequency_days,
             "last_watered": date.today().isoformat(),
             "location": location,
+            "sunlight": sunlight,
         })
         db.set_state("daily-briefing", "plants", plants)
         db.close()
-        return f"{name} added ({location}, water every {frequency_days} days). Last watered set to today."
+        sun_str = f", {sunlight}" if sunlight else ""
+        return f"{name} added ({location}{sun_str}, water every {frequency_days} days). Last watered set to today."
     except Exception as e:
         return f"Failed to add plant: {e}"
 
 
-def update_plant(plant_name: str, location: str = "", frequency_days: int = 0) -> str:
+def update_plant(plant_name: str, location: str = "", frequency_days: int = 0, sunlight: str = "") -> str:
     try:
         db = AgentDB(DB_PATH)
         plants = db.get_state("daily-briefing", "plants") or []
@@ -318,9 +346,12 @@ def update_plant(plant_name: str, location: str = "", frequency_days: int = 0) -
         if frequency_days > 0:
             match["frequency_days"] = frequency_days
             changes.append(f"frequency → every {frequency_days} days")
+        if sunlight in SUNLIGHT_VALUES:
+            match["sunlight"] = sunlight
+            changes.append(f"sunlight → {sunlight}")
         if not changes:
             db.close()
-            return "Nothing to update — specify location ('indoor'/'outdoor') or frequency_days."
+            return "Nothing to update — specify location ('indoor'/'outdoor'), frequency_days, or sunlight."
         db.set_state("daily-briefing", "plants", plants)
         db.close()
         return f"{match['name']} updated: {', '.join(changes)}."

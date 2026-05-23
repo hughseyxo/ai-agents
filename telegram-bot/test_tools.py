@@ -28,6 +28,7 @@ from tools import (
     get_plant,
     save_plant_assessment,
     research_plant_watering,
+    research_plant_sunlight,
 )
 
 FAKE_PLANTS = [
@@ -665,3 +666,77 @@ def test_research_plant_watering_gemini_failure_returns_error(mocker):
     mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="retry exhausted")
     result = research_plant_watering("Monstera")
     assert "could not" in result.lower() or "failed" in result.lower()
+
+
+# ---------------------------------------------------------------------------
+# research_plant_sunlight
+# ---------------------------------------------------------------------------
+
+def test_research_plant_sunlight_returns_valid_value(mocker):
+    mock_run = mocker.patch("tools.subprocess.run")
+    mock_run.return_value = MagicMock(returncode=0, stdout="partial shade\n")
+    result = research_plant_sunlight("Monstera")
+    assert result == "partial shade"
+    assert "Monstera" in mock_run.call_args.kwargs["input"]
+
+
+def test_research_plant_sunlight_extracts_from_verbose_response(mocker):
+    mock_run = mocker.patch("tools.subprocess.run")
+    mock_run.return_value = MagicMock(returncode=0, stdout="Monstera prefers partial shade conditions.\n")
+    result = research_plant_sunlight("Monstera")
+    assert result == "partial shade"
+
+
+def test_research_plant_sunlight_failure_returns_error(mocker):
+    mock_run = mocker.patch("tools.subprocess.run")
+    mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="error")
+    result = research_plant_sunlight("Monstera")
+    assert "could not" in result.lower() or "failed" in result.lower()
+
+
+# ---------------------------------------------------------------------------
+# update_plant sunlight
+# ---------------------------------------------------------------------------
+
+def test_update_plant_sunlight():
+    plants = [{"name": "Monstera", "frequency_days": 7, "last_watered": "2026-01-01", "location": "indoor"}]
+    mock_db = _make_mock_db(plants)
+    with patch("tools.AgentDB", return_value=mock_db):
+        result = update_plant("Monstera", sunlight="partial shade")
+    assert "partial shade" in result
+    saved = mock_db.set_state.call_args[0][2]
+    assert saved[0]["sunlight"] == "partial shade"
+
+
+def test_update_plant_invalid_sunlight_ignored():
+    plants = [{"name": "Monstera", "frequency_days": 7, "last_watered": "2026-01-01", "location": "indoor"}]
+    mock_db = _make_mock_db(plants)
+    with patch("tools.AgentDB", return_value=mock_db):
+        result = update_plant("Monstera", sunlight="bright indirect")
+    assert "nothing" in result.lower() or "specify" in result.lower()
+
+
+# ---------------------------------------------------------------------------
+# get_plant_status sunlight display
+# ---------------------------------------------------------------------------
+
+def test_get_plant_status_shows_sunlight():
+    mock_db = MagicMock()
+    mock_db.get_state.return_value = [
+        {"name": "Monstera", "frequency_days": 10, "last_watered": "2026-05-20",
+         "location": "indoor", "sunlight": "partial shade"}
+    ]
+    with patch("tools.AgentDB", return_value=mock_db):
+        result = get_plant_status()
+    assert "partial shade" in result
+
+
+def test_get_plant_status_no_sunlight_omits_field():
+    mock_db = MagicMock()
+    mock_db.get_state.return_value = [
+        {"name": "Aloe", "frequency_days": 14, "last_watered": "2026-05-20", "location": "indoor"}
+    ]
+    with patch("tools.AgentDB", return_value=mock_db):
+        result = get_plant_status()
+    assert "unknown" not in result
+    assert "full sun" not in result

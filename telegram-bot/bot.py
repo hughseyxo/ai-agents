@@ -24,6 +24,7 @@ from tools import (
     update_plant,
     remove_plant,
     research_plant_watering,
+    research_plant_sunlight,
     save_recipe,
     get_plant,
     get_all_plants,
@@ -94,6 +95,7 @@ TOOL_FUNCTIONS = {
     "update_plant": update_plant,
     "remove_plant": remove_plant,
     "research_plant_watering": research_plant_watering,
+    "research_plant_sunlight": research_plant_sunlight,
     "save_recipe": save_recipe,
 }
 
@@ -247,6 +249,11 @@ TOOLS = [
                         "enum": ["indoor", "outdoor"],
                         "description": "Whether the plant is indoors or outdoors. Default: indoor.",
                     },
+                    "sunlight": {
+                        "type": "string",
+                        "enum": ["full sun", "partial shade", "shade"],
+                        "description": "Sunlight requirements. Call research_plant_sunlight first if unsure.",
+                    },
                 },
                 "required": ["name", "frequency_days"],
             },
@@ -256,7 +263,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "update_plant",
-            "description": "Update a plant's location or watering frequency. Use when the user says a plant is indoor/outdoor or wants to change how often it's watered.",
+            "description": "Update a plant's location, watering frequency, or sunlight requirements. Use when the user says a plant is indoor/outdoor, wants to change watering frequency, or specify sunlight needs.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -273,6 +280,28 @@ TOOLS = [
                         "type": "integer",
                         "description": "New watering frequency in days.",
                     },
+                    "sunlight": {
+                        "type": "string",
+                        "enum": ["full sun", "partial shade", "shade"],
+                        "description": "New sunlight requirements for the plant.",
+                    },
+                },
+                "required": ["plant_name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "research_plant_sunlight",
+            "description": "Look up sunlight requirements for a plant. Returns 'full sun', 'partial shade', or 'shade'. Call before add_plant or update_plant when sunlight is unknown.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "plant_name": {
+                        "type": "string",
+                        "description": "Name of the plant to research (e.g. 'Monstera Deliciosa').",
+                    }
                 },
                 "required": ["plant_name"],
             },
@@ -333,7 +362,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "get_all_plants",
-            "description": "Get the full list of all tracked plants with their details (name, location, watering frequency, last watered, last assessment).",
+            "description": "Get the full list of all tracked plants with their details (name, location, sunlight, watering frequency, last watered, last assessment).",
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
     },
