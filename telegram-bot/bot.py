@@ -454,7 +454,9 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     image_bytes = buf.getvalue()
 
     assessment = _analyze_plant_image(image_bytes, plant)
-    save_plant_assessment(caption, assessment)
+    save_result = save_plant_assessment(plant["name"], assessment)
+    if "saved" not in save_result.lower():
+        logger.warning(f"Failed to save plant assessment: {save_result}")
     await update.message.reply_text(assessment)
 
 
