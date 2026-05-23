@@ -1,7 +1,10 @@
+import base64
+import io
 import json
 import logging
 import os
 import subprocess
+import tempfile
 from pathlib import Path
 from dotenv import load_dotenv
 from openai import OpenAI, APIError
@@ -17,7 +20,8 @@ from tools import (
     get_agent_logs,
     run_travel_agent,
     get_travel_report,
-    queue_tiktok,
+    water_plant,
+    save_recipe,
 )
 
 load_dotenv()
@@ -46,6 +50,17 @@ FREE_MODELS = [
     "minimax/minimax-m2.5:free",
 ]
 
+VISION_MODELS = [
+    "meta-llama/llama-3.2-11b-vision-instruct:free",
+    "qwen/qwen2.5-vl-7b-instruct:free",
+]
+
+PLANT_HEALTH_SYSTEM = (
+    "You are a plant health expert. Assess the plant in the photo. "
+    "Give specific observations about its health and concise actionable advice. "
+    "Keep your response to 3-5 sentences."
+)
+
 CONCIERGE_PATH = Path(__file__).parent / "CONCIERGE.md"
 SYSTEM_PROMPT = CONCIERGE_PATH.read_text() if CONCIERGE_PATH.exists() else (
     "You are a concierge assistant for Cian's home server. Be concise and direct."
@@ -66,7 +81,8 @@ STATE_TOOL_FUNCTIONS = {
 TOOL_FUNCTIONS = {
     **STATE_TOOL_FUNCTIONS,
     "run_travel_agent": run_travel_agent,
-    "queue_tiktok": queue_tiktok,
+    "water_plant": water_plant,
+    "save_recipe": save_recipe,
 }
 
 TOOLS = [
@@ -184,17 +200,31 @@ TOOLS = [
     {
         "type": "function",
         "function": {
-            "name": "queue_tiktok",
-            "description": (
-                "Extract YouTube video essay recommendations from a TikTok URL and add them to the user's YouTube playlist. "
-                "Use when the user sends a TikTok link or asks to queue/save a TikTok."
-            ),
+            "name": "water_plant",
+            "description": "Record that a plant was watered today. Use when the user says they watered a plant.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "plant_name": {
+                        "type": "string",
+                        "description": "Name of the plant (e.g. 'Monstera').",
+                    }
+                },
+                "required": ["plant_name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "save_recipe",
+            "description": "Save a recipe URL to Mealie. Use when the user sends a recipe link or asks to save a recipe.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "url": {
                         "type": "string",
-                        "description": "The TikTok URL (tiktok.com or vm.tiktok.com link).",
+                        "description": "The recipe URL.",
                     }
                 },
                 "required": ["url"],
@@ -229,6 +259,91 @@ def _call_gemini_fallback(user_message: str, system_prompt: str) -> str:
     if res.returncode == 0 and res.stdout.strip():
         return res.stdout.strip()
     raise RuntimeError(f"Gemini CLI failed (rc={res.returncode}): {res.stderr[:200]}")
+
+
+def _resolve_plant_name(caption: str, plants: list[dict]) -> dict | None:
+    """Use a text LLM to semantically match a user's description to a known plant.
+
+    Handles cases like 'passion flower' -> 'Passiflora' that substring matching can't catch.
+    """
+    names = ", ".join(p["name"] for p in plants)
+    prompt = (
+        f"Known plants: {names}\n"
+        f"The user referred to their plant as: \"{caption}\"\n"
+        "Which plant are they referring to? Reply with the exact name from the list, "
+        "or NONE if no match is likely. Reply with only the plant name or NONE."
+    )
+    for model in FREE_MODELS:
+        try:
+            response = client.chat.completions.create(
+                model=model,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            answer = (response.choices[0].message.content or "").strip()
+            if answer.upper() == "NONE":
+                return None
+            match = next((p for p in plants if p["name"].lower() == answer.lower()), None)
+            if match:
+                return match
+        except Exception:
+            continue
+    return None
+
+
+def _analyze_plant_image(image_bytes: bytes, plant: dict) -> str:
+    """Analyze a plant image using vision models with Gemini fallback."""
+    from datetime import date as _date
+    last_watered = plant.get("last_watered", "unknown")
+    try:
+        days_since = (_date.today() - _date.fromisoformat(last_watered)).days
+        days_str = f"{days_since} days ago"
+    except Exception:
+        days_str = "unknown"
+
+    user_text = (
+        f"This is a {plant['name']} ({plant.get('location', 'unknown location')}). "
+        f"Last watered {last_watered} ({days_str})."
+    )
+    b64 = base64.b64encode(image_bytes).decode()
+    messages = [
+        {"role": "system", "content": PLANT_HEALTH_SYSTEM},
+        {"role": "user", "content": [
+            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
+            {"type": "text", "text": user_text},
+        ]},
+    ]
+
+    for model in VISION_MODELS:
+        try:
+            response = client.chat.completions.create(model=model, messages=messages)
+            return response.choices[0].message.content or "No assessment returned."
+        except Exception:
+            continue
+
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:
+            f.write(image_bytes)
+            tmp_path = f.name
+        prompt = f"{PLANT_HEALTH_SYSTEM}\n\n{user_text}"
+        res = subprocess.run(
+            ["gemini", "-y", "-p", prompt, "-o", "text", tmp_path],
+            capture_output=True, text=True, timeout=60,
+            cwd=str(Path(__file__).parent),
+        )
+        if res.returncode == 0 and res.stdout.strip():
+            return res.stdout.strip()
+    except Exception:
+        pass
+    finally:
+        if tmp_path:
+            try:
+                import os as _os
+                _os.unlink(tmp_path)
+            except Exception:
+                pass
+
+    return "Plant assessment unavailable right now. Try again later."
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

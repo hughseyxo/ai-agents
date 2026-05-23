@@ -1,7 +1,7 @@
 import subprocess
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch, call
-from bot import start, handle_message, _call_gemini_fallback
+from bot import start, handle_message, _call_gemini_fallback, _analyze_plant_image
 
 
 # ---------------------------------------------------------------------------
@@ -242,3 +242,80 @@ def test_call_gemini_fallback_builds_prompt_with_server_state(mocker):
     assert "daily-briefing: success" in prompt_passed
     assert "CPU: 5%" in prompt_passed
     assert "how is everything?" in prompt_passed
+
+
+# ---------------------------------------------------------------------------
+# _analyze_plant_image
+# ---------------------------------------------------------------------------
+
+FAKE_PLANT = {
+    "name": "Monstera",
+    "location": "indoor",
+    "last_watered": "2026-05-20",
+    "frequency_days": 7,
+}
+FAKE_IMAGE = b"fakejpegbytes"
+
+
+def test_analyze_plant_image_returns_assessment_on_first_model(mocker):
+    mock_response = MagicMock()
+    mock_response.choices = [MagicMock(message=MagicMock(content="Leaves look healthy."))]
+    mocker.patch("bot.client").chat.completions.create.return_value = mock_response
+
+    result = _analyze_plant_image(FAKE_IMAGE, FAKE_PLANT)
+
+    assert "healthy" in result.lower()
+
+
+def test_analyze_plant_image_tries_second_model_on_failure(mocker):
+    mock_client = mocker.patch("bot.client")
+    good_response = MagicMock()
+    good_response.choices = [MagicMock(message=MagicMock(content="Plant is fine."))]
+    mock_client.chat.completions.create.side_effect = [
+        Exception("model unavailable"),
+        good_response,
+    ]
+
+    result = _analyze_plant_image(FAKE_IMAGE, FAKE_PLANT)
+
+    assert "fine" in result.lower()
+    assert mock_client.chat.completions.create.call_count == 2
+
+
+def test_analyze_plant_image_falls_back_to_gemini_when_all_vision_models_fail(mocker):
+    mock_client = mocker.patch("bot.client")
+    mock_client.chat.completions.create.side_effect = Exception("all fail")
+
+    mock_run = mocker.patch("bot.subprocess.run")
+    mock_run.return_value = MagicMock(returncode=0, stdout="Gemini says: plant is dry.\n")
+
+    result = _analyze_plant_image(FAKE_IMAGE, FAKE_PLANT)
+
+    assert "dry" in result.lower()
+    called_cmd = mock_run.call_args[0][0]
+    assert "gemini" in called_cmd[0]
+    assert any(arg.endswith(".jpg") for arg in called_cmd)
+
+
+def test_analyze_plant_image_returns_error_when_all_backends_fail(mocker):
+    mocker.patch("bot.client").chat.completions.create.side_effect = Exception("fail")
+    mocker.patch("bot.subprocess.run").return_value = MagicMock(returncode=1, stdout="", stderr="err")
+
+    result = _analyze_plant_image(FAKE_IMAGE, FAKE_PLANT)
+
+    assert "unavailable" in result.lower()
+
+
+def test_analyze_plant_image_includes_plant_context_in_prompt(mocker):
+    mock_client = mocker.patch("bot.client")
+    mock_response = MagicMock()
+    mock_response.choices = [MagicMock(message=MagicMock(content="Looks good."))]
+    mock_client.chat.completions.create.return_value = mock_response
+
+    _analyze_plant_image(FAKE_IMAGE, FAKE_PLANT)
+
+    call_kwargs = mock_client.chat.completions.create.call_args
+    messages = call_kwargs[1].get("messages") or call_kwargs[0][1]
+    user_content = str(messages)
+    assert "Monstera" in user_content
+    assert "indoor" in user_content
