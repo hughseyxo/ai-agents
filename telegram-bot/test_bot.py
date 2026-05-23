@@ -1,7 +1,7 @@
 import subprocess
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch, call
-from bot import start, handle_message, _call_gemini_fallback, _analyze_plant_image
+from bot import start, handle_message, _call_gemini_fallback, _analyze_plant_image, handle_photo
 
 
 # ---------------------------------------------------------------------------
@@ -319,3 +319,109 @@ def test_analyze_plant_image_includes_plant_context_in_prompt(mocker):
     user_content = str(messages)
     assert "Monstera" in user_content
     assert "indoor" in user_content
+
+
+# ---------------------------------------------------------------------------
+# handle_photo
+# ---------------------------------------------------------------------------
+
+def _make_photo_update(caption=None, user_id=1703830475):
+    update = MagicMock()
+    update.effective_user.id = user_id
+    update.effective_chat.id = 123
+    update.message.caption = caption
+    update.message.reply_text = AsyncMock()
+    mock_photo = MagicMock()
+    mock_photo.file_id = "file123"
+    update.message.photo = [mock_photo]
+    return update
+
+
+@pytest.mark.asyncio
+async def test_handle_photo_no_caption_replies_with_instruction(mocker):
+    mocker.patch("bot.ALLOWED_USER_ID", "1703830475")
+    update = _make_photo_update(caption=None)
+    context = MagicMock()
+    context.bot.send_chat_action = AsyncMock()
+
+    await handle_photo(update, context)
+
+    update.message.reply_text.assert_called_once()
+    assert "caption" in update.message.reply_text.call_args[0][0].lower()
+
+
+@pytest.mark.asyncio
+async def test_handle_photo_llm_resolves_common_name(mocker):
+    """'passion flower' doesn't substring-match 'Passiflora' — LLM fallback resolves it."""
+    mocker.patch("bot.ALLOWED_USER_ID", "1703830475")
+    fake_plant = {"name": "Passiflora", "location": "outdoor", "last_watered": "2026-05-20", "frequency_days": 5}
+    mocker.patch("bot.get_plant", return_value=None)
+    mocker.patch("bot._resolve_plant_name", return_value=fake_plant)
+    mocker.patch("bot._analyze_plant_image", return_value="Looks healthy.")
+    mocker.patch("bot.save_plant_assessment", return_value="saved.")
+
+    update = _make_photo_update(caption="passion flower")
+    context = MagicMock()
+    context.bot.send_chat_action = AsyncMock()
+    mock_file = AsyncMock()
+    mock_file.download_to_memory = AsyncMock(side_effect=lambda buf: buf.write(b"fakejpeg"))
+    context.bot.get_file = AsyncMock(return_value=mock_file)
+
+    await handle_photo(update, context)
+
+    update.message.reply_text.assert_called_once_with("Looks healthy.")
+
+
+@pytest.mark.asyncio
+async def test_handle_photo_unknown_plant_replies_with_known_list(mocker):
+    mocker.patch("bot.ALLOWED_USER_ID", "1703830475")
+    mocker.patch("bot.get_plant", return_value=None)
+    mocker.patch("bot._resolve_plant_name", return_value=None)
+    fake_plants = [
+        {"name": "Monstera", "frequency_days": 7, "last_watered": "2026-05-20", "location": "indoor"},
+        {"name": "Aloe", "frequency_days": 14, "last_watered": "2026-05-10", "location": "indoor"},
+    ]
+    mocker.patch("bot.get_all_plants", return_value=fake_plants)
+
+    update = _make_photo_update(caption="cactus")
+    context = MagicMock()
+    context.bot.send_chat_action = AsyncMock()
+
+    await handle_photo(update, context)
+
+    reply = update.message.reply_text.call_args[0][0]
+    assert "cactus" in reply.lower()
+    assert "Monstera" in reply or "Aloe" in reply
+
+
+@pytest.mark.asyncio
+async def test_handle_photo_happy_path(mocker):
+    mocker.patch("bot.ALLOWED_USER_ID", "1703830475")
+    fake_plant = {"name": "Monstera", "location": "indoor", "last_watered": "2026-05-20", "frequency_days": 7}
+    mocker.patch("bot.get_plant", return_value=fake_plant)
+    mocker.patch("bot._analyze_plant_image", return_value="Leaves look healthy.")
+    mocker.patch("bot.save_plant_assessment", return_value="Monstera assessment saved.")
+
+    update = _make_photo_update(caption="monstera")
+    context = MagicMock()
+    context.bot.send_chat_action = AsyncMock()
+    mock_file = AsyncMock()
+    mock_file.download_to_memory = AsyncMock(side_effect=lambda buf: buf.write(b"fakejpeg"))
+    context.bot.get_file = AsyncMock(return_value=mock_file)
+
+    await handle_photo(update, context)
+
+    update.message.reply_text.assert_called_once_with("Leaves look healthy.")
+
+
+@pytest.mark.asyncio
+async def test_handle_photo_unauthorized_user_ignored(mocker):
+    mocker.patch("bot.ALLOWED_USER_ID", "999999")
+    update = _make_photo_update(caption="monstera", user_id=111111)
+    update.message.reply_text = AsyncMock()
+    context = MagicMock()
+    context.bot.send_chat_action = AsyncMock()
+
+    await handle_photo(update, context)
+
+    update.message.reply_text.assert_not_called()

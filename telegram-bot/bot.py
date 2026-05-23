@@ -22,6 +22,9 @@ from tools import (
     get_travel_report,
     water_plant,
     save_recipe,
+    get_plant,
+    get_all_plants,
+    save_plant_assessment,
 )
 
 load_dotenv()
@@ -420,6 +423,41 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await update.message.reply_text("All AI backends unavailable. Please try again later.")
 
 
+async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if ALLOWED_USER_ID and str(update.effective_user.id) != ALLOWED_USER_ID:
+        return
+
+    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+
+    caption = (update.message.caption or "").strip()
+    if not caption:
+        await update.message.reply_text(
+            "Please include the plant name as a caption (e.g. 'monstera')."
+        )
+        return
+
+    plant = get_plant(caption)
+    if not plant:
+        all_plants = get_all_plants()
+        plant = _resolve_plant_name(caption, all_plants)
+    if not plant:
+        names = ", ".join(p["name"] for p in get_all_plants()) or "none"
+        await update.message.reply_text(
+            f"No plant named '{caption}' found. Known plants: {names}"
+        )
+        return
+
+    photo = update.message.photo[-1]
+    file = await context.bot.get_file(photo.file_id)
+    buf = io.BytesIO()
+    await file.download_to_memory(buf)
+    image_bytes = buf.getvalue()
+
+    assessment = _analyze_plant_image(image_bytes, plant)
+    save_plant_assessment(caption, assessment)
+    await update.message.reply_text(assessment)
+
+
 def main() -> None:
     if not TELEGRAM_TOKEN or not OPENROUTER_KEY:
         logger.error("Missing TELEGRAM_BOT_TOKEN or OPENROUTER_API_KEY.")
@@ -428,6 +466,7 @@ def main() -> None:
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     logger.info("Concierge bot starting...")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
