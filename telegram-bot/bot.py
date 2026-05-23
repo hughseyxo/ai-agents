@@ -21,6 +21,7 @@ from tools import (
     get_travel_report,
     water_plant,
     add_plant,
+    remove_plant,
     research_plant_watering,
     save_recipe,
     get_plant,
@@ -84,9 +85,12 @@ STATE_TOOL_FUNCTIONS = {
 # All tools available to the LLM (state + action tools)
 TOOL_FUNCTIONS = {
     **STATE_TOOL_FUNCTIONS,
+    "get_plant": get_plant,
+    "get_all_plants": get_all_plants,
     "run_travel_agent": run_travel_agent,
     "water_plant": water_plant,
     "add_plant": add_plant,
+    "remove_plant": remove_plant,
     "research_plant_watering": research_plant_watering,
     "save_recipe": save_recipe,
 }
@@ -280,6 +284,48 @@ TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_plant",
+            "description": "Look up a single plant by name (exact or substring match). Returns plant details or null if not found.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "plant_name": {
+                        "type": "string",
+                        "description": "Name of the plant to look up (e.g. 'Monstera').",
+                    }
+                },
+                "required": ["plant_name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_all_plants",
+            "description": "Get the full list of all tracked plants with their details (name, location, watering frequency, last watered, last assessment).",
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "remove_plant",
+            "description": "Remove a plant from the watering tracker. Use when the user says a plant has died or they no longer want to track it.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "plant_name": {
+                        "type": "string",
+                        "description": "Name of the plant to remove (e.g. 'Monstera').",
+                    }
+                },
+                "required": ["plant_name"],
+            },
+        },
+    },
 ]
 
 
@@ -301,7 +347,8 @@ def _call_gemini_fallback(user_message: str, system_prompt: str) -> str:
     )
 
     res = subprocess.run(
-        ["gemini", "-y", "-p", prompt, "-o", "text"],
+        ["gemini", "-y", "-o", "text"],
+        input=prompt,
         capture_output=True, text=True, timeout=60,
         cwd=str(Path(__file__).parent),
     )
@@ -396,7 +443,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     for model in FREE_MODELS:
         try:
             loop_messages = list(messages)
-            for _ in range(3):
+            for _ in range(5):
+                await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
                 response = client.chat.completions.create(
                     model=model,
                     messages=loop_messages,
@@ -420,13 +468,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                         loop_messages.append({
                             "role": "tool",
                             "tool_call_id": tc.id,
-                            "content": result,
+                            "content": str(result),
                         })
                 else:
                     await update.message.reply_text(choice.message.content or "(no response)")
                     return
 
-            await update.message.reply_text("(reached tool call limit, could not complete response)")
+            await update.message.reply_text("Sorry, this request needs too many steps. Try asking something more specific.")
             return
 
         except APIError as e:

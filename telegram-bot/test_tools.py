@@ -21,6 +21,7 @@ from tools import (
     get_cron_schedule,
     get_agent_logs,
     water_plant,
+    remove_plant,
     save_recipe,
     get_all_plants,
     get_plant,
@@ -143,6 +144,33 @@ def test_get_plant_status_handles_db_error():
     with patch("tools.AgentDB", side_effect=Exception("db error")):
         result = get_plant_status()
     assert "unavailable" in result.lower() or "error" in result.lower()
+
+
+def test_get_plant_status_shows_last_assessment_date():
+    mock_db = MagicMock()
+    mock_db.get_state.return_value = [
+        {
+            "name": "Monstera",
+            "frequency_days": 10,
+            "last_watered": "2026-05-20",
+            "location": "indoor",
+            "last_assessment": {"date": "2026-05-23", "summary": "Looks healthy."},
+        }
+    ]
+    with patch("tools.AgentDB", return_value=mock_db):
+        result = get_plant_status()
+    assert "2026-05-23" in result
+    assert "assessed" in result.lower()
+
+
+def test_get_plant_status_no_assessment_shows_nothing_extra():
+    mock_db = MagicMock()
+    mock_db.get_state.return_value = [
+        {"name": "Aloe", "frequency_days": 14, "last_watered": "2026-05-20", "location": "indoor"}
+    ]
+    with patch("tools.AgentDB", return_value=mock_db):
+        result = get_plant_status()
+    assert "assessed" not in result.lower()
 
 
 # ---------------------------------------------------------------------------
@@ -389,6 +417,50 @@ def test_water_plant_empty_list():
 def test_water_plant_db_error():
     with patch("tools.AgentDB", side_effect=Exception("db locked")):
         result = water_plant("Monstera")
+    assert "failed" in result.lower() or "error" in result.lower()
+
+
+# ---------------------------------------------------------------------------
+# remove_plant
+# ---------------------------------------------------------------------------
+
+def test_remove_plant_exact_match():
+    plants = [
+        {"name": "Monstera", "frequency_days": 7, "last_watered": "2026-01-01", "location": "indoor"},
+        {"name": "Aloe", "frequency_days": 14, "last_watered": "2026-01-01", "location": "indoor"},
+    ]
+    mock_db = _make_mock_db(plants)
+    with patch("tools.AgentDB", return_value=mock_db):
+        result = remove_plant("Monstera")
+    assert "Monstera" in result
+    saved = mock_db.set_state.call_args[0][2]
+    assert len(saved) == 1
+    assert saved[0]["name"] == "Aloe"
+
+
+def test_remove_plant_case_insensitive():
+    plants = [{"name": "Monstera", "frequency_days": 7, "last_watered": "2026-01-01", "location": "indoor"}]
+    mock_db = _make_mock_db(plants)
+    with patch("tools.AgentDB", return_value=mock_db):
+        result = remove_plant("monstera")
+    assert "Monstera" in result
+    saved = mock_db.set_state.call_args[0][2]
+    assert saved == []
+
+
+def test_remove_plant_not_found():
+    plants = [{"name": "Monstera", "frequency_days": 7, "last_watered": "2026-01-01", "location": "indoor"}]
+    mock_db = _make_mock_db(plants)
+    with patch("tools.AgentDB", return_value=mock_db):
+        result = remove_plant("Cactus")
+    assert "No plant" in result
+    assert "Monstera" in result
+    mock_db.set_state.assert_not_called()
+
+
+def test_remove_plant_db_error():
+    with patch("tools.AgentDB", side_effect=Exception("db locked")):
+        result = remove_plant("Monstera")
     assert "failed" in result.lower() or "error" in result.lower()
 
 

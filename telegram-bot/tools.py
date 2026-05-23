@@ -61,7 +61,10 @@ def get_plant_status() -> str:
                 flag = " (today!)"
             else:
                 flag = ""
-            rows.append((next_water, f"{p['name']} ({p['location']}): next {next_water}{flag}"))
+            assessed = ""
+            if p.get("last_assessment"):
+                assessed = f", assessed {p['last_assessment']['date']}"
+            rows.append((next_water, f"{p['name']} ({p['location']}): next {next_water}{flag}{assessed}"))
         rows.sort()
         return "\n".join(r[1] for r in rows)
     except Exception as e:
@@ -246,6 +249,15 @@ def run_travel_agent(
         return f"Failed to start travel agent: {e}"
 
 
+def _find_plant(name: str, plants: list[dict]) -> dict | None:
+    """Find a plant by exact name match (case-insensitive) or substring match."""
+    name_lower = name.lower().strip()
+    return (
+        next((p for p in plants if p["name"].lower() == name_lower), None)
+        or next((p for p in plants if name_lower in p["name"].lower()), None)
+    )
+
+
 def research_plant_watering(plant_name: str) -> str:
     prompt = (
         f"What is the recommended watering frequency in days for a {plant_name} houseplant? "
@@ -293,10 +305,7 @@ def water_plant(plant_name: str) -> str:
     try:
         db = AgentDB(DB_PATH)
         plants = db.get_state("daily-briefing", "plants") or []
-        name_lower = plant_name.lower().strip()
-        match = next((p for p in plants if p["name"].lower() == name_lower), None)
-        if not match:
-            match = next((p for p in plants if name_lower in p["name"].lower()), None)
+        match = _find_plant(plant_name, plants)
         if not match:
             names = ", ".join(p["name"] for p in plants)
             db.close()
@@ -307,6 +316,23 @@ def water_plant(plant_name: str) -> str:
         return f"{match['name']} marked as watered today ({match['last_watered']})."
     except Exception as e:
         return f"Failed to update plant: {e}"
+
+
+def remove_plant(plant_name: str) -> str:
+    try:
+        db = AgentDB(DB_PATH)
+        plants = db.get_state("daily-briefing", "plants") or []
+        match = _find_plant(plant_name, plants)
+        if not match:
+            names = ", ".join(p["name"] for p in plants)
+            db.close()
+            return f"No plant named '{plant_name}' found. Known plants: {names or 'none'}"
+        plants = [p for p in plants if p is not match]
+        db.set_state("daily-briefing", "plants", plants)
+        db.close()
+        return f"{match['name']} removed from plant tracker."
+    except Exception as e:
+        return f"Failed to remove plant: {e}"
 
 
 def get_all_plants() -> list[dict]:
@@ -320,22 +346,15 @@ def get_all_plants() -> list[dict]:
 
 
 def get_plant(plant_name: str) -> dict | None:
-    name_lower = plant_name.lower().strip()
     plants = get_all_plants()
-    match = next((p for p in plants if p["name"].lower() == name_lower), None)
-    if not match:
-        match = next((p for p in plants if name_lower in p["name"].lower()), None)
-    return match
+    return _find_plant(plant_name, plants)
 
 
 def save_plant_assessment(plant_name: str, summary: str) -> str:
     try:
         db = AgentDB(DB_PATH)
         plants = db.get_state("daily-briefing", "plants") or []
-        name_lower = plant_name.lower().strip()
-        match = next((p for p in plants if p["name"].lower() == name_lower), None)
-        if not match:
-            match = next((p for p in plants if name_lower in p["name"].lower()), None)
+        match = _find_plant(plant_name, plants)
         if not match:
             db.close()
             return f"No plant named '{plant_name}' found — assessment not saved."

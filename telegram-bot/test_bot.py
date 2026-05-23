@@ -137,7 +137,7 @@ async def test_tool_loop_stops_after_max_iterations(mocker):
 
     await handle_message(update, context)
 
-    assert mock_client.chat.completions.create.call_count <= 3
+    assert mock_client.chat.completions.create.call_count <= 5
 
 
 @pytest.mark.asyncio
@@ -189,9 +189,9 @@ async def test_all_openrouter_models_fail_triggers_gemini(mocker):
 
     await handle_message(update, context)
 
-    mock_run.assert_called_once()
-    cmd_args = mock_run.call_args[0][0]
-    assert "gemini" in cmd_args[0]
+    mock_run.assert_called()
+    gemini_calls = [c for c in mock_run.call_args_list if "gemini" in c[0][0][0]]
+    assert len(gemini_calls) == 1
     update.message.reply_text.assert_called_once_with("Agents all good.")
 
 
@@ -226,7 +226,7 @@ async def test_gemini_fallback_failure_sends_unavailable_message(mocker):
 
 def test_call_gemini_fallback_builds_prompt_with_server_state(mocker):
     """_call_gemini_fallback includes tool results in the prompt passed to gemini."""
-    mocker.patch("bot.TOOL_FUNCTIONS", {
+    mocker.patch("bot.STATE_TOOL_FUNCTIONS", {
         "get_agent_status": lambda: "daily-briefing: success",
         "get_system_health": lambda: "CPU: 5%",
     })
@@ -237,8 +237,7 @@ def test_call_gemini_fallback_builds_prompt_with_server_state(mocker):
     result = _call_gemini_fallback("how is everything?", "You are a concierge.")
 
     assert result == "All good."
-    # cmd is ["gemini", "-y", "-p", <prompt>, "-o", "text"]
-    prompt_passed = mock_run.call_args[0][0][3]
+    prompt_passed = mock_run.call_args.kwargs["input"]
     assert "daily-briefing: success" in prompt_passed
     assert "CPU: 5%" in prompt_passed
     assert "how is everything?" in prompt_passed
