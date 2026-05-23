@@ -55,7 +55,7 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 │       └── librarian_report.md      # Email send prompt
 ├── telegram-bot/       # Server concierge Telegram bot (OpenRouter-backed)
 │   ├── bot.py                  # Bot: polling, auth gate, tool-use loop, model fallback
-│   ├── tools.py                # Tool functions: get_agent_status, get_plant_status, get_yopflix_status, get_system_health, get_cron_schedule, get_agent_logs, queue_tiktok
+│   ├── tools.py                # Tool functions: get_agent_status, get_plant_status, get_yopflix_status, get_system_health, get_cron_schedule, get_agent_logs, water_plant, save_recipe, get_plant, get_all_plants, save_plant_assessment
 │   ├── concierge-bot.service   # systemd user service (symlinked to ~/.config/systemd/user/)
 │   ├── test_bot.py             # Bot handler tests (auth, tool-use loop)
 │   ├── test_tools.py           # Tool function unit tests (mocked deps)
@@ -94,15 +94,11 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 │       │   └── 2026-05-17-server-concierge-bot-design.md  # Concierge bot spec
 │       └── plans/
 │           └── 2026-05-17-laptop-server-bridge.md  # Laptop↔server bridge implementation plan
-├── skills/vidqueue/    # YouTube video essay queue from TikTok recommendations
-│   ├── SKILL.md            # Skill definition (trigger: /vidqueue <url>)
-│   ├── vidqueue.py         # Core: TikTok extraction + YouTube Data API playlist management
-│   └── requirements.txt    # Python deps (yt-dlp, whisper, pytesseract, google-api-python-client)
 ├── free_time_bot.py    # Telegram bot: free-time task advisor (systemd service)
 ├── mealsave-bot.service # Telegram bot: recipe saver (systemd service)
 ├── plant.sh            # CLI tool: manage plant watering tracker (add/list/remove)
 ├── run-agent.sh        # Single entrypoint for all agents
-└── credentials.json    # Google OAuth credentials (DO NOT commit secrets)
+└── credentials.json    # Google OAuth credentials — Calendar/Gmail (DO NOT commit)
 ```
 
 # Agent Conventions
@@ -133,7 +129,6 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 - Skills are Claude Code interactive commands in `skills/<name>/SKILL.md`
 - `mealsave` — save recipe URLs to Mealie (`/mealsave <url>`)
 - `free-time` — suggest best tasks for a free time window ("I have 30 minutes free")
-- `vidqueue` — extract YouTube video essay recommendations from a TikTok URL and add to a YouTube playlist (`/vidqueue <url>`). Mobile: send TikTok link to the concierge Telegram bot (uses `queue_tiktok` tool). Core logic: `skills/vidqueue/vidqueue.py`. Config: `~/.config/vidqueue/.env`. Auth bootstrap: `vidqueue.py --auth`.
 
 # Plant Watering Tracker
 - Data lives in `data/agents.db` (SQLite state table); CLI tool is `plant.sh` (add/list/remove/--outdoor)
