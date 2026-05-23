@@ -302,6 +302,32 @@ def add_plant(name: str, frequency_days: int, location: str = "indoor") -> str:
         return f"Failed to add plant: {e}"
 
 
+def update_plant(plant_name: str, location: str = "", frequency_days: int = 0) -> str:
+    try:
+        db = AgentDB(DB_PATH)
+        plants = db.get_state("daily-briefing", "plants") or []
+        match = _find_plant(plant_name, plants)
+        if not match:
+            names = ", ".join(p["name"] for p in plants)
+            db.close()
+            return f"No plant named '{plant_name}' found. Known plants: {names or 'none'}"
+        changes = []
+        if location in ("indoor", "outdoor"):
+            match["location"] = location
+            changes.append(f"location → {location}")
+        if frequency_days > 0:
+            match["frequency_days"] = frequency_days
+            changes.append(f"frequency → every {frequency_days} days")
+        if not changes:
+            db.close()
+            return "Nothing to update — specify location ('indoor'/'outdoor') or frequency_days."
+        db.set_state("daily-briefing", "plants", plants)
+        db.close()
+        return f"{match['name']} updated: {', '.join(changes)}."
+    except Exception as e:
+        return f"Failed to update plant: {e}"
+
+
 def water_plant(plant_name: str) -> str:
     try:
         db = AgentDB(DB_PATH)

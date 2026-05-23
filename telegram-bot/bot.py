@@ -21,6 +21,7 @@ from tools import (
     get_travel_report,
     water_plant,
     add_plant,
+    update_plant,
     remove_plant,
     research_plant_watering,
     save_recipe,
@@ -90,6 +91,7 @@ TOOL_FUNCTIONS = {
     "run_travel_agent": run_travel_agent,
     "water_plant": water_plant,
     "add_plant": add_plant,
+    "update_plant": update_plant,
     "remove_plant": remove_plant,
     "research_plant_watering": research_plant_watering,
     "save_recipe": save_recipe,
@@ -247,6 +249,32 @@ TOOLS = [
                     },
                 },
                 "required": ["name", "frequency_days"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "update_plant",
+            "description": "Update a plant's location or watering frequency. Use when the user says a plant is indoor/outdoor or wants to change how often it's watered.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "plant_name": {
+                        "type": "string",
+                        "description": "Name of the plant to update (e.g. 'Gazania').",
+                    },
+                    "location": {
+                        "type": "string",
+                        "enum": ["indoor", "outdoor"],
+                        "description": "New location for the plant.",
+                    },
+                    "frequency_days": {
+                        "type": "integer",
+                        "description": "New watering frequency in days.",
+                    },
+                },
+                "required": ["plant_name"],
             },
         },
     },

@@ -21,6 +21,7 @@ from tools import (
     get_cron_schedule,
     get_agent_logs,
     water_plant,
+    update_plant,
     remove_plant,
     save_recipe,
     get_all_plants,
@@ -419,6 +420,56 @@ def test_water_plant_db_error():
     with patch("tools.AgentDB", side_effect=Exception("db locked")):
         result = water_plant("Monstera")
     assert "failed" in result.lower() or "error" in result.lower()
+
+
+# ---------------------------------------------------------------------------
+# update_plant
+# ---------------------------------------------------------------------------
+
+def test_update_plant_location():
+    plants = [{"name": "Gazania", "frequency_days": 7, "last_watered": "2026-01-01", "location": "indoor"}]
+    mock_db = _make_mock_db(plants)
+    with patch("tools.AgentDB", return_value=mock_db):
+        result = update_plant("Gazania", location="outdoor")
+    assert "outdoor" in result
+    saved = mock_db.set_state.call_args[0][2]
+    assert saved[0]["location"] == "outdoor"
+
+
+def test_update_plant_frequency():
+    plants = [{"name": "Monstera", "frequency_days": 7, "last_watered": "2026-01-01", "location": "indoor"}]
+    mock_db = _make_mock_db(plants)
+    with patch("tools.AgentDB", return_value=mock_db):
+        result = update_plant("Monstera", frequency_days=14)
+    assert "14" in result
+    saved = mock_db.set_state.call_args[0][2]
+    assert saved[0]["frequency_days"] == 14
+
+
+def test_update_plant_case_insensitive():
+    plants = [{"name": "Gazania", "frequency_days": 7, "last_watered": "2026-01-01", "location": "indoor"}]
+    mock_db = _make_mock_db(plants)
+    with patch("tools.AgentDB", return_value=mock_db):
+        result = update_plant("gazania", location="outdoor")
+    assert "Gazania" in result
+
+
+def test_update_plant_not_found():
+    plants = [{"name": "Monstera", "frequency_days": 7, "last_watered": "2026-01-01", "location": "indoor"}]
+    mock_db = _make_mock_db(plants)
+    with patch("tools.AgentDB", return_value=mock_db):
+        result = update_plant("Cactus", location="outdoor")
+    assert "No plant" in result
+    mock_db.set_state.assert_not_called()
+
+
+def test_update_plant_no_changes():
+    plants = [{"name": "Monstera", "frequency_days": 7, "last_watered": "2026-01-01", "location": "indoor"}]
+    mock_db = _make_mock_db(plants)
+    with patch("tools.AgentDB", return_value=mock_db):
+        result = update_plant("Monstera")
+    assert "nothing" in result.lower() or "specify" in result.lower()
+    mock_db.set_state.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
