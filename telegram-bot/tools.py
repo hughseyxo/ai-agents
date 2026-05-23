@@ -266,7 +266,8 @@ def research_plant_watering(plant_name: str) -> str:
     )
     try:
         res = subprocess.run(
-            ["gemini", "-y", "-p", prompt, "-o", "text"],
+            ["gemini", "-y", "-o", "text"],
+            input=prompt,
             capture_output=True, text=True, timeout=30,
             cwd=str(REPO_ROOT),
         )

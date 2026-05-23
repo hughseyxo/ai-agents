@@ -26,6 +26,7 @@ from tools import (
     get_all_plants,
     get_plant,
     save_plant_assessment,
+    research_plant_watering,
 )
 
 FAKE_PLANTS = [
@@ -593,3 +594,23 @@ def test_save_recipe_not_installed():
     with patch("tools.subprocess.run", side_effect=FileNotFoundError):
         result = save_recipe("https://example.com/recipe")
     assert "not installed" in result.lower() or "error" in result.lower()
+
+
+# ---------------------------------------------------------------------------
+# research_plant_watering
+# ---------------------------------------------------------------------------
+
+def test_research_plant_watering_returns_integer_via_stdin(mocker):
+    mock_run = mocker.patch("tools.subprocess.run")
+    mock_run.return_value = MagicMock(returncode=0, stdout="7\n")
+    result = research_plant_watering("Monstera")
+    assert result == "7"
+    assert mock_run.call_args.kwargs["input"] is not None
+    assert "Monstera" in mock_run.call_args.kwargs["input"]
+
+
+def test_research_plant_watering_gemini_failure_returns_error(mocker):
+    mock_run = mocker.patch("tools.subprocess.run")
+    mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="retry exhausted")
+    result = research_plant_watering("Monstera")
+    assert "could not" in result.lower() or "failed" in result.lower()
