@@ -434,7 +434,8 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     save_result = save_plant_assessment(plant["name"], assessment)
     if "saved" not in save_result.lower():
         logger.warning(f"Failed to save plant assessment: {save_result}")
-    await update.message.reply_text(assessment)
+    for chunk in [assessment[i:i+4000] for i in range(0, len(assessment), 4000)]:
+        await update.message.reply_text(chunk)
 
 
 def main() -> None:
