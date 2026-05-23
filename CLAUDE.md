@@ -55,7 +55,7 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 │       └── librarian_report.md      # Email send prompt
 ├── telegram-bot/       # Server concierge Telegram bot (OpenRouter-backed)
 │   ├── bot.py                  # Bot: polling, auth gate, tool-use loop, model fallback
-│   ├── tools.py                # Tool functions: get_agent_status, get_plant_status, get_yopflix_status, get_system_health, get_cron_schedule, get_agent_logs, water_plant, save_recipe, get_plant, get_all_plants, save_plant_assessment
+│   ├── tools.py                # Tool functions: get_agent_status, get_plant_status, get_yopflix_status, get_system_health, get_cron_schedule, get_agent_logs, water_plant, add_plant, save_recipe, get_plant, get_all_plants, save_plant_assessment
 │   ├── concierge-bot.service   # systemd user service (symlinked to ~/.config/systemd/user/)
 │   ├── test_bot.py             # Bot handler tests (auth, tool-use loop)
 │   ├── test_tools.py           # Tool function unit tests (mocked deps)
