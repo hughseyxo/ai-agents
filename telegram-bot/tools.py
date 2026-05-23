@@ -246,6 +246,28 @@ def run_travel_agent(
         return f"Failed to start travel agent: {e}"
 
 
+def research_plant_watering(plant_name: str) -> str:
+    prompt = (
+        f"What is the recommended watering frequency in days for a {plant_name} houseplant? "
+        "Consider it is kept indoors. Reply with only a single integer (number of days between waterings). "
+        "For example: 7"
+    )
+    try:
+        res = subprocess.run(
+            ["gemini", "-y", "-p", prompt, "-o", "text"],
+            capture_output=True, text=True, timeout=30,
+            cwd=str(REPO_ROOT),
+        )
+        if res.returncode == 0 and res.stdout.strip():
+            import re
+            match = re.search(r"\d+", res.stdout.strip())
+            if match:
+                return match.group()
+        return f"Could not determine watering frequency: {res.stderr[:100]}"
+    except Exception as e:
+        return f"Research failed: {e}"
+
+
 def add_plant(name: str, frequency_days: int, location: str = "indoor") -> str:
     try:
         db = AgentDB(DB_PATH)

@@ -21,6 +21,7 @@ from tools import (
     get_travel_report,
     water_plant,
     add_plant,
+    research_plant_watering,
     save_recipe,
     get_plant,
     get_all_plants,
@@ -86,6 +87,7 @@ TOOL_FUNCTIONS = {
     "run_travel_agent": run_travel_agent,
     "water_plant": water_plant,
     "add_plant": add_plant,
+    "research_plant_watering": research_plant_watering,
     "save_recipe": save_recipe,
 }
 
@@ -241,6 +243,23 @@ TOOLS = [
                     },
                 },
                 "required": ["name", "frequency_days"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "research_plant_watering",
+            "description": "Look up the recommended watering frequency for a plant using web search. Call this before add_plant when the user hasn't specified how often to water.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "plant_name": {
+                        "type": "string",
+                        "description": "Name of the plant to research (e.g. 'Monstera Deliciosa').",
+                    }
+                },
+                "required": ["plant_name"],
             },
         },
     },
