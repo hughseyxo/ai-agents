@@ -44,6 +44,7 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 │   ├── commit_security.py      # Commit security agent (on-demand) — LLM-based scan of git diff for secrets/vulnerabilities. run_hook() used by .git/hooks/pre-push; blocks push on Critical/High. Also runnable via CLI.
 │   ├── travel_agent.py         # Travel agent (on-demand) — search mode: finds flights/hotels/activities; plan mode: itinerary from existing bookings. model: claude-sonnet-4-6. Design doc: docs/travel-agent.md
 │   ├── librarian.py            # Librarian agent (on-demand, cron-managed: audit Sun 06:00 UTC, watch Mon-Sat 06:00 UTC). Reads agent run history + output files, calls LLM to produce findings. Auto-applies learnings (confidence ≥0.8), emails prompt proposals (0.5-0.79) with approve/reject links via bridge server.
+│   ├── plant_weather_agent.py  # Plant Weather agent (schedule: 0 * * * * / hourly). Fetches weather, recalculates weather-adjusted watering dates for all plants, writes results to plant_weather_cache table in SQLite. No LLM, no email — purely deterministic cache refresh.
 │   └── prompts/                # LLM CLI synthesis prompt templates
 │       ├── daily_briefing.md
 │       ├── news_briefing.md
@@ -132,11 +133,11 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 
 # Plant Watering Tracker
 - Data lives in `data/agents.db` (SQLite state table); CLI tool is `plant.sh` (add/list/remove/--outdoor)
-- Plant data model: `{name, frequency_days, last_watered, location}` — location is `"indoor"` or `"outdoor"`
-- **Weather-aware:** Daily briefing fetches weather from Open-Meteo (Leiden) and adjusts watering dates automatically:
+- Plant data model: `{name, frequency_days, last_watered, location, sunlight, water_sensitivity}` — location is `"indoor"` or `"outdoor"`; water_sensitivity is `"high"/"medium"/"low"` (auto-researched via Gemini at add time, defaults to `"medium"`)
+- **Weather-aware:** `PlantWeatherAgent` runs hourly and writes adjusted dates to `plant_weather_cache` table. `get_plant_status()` in the concierge bot reads from this cache. Daily briefing also applies adjustments independently for its email output.
   - Indoor: ±1-2 days based on temp/humidity (subtle)
   - Outdoor: ±1-3 days based on rain, heatwaves, dry spells (larger adjustments)
-  - Weather fetch failure is non-fatal — falls back to base schedule
+  - Weather fetch failure is non-fatal — cache not updated, bot falls back to base schedule
 - Daily briefing agent checks plants and creates Todoist reminders automatically
 - **When adding a plant without an explicit frequency:** search the web for recommended indoor watering cadence, check at least 3 sources, and use the consensus value. Do NOT default to 7 days.
 
