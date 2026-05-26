@@ -78,11 +78,13 @@ Call `mcp__todoist__find-tasks` with `projectId: "6Crf3cH2RF5v86wc"`, `limit: 50
 ## Step 5.5: Identify Quick Wins
 From the fetched inbox tasks (overdue or due today), identify up to 5 "Quick Wins" — tasks that likely take less than 15 minutes to complete (e.g. phone calls, quick emails, simple bookings, brief lookups). Provide a rough estimate of the time for each.
 
-## Step 6: Handle plant watering tasks
+## Step 6: Handle plant watering tasks and advisory
 The agent has pre-computed plant watering data (see "Pre-computed Plant Data" section below).
 Tasks are only created on the morning of the watering day, so weather is always current.
 
 If there are plant tasks to create, check if each task already exists in project 6Crf3cH2RF5v86wc first (search by content matching "Water [Plant Name]"), then create any missing ones via `mcp__todoist__add-tasks` with priority p4.
+
+If the "Watering Advisory" section below contains entries (not "No overwatering concerns."), render the Watering Advisory HTML block in the email ABOVE the Plant Watering section.
 
 ## Step 7: Build and send HTML email
 Build the email body as HTML with inline CSS only using the template below, then send via `mcp__gmail__gmail_send`. After sending, your final text output MUST be the exact HTML you sent — nothing else, no preamble, no summary.
@@ -133,6 +135,16 @@ Gmail send args:
           <p style="margin:12px 0 6px;font-size:11px;font-weight:700;text-transform:uppercase;color:#d29922;letter-spacing:0.5px;">Due Today</p>
           [For each: <p style="margin:0 0 6px;padding:8px 12px;background:#1c2128;border-left:3px solid #d29922;border-radius:4px;font-size:14px;color:#c9d1d9;">[Title]</p>]
         </td></tr>
+
+        <!-- Watering Advisory (render only when Watering Advisory section has entries) -->
+        [If advisory entries exist:
+        <tr><td style="padding:20px 32px 0;">
+          <div style="padding:12px 16px;background:#1c2128;border-left:3px solid #d29922;border-radius:4px;">
+            <p style="margin:0 0 8px;font-size:11px;font-weight:700;text-transform:uppercase;color:#d29922;letter-spacing:0.5px;">🌡 Watering Advisory</p>
+            [For each risk entry: <p style="margin:0 0 4px;font-size:13px;color:#c9d1d9;">[Plant Name]: next watering in [N]d (normal cycle: [M]d)</p>]
+            <p style="margin:8px 0 0;font-size:12px;color:#8b949e;font-style:italic;">Weather is driving more frequent watering than usual. Check soil before watering.</p>
+          </div>
+        </td></tr>]
 
         <!-- Plant Watering -->
         <tr><td style="padding:20px 32px 0;">

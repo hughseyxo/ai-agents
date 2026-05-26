@@ -326,3 +326,76 @@ class TestFetchWeatherStep:
         agent._fetch_weather()
 
         assert agent.context["weather"] is None
+
+
+class TestOverwateringRisk:
+    """_check_plants should populate overwatering_risk when effective interval
+    is less than 60% of the plant's normal frequency."""
+
+    def test_short_interval_flagged_as_overwatering_risk(self):
+        """effective_interval < frequency * 0.6 → appears in overwatering_risk.
+
+        frequency_days=4, last_watered=today, hot dry weather gives adj=-2:
+          base = today+4, adjusted = today+2, effective_interval = 2
+          threshold = 4 * 0.6 = 2.4 → 2 < 2.4 → TRIGGERED
+        """
+        today = datetime.now(timezone.utc).date()
+        last_watered = today.isoformat()
+        plants = [{"name": "Cactus", "frequency_days": 4,
+                   "last_watered": last_watered, "location": "indoor"}]
+
+        hot_dry = {
+            "current": {"temp_c": 34, "humidity_pct": 30, "precip_mm": 0},
+            "forecast": [
+                {"date": "2026-05-15", "temp_max_c": 35, "precip_mm": 0},
+                {"date": "2026-05-16", "temp_max_c": 33, "precip_mm": 0},
+                {"date": "2026-05-17", "temp_max_c": 32, "precip_mm": 0},
+            ],
+            "recent_precip_mm": 0,
+        }
+        agent = _make_agent_with_plants(plants, hot_dry)
+        result = agent._check_plants()
+
+        assert "overwatering_risk" in result
+        assert len(result["overwatering_risk"]) == 1
+        risk = result["overwatering_risk"][0]
+        assert risk["name"] == "Cactus"
+        assert risk["effective_interval"] == 2
+        assert risk["normal_frequency"] == 4
+
+    def test_normal_interval_not_flagged(self):
+        """effective_interval >= frequency * 0.6 → not in overwatering_risk.
+
+        frequency_days=10, last_watered=8 days ago, no adjustment:
+          base = today+2, adjusted = today+2, effective_interval = 10
+          threshold = 6 → 10 >= 6 → NOT triggered
+        """
+        today = datetime.now(timezone.utc).date()
+        last_watered = (today - timedelta(days=8)).isoformat()
+        plants = [{"name": "Monstera", "frequency_days": 10,
+                   "last_watered": last_watered, "location": "indoor"}]
+
+        agent = _make_agent_with_plants(plants, NORMAL_WEATHER)
+        result = agent._check_plants()
+
+        assert "overwatering_risk" in result
+        assert result["overwatering_risk"] == []
+
+    def test_no_weather_no_risk(self):
+        """Without weather, no adjustments → no overwatering risk flagged."""
+        today = datetime.now(timezone.utc).date()
+        last_watered = today.isoformat()
+        plants = [{"name": "Cactus", "frequency_days": 4,
+                   "last_watered": last_watered, "location": "indoor"}]
+
+        agent = _make_agent_with_plants(plants, weather=None)
+        result = agent._check_plants()
+
+        assert result["overwatering_risk"] == []
+
+    def test_overwatering_risk_key_always_present(self):
+        """overwatering_risk key must exist in result even when plant list is empty."""
+        agent = _make_agent_with_plants([], NORMAL_WEATHER)
+        result = agent._check_plants()
+        assert "overwatering_risk" in result
+        assert result["overwatering_risk"] == []

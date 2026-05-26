@@ -119,12 +119,13 @@ class DailyBriefingAgent(BaseAgent):
         """Calculate watering schedule with weather adjustments."""
         plants = self.get_state("plants")
         if plants is None:
-            return {"plants": [], "tasks_to_create": []}
+            return {"plants": [], "tasks_to_create": [], "overwatering_risk": []}
 
         weather = self.context.get("weather")
         today = datetime.now(timezone.utc).date()
         upcoming_watering = []
         tasks_to_create = []
+        overwatering_risk = []
 
         for plant in plants:
             last_watered = datetime.strptime(plant["last_watered"], "%Y-%m-%d").date()
@@ -138,6 +139,14 @@ class DailyBriefingAgent(BaseAgent):
                 reason = ""
 
             days_until = (next_water - today).days
+
+            effective_interval = (next_water - last_watered).days
+            if weather and effective_interval < plant["frequency_days"] * 0.6:
+                overwatering_risk.append({
+                    "name": plant["name"],
+                    "effective_interval": effective_interval,
+                    "normal_frequency": plant["frequency_days"],
+                })
 
             if days_until <= 7:
                 entry = {
@@ -159,6 +168,7 @@ class DailyBriefingAgent(BaseAgent):
         return {
             "plants": upcoming_watering,
             "tasks_to_create": tasks_to_create,
+            "overwatering_risk": overwatering_risk,
         }
 
     # --- Briefing (Claude CLI with MCP) ---
@@ -194,6 +204,7 @@ class DailyBriefingAgent(BaseAgent):
         plant_section = ""
         plants = plant_data.get("plants", [])
         tasks_to_create = plant_data.get("tasks_to_create", [])
+        overwatering_risk = plant_data.get("overwatering_risk", [])
 
         if plants:
             plant_lines = []
@@ -213,10 +224,23 @@ class DailyBriefingAgent(BaseAgent):
                 task_lines.append(f'- Content: "{t["task_content"]}", due: {t["due_date"]}, priority: p4')
             task_instructions = "\n".join(task_lines)
 
+        advisory_section = ""
+        if overwatering_risk:
+            risk_lines = ["⚠ Watering Advisory — weather is driving unusually frequent watering for:"]
+            for r in overwatering_risk:
+                risk_lines.append(
+                    f"- {r['name']}: next watering in {r['effective_interval']}d "
+                    f"(normal cycle: {r['normal_frequency']}d)"
+                )
+            advisory_section = "\n".join(risk_lines)
+
         return f"""{base_prompt}
 
 ## Pre-computed Plant Data
 {plant_section}
+
+## Watering Advisory
+{advisory_section if advisory_section else "No overwatering concerns."}
 
 ## Plant Todoist Tasks
 {task_instructions if task_instructions else "No plant tasks to create."}
