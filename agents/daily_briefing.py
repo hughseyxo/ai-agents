@@ -121,13 +121,14 @@ class DailyBriefingAgent(BaseAgent):
         """Calculate watering schedule with weather adjustments."""
         plants = self.get_state("plants")
         if plants is None:
-            return {"plants": [], "tasks_to_create": [], "overwatering_risk": []}
+            return {"plants": [], "tasks_to_create": [], "overwatering_risk": [], "heatwave_timing": []}
 
         weather = self.context.get("weather")
         today = datetime.now(timezone.utc).date()
         upcoming_watering = []
         tasks_to_create = []
         overwatering_risk = []
+        heatwave_timing = []
 
         for plant in plants:
             last_watered = datetime.strptime(plant["last_watered"], "%Y-%m-%d").date()
@@ -154,6 +155,9 @@ class DailyBriefingAgent(BaseAgent):
                         "normal_frequency": plant["frequency_days"],
                     })
 
+            if location == "outdoor" and weather and is_heatwave_incoming(weather) and days_until <= 1:
+                heatwave_timing.append(plant["name"])
+
             if days_until <= 7:
                 entry = {
                     "name": plant["name"],
@@ -175,6 +179,7 @@ class DailyBriefingAgent(BaseAgent):
             "plants": upcoming_watering,
             "tasks_to_create": tasks_to_create,
             "overwatering_risk": overwatering_risk,
+            "heatwave_timing": heatwave_timing,
         }
 
     # --- Briefing (Claude CLI with MCP) ---
@@ -211,6 +216,7 @@ class DailyBriefingAgent(BaseAgent):
         plants = plant_data.get("plants", [])
         tasks_to_create = plant_data.get("tasks_to_create", [])
         overwatering_risk = plant_data.get("overwatering_risk", [])
+        heatwave_timing = plant_data.get("heatwave_timing", [])
 
         if plants:
             plant_lines = []
@@ -240,6 +246,13 @@ class DailyBriefingAgent(BaseAgent):
                 )
             advisory_section = "\n".join(risk_lines)
 
+        heatwave_section = ""
+        if heatwave_timing:
+            lines = ["⚠ Heatwave look-ahead — water these outdoor plants this evening or tomorrow morning before temperatures peak:"]
+            for name in heatwave_timing:
+                lines.append(f"- {name}")
+            heatwave_section = "\n".join(lines)
+
         return f"""{base_prompt}
 
 ## Pre-computed Plant Data
@@ -247,6 +260,9 @@ class DailyBriefingAgent(BaseAgent):
 
 ## Watering Advisory
 {advisory_section if advisory_section else "No overwatering concerns."}
+
+## Heatwave Timing
+{heatwave_section if heatwave_section else "No heatwave look-ahead."}
 
 ## Plant Todoist Tasks
 {task_instructions if task_instructions else "No plant tasks to create."}

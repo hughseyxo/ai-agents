@@ -475,3 +475,57 @@ class TestOverwateringRisk:
         result = agent._check_plants()
 
         assert result["overwatering_risk"] == []
+
+
+class TestHeatwaveTiming:
+    """_check_plants should populate heatwave_timing for outdoor plants
+    due within 1 day when a heatwave is incoming."""
+
+    def test_heatwave_timing_key_always_present(self):
+        """heatwave_timing key must exist even when plant list is empty."""
+        agent = _make_agent_with_plants([], HEATWAVE_WEATHER)
+        result = agent._check_plants()
+        assert "heatwave_timing" in result
+        assert result["heatwave_timing"] == []
+
+    def test_outdoor_plant_due_tomorrow_in_heatwave_added(self):
+        """Outdoor plant due in 0-1 days during heatwave → in heatwave_timing.
+
+        last_watered = today - (freq - 1), so base = today+1, outdoor heatwave adj=-2,
+        adjusted = today-1 → days_until = -1, so adjusted <= today+1 → in list.
+        Actually let's use last_watered=today-2, freq=3: base=today+1, outdoor adj=-2,
+        adjusted=today-1, days_until=-1 → still creates a task but also in heatwave_timing.
+
+        Simpler: last_watered=today-1, freq=2: base=today+1, adj=-2, adjusted=today-1,
+        days_until=-1 → adjusted <= today+1 ✓
+        """
+        today = datetime.now(timezone.utc).date()
+        last_watered = (today - timedelta(days=1)).isoformat()
+        plants = [{"name": "Tomato", "frequency_days": 2,
+                   "last_watered": last_watered, "location": "outdoor"}]
+        agent = _make_agent_with_plants(plants, HEATWAVE_WEATHER)
+        result = agent._check_plants()
+
+        assert "Tomato" in result["heatwave_timing"]
+
+    def test_outdoor_plant_with_rain_not_in_heatwave_timing(self):
+        """Rain in forecast → is_heatwave_incoming=False → plant not in heatwave_timing."""
+        today = datetime.now(timezone.utc).date()
+        last_watered = (today - timedelta(days=1)).isoformat()
+        plants = [{"name": "Tomato", "frequency_days": 2,
+                   "last_watered": last_watered, "location": "outdoor"}]
+        agent = _make_agent_with_plants(plants, RAINY_HEATWAVE_WEATHER)
+        result = agent._check_plants()
+
+        assert result["heatwave_timing"] == []
+
+    def test_indoor_plant_not_in_heatwave_timing(self):
+        """Indoor plant is never added to heatwave_timing."""
+        today = datetime.now(timezone.utc).date()
+        last_watered = (today - timedelta(days=1)).isoformat()
+        plants = [{"name": "Monstera", "frequency_days": 2,
+                   "last_watered": last_watered, "location": "indoor"}]
+        agent = _make_agent_with_plants(plants, HEATWAVE_WEATHER)
+        result = agent._check_plants()
+
+        assert result["heatwave_timing"] == []
