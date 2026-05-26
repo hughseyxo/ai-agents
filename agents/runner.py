@@ -28,6 +28,7 @@ AGENT_REGISTRY = {
     "security-audit": "agents.security_audit:SecurityAuditAgent",
     "travel-agent": "agents.travel_agent:TravelAgent",
     "librarian": "agents.librarian:LibrarianAgent",
+    "plant-weather": "agents.plant_weather_agent:PlantWeatherAgent",
 }
 
 
@@ -165,6 +166,7 @@ def main():
     run_parser = subparsers.add_parser("run", help="Run an agent")
     run_parser.add_argument("agent", help="Agent name")
     run_parser.add_argument("--fix", action="store_true", help="Interactive fix mode (security-audit)")
+    run_parser.add_argument("--force", action="store_true", help="Clear dedup and force re-run (daily-briefing)")
     # Travel agent args (ignored by other agents)
     run_parser.add_argument(
         "--mode",
