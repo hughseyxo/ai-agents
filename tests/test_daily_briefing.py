@@ -55,6 +55,26 @@ RAINY_WEATHER = {
     "recent_precip_mm": 8,
 }
 
+HEATWAVE_WEATHER = {
+    "current": {"temp_c": 31, "humidity_pct": 30, "precip_mm": 0},
+    "forecast": [
+        {"date": "2026-05-26", "temp_max_c": 33, "precip_mm": 0},
+        {"date": "2026-05-27", "temp_max_c": 34, "precip_mm": 0},
+        {"date": "2026-05-28", "temp_max_c": 31, "precip_mm": 0},
+    ],
+    "recent_precip_mm": 0,
+}
+
+RAINY_HEATWAVE_WEATHER = {
+    "current": {"temp_c": 31, "humidity_pct": 30, "precip_mm": 0},
+    "forecast": [
+        {"date": "2026-05-26", "temp_max_c": 33, "precip_mm": 8},
+        {"date": "2026-05-27", "temp_max_c": 34, "precip_mm": 0},
+        {"date": "2026-05-28", "temp_max_c": 31, "precip_mm": 0},
+    ],
+    "recent_precip_mm": 0,
+}
+
 
 class TestCheckPlantsWithWeather:
     def test_weather_adjusts_indoor_plant_date(self):
@@ -398,4 +418,60 @@ class TestOverwateringRisk:
         agent = _make_agent_with_plants([], NORMAL_WEATHER)
         result = agent._check_plants()
         assert "overwatering_risk" in result
+        assert result["overwatering_risk"] == []
+
+    def test_high_sensitivity_flagged_at_80_percent(self):
+        """High-sensitivity plant flagged when effective_interval < freq * 0.8.
+
+        freq=5, last_watered=today, hot_dry adj=-2:
+          effective_interval=3, threshold=5*0.8=4.0 → 3 < 4.0 → FLAGGED
+        """
+        today = datetime.now(timezone.utc).date()
+        plants = [{"name": "Cactus", "frequency_days": 5,
+                   "last_watered": today.isoformat(), "location": "indoor",
+                   "water_sensitivity": "high"}]
+        agent = _make_agent_with_plants(plants, HOT_DRY_WEATHER)
+        result = agent._check_plants()
+
+        assert len(result["overwatering_risk"]) == 1
+        assert result["overwatering_risk"][0]["name"] == "Cactus"
+
+    def test_low_sensitivity_not_flagged_at_40_percent(self):
+        """Low-sensitivity plant not flagged when effective_interval >= freq * 0.4.
+
+        freq=5, last_watered=today, hot_dry adj=-2:
+          effective_interval=3, threshold=5*0.4=2.0 → 3 >= 2.0 → NOT flagged
+        """
+        today = datetime.now(timezone.utc).date()
+        plants = [{"name": "Fern", "frequency_days": 5,
+                   "last_watered": today.isoformat(), "location": "indoor",
+                   "water_sensitivity": "low"}]
+        agent = _make_agent_with_plants(plants, HOT_DRY_WEATHER)
+        result = agent._check_plants()
+
+        assert result["overwatering_risk"] == []
+
+    def test_missing_sensitivity_defaults_to_medium(self):
+        """Plant without water_sensitivity field defaults to medium (0.6 threshold).
+
+        freq=4, last_watered=today, hot_dry adj=-2:
+          effective_interval=2, threshold=4*0.6=2.4 → 2 < 2.4 → FLAGGED
+        """
+        today = datetime.now(timezone.utc).date()
+        plants = [{"name": "OldPlant", "frequency_days": 4,
+                   "last_watered": today.isoformat(), "location": "indoor"}]
+        agent = _make_agent_with_plants(plants, HOT_DRY_WEATHER)
+        result = agent._check_plants()
+
+        assert len(result["overwatering_risk"]) == 1
+
+    def test_outdoor_plant_never_flagged_for_overwatering(self):
+        """Outdoor plants are excluded from overwatering_risk regardless of sensitivity."""
+        today = datetime.now(timezone.utc).date()
+        plants = [{"name": "Tomato", "frequency_days": 5,
+                   "last_watered": today.isoformat(), "location": "outdoor",
+                   "water_sensitivity": "high"}]
+        agent = _make_agent_with_plants(plants, HOT_DRY_WEATHER)
+        result = agent._check_plants()
+
         assert result["overwatering_risk"] == []

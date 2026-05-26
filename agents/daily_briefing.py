@@ -11,10 +11,12 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .base import BaseAgent, REPO_ROOT
-from .plant_weather import adjust_watering_date
+from .plant_weather import adjust_watering_date, is_heatwave_incoming
 from .weather import fetch_weather
 
 PERSONAL_PROJECT_ID = "6Crf3cH2RF5v86wc"
+
+SENSITIVITY_THRESHOLDS = {"high": 0.8, "medium": 0.6, "low": 0.4}
 
 _SYNC_PROMPT = f"""\
 You are a data-fetch step. Your only job is to find recently completed plant watering tasks in Todoist and return JSON.
@@ -141,12 +143,16 @@ class DailyBriefingAgent(BaseAgent):
             days_until = (next_water - today).days
 
             effective_interval = (next_water - last_watered).days
-            if weather and effective_interval < plant["frequency_days"] * 0.6:
-                overwatering_risk.append({
-                    "name": plant["name"],
-                    "effective_interval": effective_interval,
-                    "normal_frequency": plant["frequency_days"],
-                })
+            location = plant.get("location", "indoor")
+            if location == "indoor" and weather:
+                sensitivity = plant.get("water_sensitivity", "medium")
+                threshold = SENSITIVITY_THRESHOLDS.get(sensitivity, 0.6)
+                if effective_interval < plant["frequency_days"] * threshold:
+                    overwatering_risk.append({
+                        "name": plant["name"],
+                        "effective_interval": effective_interval,
+                        "normal_frequency": plant["frequency_days"],
+                    })
 
             if days_until <= 7:
                 entry = {
