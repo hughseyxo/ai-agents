@@ -6,7 +6,6 @@ Pure functions — no side effects, no I/O. Fully testable.
 from datetime import date, timedelta
 
 MAX_ADJUSTMENT = 3
-MIN_INTERVAL_DAYS = 2
 
 
 def calculate_adjustment(plant: dict, weather: dict) -> int:
@@ -91,18 +90,6 @@ def adjust_watering_date(base_date: date, frequency_days: int,
         return base_date, ""
 
     adjusted = base_date + timedelta(days=adj)
-
-    # Never reduce effective interval below MIN_INTERVAL_DAYS
-    last_watered_str = plant.get("last_watered")
-    if last_watered_str and adj < 0:
-        from datetime import datetime
-        last_watered = datetime.strptime(last_watered_str, "%Y-%m-%d").date()
-        effective_interval = (adjusted - last_watered).days
-        if effective_interval < MIN_INTERVAL_DAYS:
-            adjusted = last_watered + timedelta(days=MIN_INTERVAL_DAYS)
-            adj = (adjusted - base_date).days
-            if adj == 0:
-                return base_date, ""
 
     reason = _build_reason(adj, plant, weather)
     return adjusted, reason

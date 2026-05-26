@@ -237,15 +237,23 @@ class TestAdjustWateringDate:
         assert adjusted > base
         assert "cold" in reason.lower() or "humid" in reason.lower()
 
-    def test_never_reduces_interval_below_2_days(self):
-        # Plant with 3-day frequency, -2 adjustment would make it 1 day
-        base = date(2026, 5, 13)  # only 3 days after last_watered (May 10)
-        plant = _plant(frequency_days=3)
+    def test_heat_adjustment_applied_without_floor(self):
+        # -2 adjustment on a 3-day cycle plant watered yesterday:
+        # base = yesterday + 3 = today + 2, adjusted = today + 2 - 2 = today
+        # With MIN_INTERVAL_DAYS removed, this lands on today (effective_interval=1).
+        yesterday = date(2026, 5, 9)
+        base = date(2026, 5, 12)  # yesterday + 3
+        plant = {
+            "name": "Test Plant",
+            "frequency_days": 3,
+            "last_watered": yesterday.isoformat(),
+            "location": "indoor",
+        }
         adjusted, reason = adjust_watering_date(
             base, 3, plant,
             _weather(temp_c=34, humidity_pct=30))
-        last_watered = date(2026, 5, 10)
-        assert (adjusted - last_watered).days >= 2
+        assert adjusted == date(2026, 5, 10)
+        assert reason != ""
 
     def test_reason_string_describes_adjustment(self):
         base = date(2026, 5, 17)
