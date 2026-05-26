@@ -22,6 +22,7 @@ YOPFLIX_CONFIG = str(Path.home() / "git" / "yopflix" / "seedbox" / "config.yaml"
 REPO_ROOT = Path(__file__).parent.parent
 CEST_OFFSET = 2  # UTC+2
 SUNLIGHT_VALUES = ("full sun", "partial shade", "shade")
+SENSITIVITY_VALUES = ("high", "medium", "low")
 
 
 def get_agent_status() -> str:
@@ -47,6 +48,7 @@ def get_plant_status() -> str:
     try:
         db = AgentDB(DB_PATH)
         plants = db.get_state("daily-briefing", "plants") or []
+        cache = {r["plant_name"]: r for r in db.get_plant_weather_cache()}
         db.close()
         if not plants:
             return "No plants tracked."
@@ -54,7 +56,14 @@ def get_plant_status() -> str:
         rows = []
         for p in plants:
             last = date.fromisoformat(p["last_watered"])
-            next_water = last + timedelta(days=p["frequency_days"])
+            base_date = last + timedelta(days=p["frequency_days"])
+            cached = cache.get(p["name"])
+            if cached:
+                next_water = date.fromisoformat(cached["adjusted_date"])
+                reason = f" [{cached['adjustment_reason']}]" if cached.get("adjustment_reason") else ""
+            else:
+                next_water = base_date
+                reason = ""
             days_left = (next_water - today).days
             if days_left < 0:
                 flag = f" ⚠ OVERDUE by {-days_left}d"
@@ -67,7 +76,7 @@ def get_plant_status() -> str:
                 assessed = f", assessed {p['last_assessment']['date']}"
             sun = p.get("sunlight", "")
             loc_str = f"{p['location']}, {sun}" if sun else p['location']
-            rows.append((next_water, f"{p['name']} ({loc_str}): next {next_water}{flag}{assessed}"))
+            rows.append((next_water, f"{p['name']} ({loc_str}): next {next_water}{flag}{reason}{assessed}"))
         rows.sort()
         return "\n".join(r[1] for r in rows)
     except Exception as e:
@@ -307,6 +316,32 @@ def research_plant_sunlight(plant_name: str) -> str:
         return f"Research failed: {e}"
 
 
+def research_plant_water_sensitivity(plant_name: str) -> str:
+    prompt = (
+        f"What is the water sensitivity of a {plant_name} plant? "
+        "High sensitivity means it is very prone to overwatering (cacti, succulents, snake plant, ZZ plant). "
+        "Low sensitivity means it prefers consistently moist soil (ferns, peace lily, carnivorous plants). "
+        "Medium covers most common houseplants (pothos, monstera, philodendron). "
+        "Reply with exactly one of: 'high', 'medium', or 'low'. "
+        "Reply with only that word and nothing else."
+    )
+    try:
+        res = subprocess.run(
+            ["gemini", "-y", "-o", "text"],
+            input=prompt,
+            capture_output=True, text=True, timeout=30,
+            cwd=str(REPO_ROOT),
+        )
+        if res.returncode == 0 and res.stdout.strip():
+            answer = res.stdout.strip().lower()
+            for val in SENSITIVITY_VALUES:
+                if val in answer:
+                    return val
+        return f"Could not determine water sensitivity: {res.stderr[:100]}"
+    except Exception as e:
+        return f"Research failed: {e}"
+
+
 def add_plant(name: str, frequency_days: int, location: str = "indoor", sunlight: str = "") -> str:
     try:
         db = AgentDB(DB_PATH)
@@ -315,17 +350,26 @@ def add_plant(name: str, frequency_days: int, location: str = "indoor", sunlight
         if any(p["name"].lower() == name_lower for p in plants):
             db.close()
             return f"A plant named '{name}' already exists."
+
+        sensitivity = research_plant_water_sensitivity(name)
+        if sensitivity not in SENSITIVITY_VALUES:
+            sensitivity = "medium"
+
         plants.append({
             "name": name,
             "frequency_days": frequency_days,
             "last_watered": date.today().isoformat(),
             "location": location,
             "sunlight": sunlight,
+            "water_sensitivity": sensitivity,
         })
         db.set_state("daily-briefing", "plants", plants)
         db.close()
         sun_str = f", {sunlight}" if sunlight else ""
-        return f"{name} added ({location}{sun_str}, water every {frequency_days} days). Last watered set to today."
+        return (
+            f"{name} added ({location}{sun_str}, water every {frequency_days} days, "
+            f"sensitivity: {sensitivity}). Last watered set to today."
+        )
     except Exception as e:
         return f"Failed to add plant: {e}"
 

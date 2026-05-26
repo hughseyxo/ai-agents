@@ -29,6 +29,8 @@ from tools import (
     save_plant_assessment,
     research_plant_watering,
     research_plant_sunlight,
+    research_plant_water_sensitivity,
+    add_plant,
 )
 
 FAKE_PLANTS = [
@@ -740,3 +742,89 @@ def test_get_plant_status_no_sunlight_omits_field():
         result = get_plant_status()
     assert "unknown" not in result
     assert "full sun" not in result
+
+
+def test_get_plant_status_shows_adjusted_date_and_reason():
+    mock_db = MagicMock()
+    mock_db.get_state.return_value = [
+        {"name": "Monstera", "frequency_days": 7, "last_watered": "2026-05-17", "location": "indoor"}
+    ]
+    mock_db.get_plant_weather_cache.return_value = [
+        {"plant_name": "Monstera", "adjusted_date": "2026-05-26", "adjustment_reason": "2d later — cold & humid"}
+    ]
+    with patch("tools.AgentDB", return_value=mock_db):
+        result = get_plant_status()
+    assert "2026-05-26" in result
+    assert "cold" in result.lower() or "humid" in result.lower()
+
+
+def test_get_plant_status_uses_base_date_when_no_cache():
+    mock_db = MagicMock()
+    mock_db.get_state.return_value = [
+        {"name": "Monstera", "frequency_days": 7, "last_watered": "2026-05-17", "location": "indoor"}
+    ]
+    mock_db.get_plant_weather_cache.return_value = []
+    with patch("tools.AgentDB", return_value=mock_db):
+        result = get_plant_status()
+    assert "2026-05-24" in result  # base date: 2026-05-17 + 7 days
+
+
+# ---------------------------------------------------------------------------
+# research_plant_water_sensitivity
+# ---------------------------------------------------------------------------
+
+def test_research_plant_water_sensitivity_returns_valid_value(mocker):
+    mock_run = mocker.patch("tools.subprocess.run")
+    mock_run.return_value = MagicMock(returncode=0, stdout="high\n")
+    result = research_plant_water_sensitivity("Cactus")
+    assert result == "high"
+    assert mock_run.call_args.kwargs["input"] is not None
+    assert "Cactus" in mock_run.call_args.kwargs["input"]
+
+
+def test_research_plant_water_sensitivity_extracts_from_verbose_response(mocker):
+    mock_run = mocker.patch("tools.subprocess.run")
+    mock_run.return_value = MagicMock(returncode=0, stdout="The cactus has high water sensitivity.\n")
+    result = research_plant_water_sensitivity("Cactus")
+    assert result == "high"
+
+
+def test_research_plant_water_sensitivity_returns_medium_on_unknown(mocker):
+    mock_run = mocker.patch("tools.subprocess.run")
+    mock_run.return_value = MagicMock(returncode=0, stdout="I don't know\n")
+    result = research_plant_water_sensitivity("Cactus")
+    assert "could not" in result.lower() or "failed" in result.lower() or result not in ("high", "medium", "low")
+
+
+def test_research_plant_water_sensitivity_failure_returns_error(mocker):
+    mock_run = mocker.patch("tools.subprocess.run")
+    mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="timeout")
+    result = research_plant_water_sensitivity("Cactus")
+    assert "could not" in result.lower() or "failed" in result.lower()
+
+
+# ---------------------------------------------------------------------------
+# add_plant with water_sensitivity
+# ---------------------------------------------------------------------------
+
+def test_add_plant_stores_water_sensitivity(mocker):
+    mock_run = mocker.patch("tools.subprocess.run")
+    mock_run.return_value = MagicMock(returncode=0, stdout="high\n")
+    mock_db = MagicMock()
+    mock_db.get_state.return_value = []
+    with patch("tools.AgentDB", return_value=mock_db):
+        result = add_plant("Cactus", 14, "indoor")
+    saved = mock_db.set_state.call_args[0][2]
+    assert saved[0]["water_sensitivity"] == "high"
+    assert "sensitivity: high" in result
+
+
+def test_add_plant_defaults_sensitivity_to_medium_on_research_failure(mocker):
+    mock_run = mocker.patch("tools.subprocess.run")
+    mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="error")
+    mock_db = MagicMock()
+    mock_db.get_state.return_value = []
+    with patch("tools.AgentDB", return_value=mock_db):
+        result = add_plant("Cactus", 14, "indoor")
+    saved = mock_db.set_state.call_args[0][2]
+    assert saved[0]["water_sensitivity"] == "medium"
