@@ -7,7 +7,7 @@ from datetime import date
 
 import pytest
 
-from agents.plant_weather import calculate_adjustment, adjust_watering_date
+from agents.plant_weather import calculate_adjustment, adjust_watering_date, is_heatwave_incoming
 
 
 # --- Weather data fixtures ---
@@ -262,3 +262,37 @@ class TestAdjustWateringDate:
             _weather(recent_precip_mm=10))
         assert reason != ""
         assert "rain" in reason.lower()
+
+
+# ===================================================================
+# is_heatwave_incoming
+# ===================================================================
+
+class TestIsHeatwaveIncoming:
+    def test_heatwave_detected(self):
+        weather = _weather(forecast=[
+            {"date": "2026-05-26", "temp_max_c": 33, "precip_mm": 0},
+            {"date": "2026-05-27", "temp_max_c": 34, "precip_mm": 0},
+            {"date": "2026-05-28", "temp_max_c": 31, "precip_mm": 0},
+        ])
+        assert is_heatwave_incoming(weather) is True
+
+    def test_heatwave_with_rain_returns_false(self):
+        weather = _weather(forecast=[
+            {"date": "2026-05-26", "temp_max_c": 33, "precip_mm": 8},
+            {"date": "2026-05-27", "temp_max_c": 34, "precip_mm": 0},
+            {"date": "2026-05-28", "temp_max_c": 31, "precip_mm": 0},
+        ])
+        assert is_heatwave_incoming(weather) is False
+
+    def test_only_one_hot_day_returns_false(self):
+        weather = _weather(forecast=[
+            {"date": "2026-05-26", "temp_max_c": 33, "precip_mm": 0},
+            {"date": "2026-05-27", "temp_max_c": 25, "precip_mm": 0},
+            {"date": "2026-05-28", "temp_max_c": 22, "precip_mm": 0},
+        ])
+        assert is_heatwave_incoming(weather) is False
+
+    def test_empty_forecast_returns_false(self):
+        weather = _weather(forecast=[])
+        assert is_heatwave_incoming(weather) is False

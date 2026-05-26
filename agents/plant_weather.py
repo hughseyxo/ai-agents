@@ -95,6 +95,14 @@ def adjust_watering_date(base_date: date, frequency_days: int,
     return adjusted, reason
 
 
+def is_heatwave_incoming(weather: dict) -> bool:
+    """Return True when ≥2 forecast days >30°C and no forecast day has ≥5mm rain."""
+    forecast = weather.get("forecast", [])
+    hot_days = sum(1 for f in forecast if f["temp_max_c"] > 30)
+    all_dry = all(f["precip_mm"] < 5 for f in forecast)
+    return hot_days >= 2 and all_dry
+
+
 def _build_reason(adj: int, plant: dict, weather: dict) -> str:
     """Build a human-readable reason for the adjustment."""
     location = plant.get("location", "indoor")
