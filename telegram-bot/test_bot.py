@@ -389,7 +389,7 @@ async def test_handle_photo_no_caption_triggers_visual_id(mocker):
 
     await handle_photo(update, context)
 
-    update.message.reply_text.assert_called_once_with("Healthy.")
+    update.message.reply_text.assert_called_once_with("**Monstera**\n\nHealthy.")
 
 
 @pytest.mark.asyncio
@@ -411,7 +411,7 @@ async def test_handle_photo_llm_resolves_common_name(mocker):
 
     await handle_photo(update, context)
 
-    update.message.reply_text.assert_called_once_with("Looks healthy.")
+    update.message.reply_text.assert_called_once_with("**Passiflora**\n\nLooks healthy.")
 
 
 @pytest.mark.asyncio
@@ -453,7 +453,7 @@ async def test_handle_photo_happy_path(mocker):
 
     await handle_photo(update, context)
 
-    update.message.reply_text.assert_called_once_with("Leaves look healthy.")
+    update.message.reply_text.assert_called_once_with("**Monstera**\n\nLeaves look healthy.")
 
 
 @pytest.mark.asyncio
@@ -475,7 +475,7 @@ async def test_handle_photo_assess_caption_uses_visual_id(mocker):
 
     await handle_photo(update, context)
 
-    update.message.reply_text.assert_called_once_with("Looks healthy.")
+    update.message.reply_text.assert_called_once_with("**Monstera**\n\nLooks healthy.")
 
 
 @pytest.mark.asyncio

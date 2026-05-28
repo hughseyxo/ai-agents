@@ -596,7 +596,7 @@ def _analyze_plant_image(image_bytes: bytes, plant: dict) -> tuple[str, dict | N
             text = _re.sub(r"\n?```$", "", text.strip())
         parsed = json.loads(text)
         # Build display text from structured data
-        display = f"**{parsed.get('status', 'Assessment')}**\n\n{parsed.get('summary', '')}"
+        display = f"**{plant['name']}** — {parsed.get('status', 'Assessment')}\n\n{parsed.get('summary', '')}"
         obs = parsed.get("observations", [])
         if obs:
             display += "\n\n**Observations:**\n" + "\n".join(f"• {o}" for o in obs)
@@ -769,7 +769,9 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         save_result = save_plant_assessment(plant["name"], display_text)
         if "saved" not in save_result.lower():
             logger.warning(f"Failed to save plant assessment: {save_result}")
-        for chunk in [display_text[i:i+4000] for i in range(0, len(display_text), 4000)]:
+        header = f"**{plant['name']}**\n\n"
+        full_text = header + display_text
+        for chunk in [full_text[i:i+4000] for i in range(0, len(full_text), 4000)]:
             await update.message.reply_text(chunk)
 
 
