@@ -8,7 +8,7 @@ Plant watering schedules were fixed intervals (`frequency_days`). A heatwave or 
 
 ## Design decisions
 - **Weather API:** Open-Meteo (free, no API key, Leiden: 52.16°N, 4.49°E)
-- **Weather fetch in Python**, not LLM — deterministic, testable, works identically for both Claude and Gemini CLI
+- **Weather fetch in Python**, not LLM — deterministic, testable, works identically for both Claude and Antigravity CLI
 - **Adjustments are automatic** — shift the actual watering date and Todoist task, not just advisory
 
 ## Architecture

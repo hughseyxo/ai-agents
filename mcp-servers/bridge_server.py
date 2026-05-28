@@ -98,7 +98,7 @@ def _handle_librarian_create_plan(proposal_id: str) -> tuple[int, str]:
     return 200, (
         f"<h1>&#10003; Plan Created</h1>"
         f"<p>Written to <code>{proposal['plan_file']}</code>.</p>"
-        f"<p><b>Next Step:</b> Run Gemini CLI and ask it to implement this plan.</p>"
+        f"<p><b>Next Step:</b> Run Antigravity CLI and ask it to implement this plan.</p>"
     )
 
 

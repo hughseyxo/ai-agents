@@ -601,7 +601,7 @@ git commit -m "feat: add heatwave look-ahead task creation to plant_weather_agen
 
 ### Task 5: Add `research_plant_water_sensitivity()` to `telegram-bot/tools.py`
 
-Same pattern as `research_plant_sunlight()` — calls Gemini via stdin, validates against allowed values, defaults to "medium" if unclear.
+Same pattern as `research_plant_sunlight()` — calls Antigravity via stdin, validates against allowed values, defaults to "medium" if unclear.
 
 **Files:**
 - Modify: `telegram-bot/tools.py`
@@ -729,7 +729,7 @@ def research_plant_water_sensitivity(plant_name: str) -> str:
     )
     try:
         res = subprocess.run(
-            ["gemini", "-y", "-o", "text"],
+            ["antigravity", "-y", "-o", "text"],
             input=prompt,
             capture_output=True, text=True, timeout=30,
             cwd=str(REPO_ROOT),
@@ -842,7 +842,7 @@ git commit -m "docs: update plant data model in CLAUDE.md with water_sensitivity
 | Spec requirement | Task |
 |---|---|
 | `water_sensitivity` field "high"/"medium"/"low" | Task 5 (add_plant stores it) |
-| Auto-researched via Gemini at add_plant() time | Task 5 |
+| Auto-researched via Antigravity at add_plant() time | Task 5 |
 | Sensitivity thresholds: high=0.8, medium=0.6, low=0.4 | Task 2 |
 | Indoor-only overwatering check | Task 2 |
 | `is_heatwave_incoming()` pure helper | Task 1 |

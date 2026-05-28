@@ -1,6 +1,6 @@
 # AI Agents
 
-Personal AI agent workspace running on an OVH VPS. Automates daily tasks via scheduled Python agents that use Claude (with Gemini fallback) as the reasoning layer.
+Personal AI agent workspace running on an OVH VPS. Automates daily tasks via scheduled Python agents that use Claude (with Antigravity fallback) as the reasoning layer.
 
 ## What's running
 
@@ -73,7 +73,7 @@ Plants are tracked in SQLite with weather-aware scheduling (Open-Meteo, Leiden).
 
 ## MCP Integrations
 
-Configured for both Claude (`.mcp.json`) and Gemini (`gemini mcp`):
+Configured for both Claude (`.mcp.json`) and Antigravity (`mcp_config.json`):
 
 - **Todoist** — task management
 - **Google Calendar** — event listing and creation

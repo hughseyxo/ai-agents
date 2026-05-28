@@ -1,5 +1,6 @@
 .claude/
 .gemini/
+.antigravitycli/
 output/*
 !output/.gitkeep
 docs/agent-learnings/

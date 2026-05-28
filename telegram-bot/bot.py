@@ -78,7 +78,7 @@ PLANT_ASSESSMENT_DIR = Path(__file__).parent.parent / "docs" / "plants"
 _ASSESSMENT_PROMPT_PATH = Path(__file__).parent.parent / "agents" / "prompts" / "plant_photo_assessment.md"
 PLANT_ASSESSMENT_SYSTEM = _ASSESSMENT_PROMPT_PATH.read_text() if _ASSESSMENT_PROMPT_PATH.exists() else PLANT_HEALTH_SYSTEM
 
-# State-reading tools — called in Gemini fallback to build context snapshot
+# State-reading tools — called in Antigravity fallback to build context snapshot
 STATE_TOOL_FUNCTIONS = {
     "get_agent_status": get_agent_status,
     "get_plant_status": get_plant_status,
@@ -391,8 +391,8 @@ TOOLS = [
 ]
 
 
-def _call_gemini_fallback(user_message: str, system_prompt: str) -> str:
-    """Execute state-reading tools, inject results, call Gemini CLI as a flat prompt."""
+def _call_antigravity_fallback(user_message: str, system_prompt: str) -> str:
+    """Execute state-reading tools, inject results, call Antigravity CLI as a flat prompt."""
     state_parts = []
     for name, fn in STATE_TOOL_FUNCTIONS.items():
         try:
@@ -409,14 +409,14 @@ def _call_gemini_fallback(user_message: str, system_prompt: str) -> str:
     )
 
     res = subprocess.run(
-        ["gemini", "-y", "-o", "text"],
+        ["agy", "-y", "-o", "text"],
         input=prompt,
         capture_output=True, text=True, timeout=60,
         cwd=str(Path(__file__).parent),
     )
     if res.returncode == 0 and res.stdout.strip():
         return res.stdout.strip()
-    raise RuntimeError(f"Gemini CLI failed (rc={res.returncode}): {res.stderr[:200]}")
+    raise RuntimeError(f"Antigravity CLI failed (rc={res.returncode}): {res.stderr[:200]}")
 
 
 def _resolve_plant_name(caption: str, plants: list[dict]) -> dict | None:
@@ -580,13 +580,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             await update.message.reply_text("Sorry, unexpected error. Please try again.")
             return
 
-    # All OpenRouter models exhausted — fall back to Gemini CLI
-    logger.warning("All OpenRouter models failed, falling back to Gemini CLI")
+    # All OpenRouter models exhausted — fall back to Antigravity CLI
+    logger.warning("All OpenRouter models failed, falling back to Antigravity CLI")
     try:
-        reply = _call_gemini_fallback(update.message.text, SYSTEM_PROMPT)
+        reply = _call_antigravity_fallback(update.message.text, SYSTEM_PROMPT)
         await update.message.reply_text(reply)
     except Exception as e:
-        logger.error(f"Gemini fallback failed: {e}")
+        logger.error(f"Antigravity fallback failed: {e}")
         await update.message.reply_text("All AI backends unavailable. Please try again later.")
 
 

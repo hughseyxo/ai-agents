@@ -3,15 +3,15 @@
 Personal AI agent workspace for automating day-to-day tasks and learning AI automation.
 
 # Multi-LLM Setup
-- This codebase is worked on by both **Claude Code** (codename: eagna) and **Gemini CLI**
-- **Gemini is the primary agent** for all automated tasks to mitigate Claude usage spikes.
-- Claude acts as a fallback if Gemini fails (timeouts, logic errors, etc.).
+- This codebase is worked on by both **Claude Code** (codename: eagna) and **Antigravity CLI** (agy)
+- **Antigravity is the primary agent** for all automated tasks to mitigate Claude usage spikes.
+- Claude acts as a fallback if Antigravity fails (timeouts, logic errors, etc.).
 - **CLAUDE.md is the single source of truth** — both agents read it. Keep it updated with:
   - New files, agents, or scripts added to the project
   - New conventions or architectural decisions
   - In-progress plans or migration states
   - Any non-obvious context a fresh session would need
-- GEMINI.md defers to CLAUDE.md (do not duplicate rules there)
+- .antigravity.md defers to CLAUDE.md (do not duplicate rules there)
 
 # Token Efficiency Rules
 - **Be terse.** Short answers, no filler, no restating what I said.
@@ -82,7 +82,7 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 │   ├── test_security_audit.py  # Cloudflare IP + Shodan exposure tests
 │   └── test_mealsave_tiktok.py # TikTok caption metadata fetch tests
 ├── docs/               # Design docs (mandatory for non-trivial changes)
-│   ├── llm-failover.md         # Claude→Gemini failover design doc
+│   ├── llm-failover.md         # Claude→Antigravity failover design doc
 │   ├── weather-aware-plant-watering.md  # Weather-based watering adjustments
 │   ├── mealsave-tiktok-and-telegram.md  # TikTok OCR + Telegram bot design
 │   ├── hermes-evaluation.md    # Summary of failed CLI-proxy/local-inference efforts
@@ -104,16 +104,16 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 
 # Agent Conventions
 - Agents are Python classes in `agents/` extending `BaseAgent`
-- **Dual-CLI rule:** All agent Python code must be runnable by both Claude and Gemini CLI. No Claude-specific or Gemini-specific dependencies in Python. LLM-specific adaptations happen in `BaseAgent.synthesize()` only.
+- **Dual-CLI rule:** All agent Python code must be runnable by both Claude and Antigravity CLI. No Claude-specific or Antigravity-specific dependencies in Python. LLM-specific adaptations happen in `BaseAgent.synthesize()` only.
 - Execution model: Python handles lifecycle, state (SQLite), retry, dedup, and deterministic logic (e.g. plant watering, weather, RSS fetching). LLM CLI (with MCP tools) handles data synthesis, formatting, and email sending.
-- **Model selection:** Set `model = "claude-sonnet-4-6"` (or haiku/opus) on the agent class. `BaseAgent.synthesize()` maps these to appropriate Gemini models when using Gemini, or passes them directly to Claude.
-- **Per-agent provider override:** Set `providers = [...]` on the agent class to change provider order. Default is Gemini-first; `news_briefing` overrides to Claude-first. See `BaseAgent.PROVIDERS` for the full list.
-- **LLM failover & Timeouts:** `BaseAgent.synthesize()` tries providers in order, adapting prompts for Gemini at runtime.
+- **Model selection:** Set `model = "claude-sonnet-4-6"` (or haiku/opus) on the agent class. `BaseAgent.synthesize()` maps these to appropriate Antigravity models when using Antigravity, or passes them directly to Claude.
+- **Per-agent provider override:** Set `providers = [...]` on the agent class to change provider order. Default is Antigravity-first; `news_briefing` overrides to Claude-first. See `BaseAgent.PROVIDERS` for the full list.
+- **LLM failover & Timeouts:** `BaseAgent.synthesize()` tries providers in order, adapting prompts for Antigravity at runtime.
   - **Timeouts:** A 600s timeout is applied to LLM calls. If a step marked with `side_effects: True` times out, the agent skips retries to avoid duplicate actions (e.g. sending multiple emails).
 - **On-demand agents:** Set `schedule = ""` — they won't appear in crontab but can be triggered manually or via Telegram bot. Pass extra args via `configure(args)` called by `cmd_run` in runner.py.
 
 # Security & Git Workflow
-- **Security Audit Before Push:** Gemini MUST run the security audit agent (`run-agent.sh security-audit`) before every `git push` to a public branch. If any "Critical" or "High" severity findings are found in unpushed or staged changes (Check 16), the push MUST be aborted until fixed or explicitly exempted by the user.
+- **Security Audit Before Push:** Antigravity MUST run the security audit agent (`run-agent.sh security-audit`) before every `git push` to a public branch. If any "Critical" or "High" severity findings are found in unpushed or staged changes (Check 16), the push MUST be aborted until fixed or explicitly exempted by the user.
 - **Atomic Commits:** Prefer small, focused commits with clear descriptions.
 - **No Secrets:** Never commit `.env`, `credentials.json`, or any files containing API keys or private data.
 - **Media Files:** Do not commit `.mp4`, `.mkv`, or other large media files downloaded by agents.
@@ -121,7 +121,7 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 - Run via: `run-agent.sh <agent-name>` or `python3 -m agents <agent-name>`
 - Each agent declares its own cron schedule; `python3 -m agents install-cron` writes crontab entries
 - Agent state lives in `data/agents.db` (SQLite) — never store secrets there
-- MCP servers (Todoist, Calendar, Gmail) are used via LLM CLI (Claude or Gemini), not called directly from Python. Both CLIs have identical MCP server configs — Claude via `.mcp.json`, Gemini via `gemini mcp add` (project scope).
+- MCP servers (Todoist, Calendar, Gmail) are used via LLM CLI (Claude or Antigravity), not called directly from Python. Both CLIs have identical MCP server configs — Claude via `.mcp.json`, Antigravity via `~/.antigravity/antigravity-cli/mcp_config.json`.
 - Step failure handling: if a step exhausts retries, execution continues but the run is marked `partial_failure` in the DB (not `success`). Check `_failed_steps` in `report()` if you need to adjust output.
 - Agents log operational notes (feed failures, API quirks, unexpected behavior) to `docs/agent-notes.md` (gitignored) to save tokens on future runs
 - All cron schedules target 6:00 AM Amsterdam time (CEST = UTC+2, so 04:00 UTC)
@@ -133,7 +133,7 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 
 # Plant Watering Tracker
 - Data lives in `data/agents.db` (SQLite state table); CLI tool is `plant.sh` (add/list/remove/--outdoor)
-- Plant data model: `{name, frequency_days, last_watered, location, sunlight, water_sensitivity}` — location is `"indoor"` or `"outdoor"`; water_sensitivity is `"high"/"medium"/"low"` (auto-researched via Gemini at add time, defaults to `"medium"`)
+- Plant data model: `{name, frequency_days, last_watered, location, sunlight, water_sensitivity}` — location is `"indoor"` or `"outdoor"`; water_sensitivity is `"high"/"medium"/"low"` (auto-researched via Antigravity at add time, defaults to `"medium"`)
 - **Weather-aware:** `PlantWeatherAgent` runs hourly and writes adjusted dates to `plant_weather_cache` table. `get_plant_status()` in the concierge bot reads from this cache. Daily briefing also applies adjustments independently for its email output.
   - Indoor: ±1-2 days based on temp/humidity (subtle)
   - Outdoor: ±1-3 days based on rain, heatwaves, dry spells (larger adjustments)
@@ -142,7 +142,7 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 - **When adding a plant without an explicit frequency:** search the web for recommended indoor watering cadence, check at least 3 sources, and use the consensus value. Do NOT default to 7 days.
 
 # Available MCP Integrations
-Configured for both Claude (`.mcp.json`) and Gemini (`gemini mcp` project scope):
+Configured for both Claude (`.mcp.json`) and Antigravity (`mcp_config.json`):
 - **Todoist** — remote HTTP MCP (`ai.todoist.net/mcp`). Task management (find-tasks, add-tasks, complete-tasks, etc.)
 - **Google Calendar** — local stdio MCP (`mcp-servers/calendar_server.py`). Event listing, creation, scheduling
 - **Gmail** — local stdio MCP (`mcp-servers/gmail_server.py`). Search threads, send/draft emails, label management

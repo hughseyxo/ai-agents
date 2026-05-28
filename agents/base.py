@@ -122,12 +122,12 @@ class BaseAgent:
         """Format + deliver results. Override in subclass."""
         raise NotImplementedError
 
-    # --- LLM CLI synthesis (Gemini → Claude failover) ---
+    # --- LLM CLI synthesis (Antigravity → Claude failover) ---
 
     PROVIDERS = [
         {
-            "name": "gemini",
-            "cmd_prefix": ["gemini", "-y", "-p"],
+            "name": "antigravity",
+            "cmd_prefix": ["agy", "-y", "-p"],
             "cmd_suffix": ["-o", "text"],
             "adapt_prompt": True,
         },
@@ -143,7 +143,7 @@ class BaseAgent:
     _NON_RETRIABLE = ["context_length", "invalid_request", "too long"]
 
     def synthesize(self, prompt: str) -> str:
-        """Invoke LLM CLI with MCP access. Tries Gemini first, falls back to Claude.
+        """Invoke LLM CLI with MCP access. Tries Antigravity first, falls back to Claude.
 
         Timeouts are terminal — they do NOT trigger failover. A killed CLI may
         have already executed MCP side effects (sent email, created tasks);
@@ -157,7 +157,7 @@ class BaseAgent:
 
         last_error = None
         for provider in (self.providers or self.PROVIDERS):
-            p_prompt = self._adapt_prompt_for_gemini(prompt) if provider["adapt_prompt"] else prompt
+            p_prompt = self._adapt_prompt_for_antigravity(prompt) if provider["adapt_prompt"] else prompt
             cmd = list(provider["cmd_prefix"]) + [p_prompt] + list(provider["cmd_suffix"])
             
             if provider["name"] == "claude" and self.model:
@@ -200,9 +200,9 @@ class BaseAgent:
         raise RuntimeError(f"All LLM providers failed. Last error: {last_error}")
 
     @staticmethod
-    def _adapt_prompt_for_gemini(prompt: str) -> str:
-        """Adapt Claude-specific prompt features for Gemini CLI."""
-        # Strip ToolSearch instructions — Gemini loads all tools immediately
+    def _adapt_prompt_for_antigravity(prompt: str) -> str:
+        """Adapt Claude-specific prompt features for Antigravity CLI."""
+        # Strip ToolSearch instructions — Antigravity loads all tools immediately
         prompt = re.sub(
             r'## Step 1: Import MCP tools.*?(?=## Step 2)',
             '## Step 1: Tools are available\n'
@@ -213,7 +213,7 @@ class BaseAgent:
         prompt = prompt.replace('mcp__google_calendar__', 'mcp_google-calendar_')
         prompt = prompt.replace('mcp__todoist__', 'mcp_todoist_')
         prompt = prompt.replace('mcp__gmail__', 'mcp_gmail_')
-        # WebFetch → curl via shell (Gemini has shell access in -y mode)
+        # WebFetch → curl via shell (Antigravity has shell access in -y mode)
         prompt = prompt.replace('WebFetch', 'the shell tool with curl')
         # ToolSearch references outside Step 1
         prompt = prompt.replace('ToolSearch', 'the appropriate tool')

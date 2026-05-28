@@ -19,7 +19,7 @@ The `overwatering_risk` list in the daily briefing email, indoor plants only.
 
 **Why indoor only:** Outdoor plant scheduling is weather-driven by design. A shorter interval caused by heat or rain logic is appropriate, not a risk. Flagging it would create noise.
 
-**`water_sensitivity` field:** New per-plant field, values `"high"` / `"medium"` / `"low"`. Defaults to `"medium"` when absent (backwards compatible). Auto-researched via Gemini at `add_plant()` time.
+**`water_sensitivity` field:** New per-plant field, values `"high"` / `"medium"` / `"low"`. Defaults to `"medium"` when absent (backwards compatible). Auto-researched via Antigravity at `add_plant()` time.
 
 Research-backed thresholds (from horticultural literature):
 - `high` (cacti, succulents, snake plant, ZZ plant): soil must fully dry between waterings. Warn if `effective_interval < frequency_days * 0.8`

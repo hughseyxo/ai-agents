@@ -663,7 +663,7 @@ def test_research_plant_watering_returns_integer_via_stdin(mocker):
     assert "Monstera" in mock_run.call_args.kwargs["input"]
 
 
-def test_research_plant_watering_gemini_failure_returns_error(mocker):
+def test_research_plant_watering_antigravity_failure_returns_error(mocker):
     mock_run = mocker.patch("tools.subprocess.run")
     mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="retry exhausted")
     result = research_plant_watering("Monstera")

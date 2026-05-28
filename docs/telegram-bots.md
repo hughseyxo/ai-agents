@@ -35,8 +35,8 @@ Overview of all Telegram bots in this project.
 ## Failed / Abandoned
 
 ### hermes-gateway (abandoned 2026-05-17)
-- **Intent:** Persistent Telegram orchestrator routing work to Claude/Gemini CLI via local Hermes-3 8B (Ollama)
-- **Why it failed:** `hermes-cli` was never installable — cloud model quota (Gemini HTTP 429, Anthropic HTTP 400) killed every turn. Local Ollama model path was under-configured. The `hermes-agent` venv was never set up.
+- **Intent:** Persistent Telegram orchestrator routing work to Claude/Antigravity CLI via local Hermes-3 8B (Ollama)
+- **Why it failed:** `hermes-cli` was never installable — cloud model quota (Antigravity HTTP 429, Anthropic HTTP 400) killed every turn. Local Ollama model path was under-configured. The `hermes-agent` venv was never set up.
 - **Cleanup done:** Service disabled and removed from `~/.config/systemd/user/`
 - **Design doc:** `docs/hermes-orchestrator.md` (kept as record)
 

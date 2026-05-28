@@ -1,19 +1,19 @@
 # Hermes Evaluation and Viability Report
 
 ## Objective
-Evaluate the efforts made to get the Hermes gateway working using CLI-based proxy backends (`google-gemini-cli` and `claude_code`). The primary goal is to determine if Hermes can reliably operate using existing Gemini Pro and Claude Pro subscriptions, avoiding pay-as-you-go API costs.
+Evaluate the efforts made to get the Hermes gateway working using CLI-based proxy backends (`google-antigravity-cli` and `claude_code`). The primary goal is to determine if Hermes can reliably operate using existing Antigravity Pro and Claude Pro subscriptions, avoiding pay-as-you-go API costs.
 
 ## Summary of Efforts & Errors Encountered
 
 Based on the logs (`.hermes/logs/errors.log` and `.hermes/logs/agent.log`) and configuration (`.hermes/config.yaml`), the following approaches have been attempted:
 
-### 1. Gemini Integration (`google-gemini-cli`)
-- **Setup:** Hermes was configured to route requests through `google-gemini-cli` using a custom base URL (`cloudcode-pa://google`).
+### 1. Antigravity Integration (`google-antigravity-cli`)
+- **Setup:** Hermes was configured to route requests through `google-antigravity-cli` using a custom base URL (`cloudcode-pa://google`).
 - **Issues Encountered:**
-  - `Provider 'gemini' is set in config.yaml but no API key was found.` initially indicated standard API paths were being attempted.
-  - `OAuth provider google-gemini-cli not directly supported`: The internal HTTP client in Hermes failed to resolve the custom OAuth flow required by the CLI.
-  - `Code Assist 404: Requested entity was not found`: When Hermes attempted to call `gemini-1.5-flash` and `gemini-3-flash-preview` via the Code Assist endpoint, Google's backend returned 404s. The Code Assist endpoint uses specific internal model names and does not map to standard Gemini model identifiers.
-  - `HTTP 429: Gemini quota exhausted`: Even when a request partially succeeded or was retried, it quickly hit a hidden quota limit (`Your quota will reset after 56s.`), proving the endpoint is highly restricted.
+  - `Provider 'antigravity' is set in config.yaml but no API key was found.` initially indicated standard API paths were being attempted.
+  - `OAuth provider google-antigravity-cli not directly supported`: The internal HTTP client in Hermes failed to resolve the custom OAuth flow required by the CLI.
+  - `Code Assist 404: Requested entity was not found`: When Hermes attempted to call `antigravity-1.5-flash` and `antigravity-3-flash-preview` via the Code Assist endpoint, Google's backend returned 404s. The Code Assist endpoint uses specific internal model names and does not map to standard Antigravity model identifiers.
+  - `HTTP 429: Antigravity quota exhausted`: Even when a request partially succeeded or was retried, it quickly hit a hidden quota limit (`Your quota will reset after 56s.`), proving the endpoint is highly restricted.
 
 ### 2. Claude Integration (`claude_code`)
 - **Setup:** Hermes was configured to use Anthropic as a provider with the source set to `claude_code`, attempting to proxy requests to avoid API fees.
@@ -32,7 +32,7 @@ Based on the logs (`.hermes/logs/errors.log` and `.hermes/logs/agent.log`) and c
 **The plan to run Hermes purely on Pro subscriptions via CLI proxying or Local Models is currently NOT VIABLE.**
 
 1. **Claude is Blocked:** Anthropic has implemented strict billing enforcement. Their backend now detects third-party usage (like the CLI being driven programmatically or proxied) and explicitly refuses to draw from the Claude Pro subscription plan. It strictly requires a prepaid API balance ("extra usage"). There is no known workaround for this policy.
-2. **Gemini is Brittle and Rate-Limited:** The `google-gemini-cli` relies on an undocumented, internal Google Cloud Code endpoint (`cloudcode-pa://google`). This endpoint is heavily rate-limited (as seen in the 429 errors), does not support the latest standard models, and requires complex OAuth handling that Hermes currently fails to implement reliably.
+2. **Antigravity is Brittle and Rate-Limited:** The `google-antigravity-cli` relies on an undocumented, internal Google Cloud Code endpoint (`cloudcode-pa://google`). This endpoint is heavily rate-limited (as seen in the 429 errors), does not support the latest standard models, and requires complex OAuth handling that Hermes currently fails to implement reliably.
 3. **Local Models (Ollama) Timeout:** The server's hardware (CPU-only seedbox) is insufficient for inference. Requests simply hang indefinitely.
 
 ## Conclusion

@@ -4,7 +4,7 @@
 The previous Telegram orchestrator (Hermes) relied on local Ollama inference and CLI-proxying. On the current CPU-only hardware, local inference was unacceptably slow (timeouts), and vendor restrictions (Anthropic/Google) blocked programmatic use of CLI-bound Pro subscriptions via API.
 
 ## Goal
-Provide a fast, reliable, and cost-effective Telegram chat interface to Gemini, Claude, and open-source models without requiring expensive monthly API commitments or hitting hardware bottlenecks.
+Provide a fast, reliable, and cost-effective Telegram chat interface to Antigravity, Claude, and open-source models without requiring expensive monthly API commitments or hitting hardware bottlenecks.
 
 ## Design Decisions
 - **OpenRouter as Backend:** Aggregates multiple LLMs into a single OpenAI-compatible API.
@@ -32,5 +32,5 @@ Provide a fast, reliable, and cost-effective Telegram chat interface to Gemini, 
 
 ## Future Enhancements
 - **Conversation Memory:** Store last N turns in a dictionary keyed by `chat_id`.
-- **Model Switching:** Command-based switching between Gemini, Claude, and Llama.
+- **Model Switching:** Command-based switching between Antigravity, Claude, and Llama.
 - **Systemd Integration:** Create a user-level service for persistence.

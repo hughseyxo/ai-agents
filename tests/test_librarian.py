@@ -74,9 +74,9 @@ def test_check_failures_detects_two_consecutive_errors(tmp_path):
     agent = make_agent(tmp_path)
     agent.context["plan"] = {"mode": "watch", "today": "2026-05-22"}
     r1 = agent.db.start_run("news-briefing")
-    agent.db.complete_run(r1, status="error", error="Claude CLI failed")
+    agent.db.complete_run(r1, status="error", error="Antigravity CLI failed")
     r2 = agent.db.start_run("news-briefing")
-    agent.db.complete_run(r2, status="error", error="Claude CLI failed")
+    agent.db.complete_run(r2, status="error", error="Antigravity CLI failed")
     result = agent._check_failures()
     assert "news-briefing" in result["failing_agents"]
 
@@ -215,7 +215,7 @@ def test_analyze_failures_calls_llm_when_failures_exist(tmp_path):
     agent = make_agent(tmp_path)
     agent.context["check_failures"] = {
         "failing_agents": ["news-briefing"],
-        "error_details": {"news-briefing": ["Claude CLI failed"]},
+        "error_details": {"news-briefing": ["Antigravity CLI failed"]},
     }
     findings = [{"agent": "news-briefing", "type": "reliability", "description": "CLI fails",
                  "confidence": 0.85, "fix_type": "learnings", "suggested_fix": "x",

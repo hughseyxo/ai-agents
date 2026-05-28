@@ -310,9 +310,9 @@ class TestProvidersOverride:
         assert agent.providers is not None
         assert agent.providers[0]["name"] == "claude"
 
-    def test_gemini_is_fallback(self, agent):
+    def test_antigravity_is_fallback(self, agent):
         assert len(agent.providers) == 2
-        assert agent.providers[1]["name"] == "gemini"
+        assert agent.providers[1]["name"] == "antigravity"
 
 
 # ---- International feed coverage ----

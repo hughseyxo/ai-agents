@@ -1,4 +1,4 @@
-"""Tests for BaseAgent.synthesize() and _adapt_prompt_for_gemini().
+"""Tests for BaseAgent.synthesize() and _adapt_prompt_for_antigravity().
 
 subprocess.run is mocked because we're testing failover logic,
 not the actual CLI binaries.
@@ -27,10 +27,10 @@ def mock_result(returncode=0, stdout="output", stderr=""):
 
 
 # ===================================================================
-# _adapt_prompt_for_gemini — pure function tests (no mocks needed)
+# _adapt_prompt_for_antigravity — pure function tests (no mocks needed)
 # ===================================================================
 
-class TestAdaptPromptForGemini:
+class TestAdaptPromptForAntigravity:
     def test_strips_toolsearch_step1(self):
         prompt = (
             "## Step 1: Import MCP tools\n"
@@ -40,7 +40,7 @@ class TestAdaptPromptForGemini:
             "## Step 2: Get data\n"
             "Do things here."
         )
-        result = BaseAgent._adapt_prompt_for_gemini(prompt)
+        result = BaseAgent._adapt_prompt_for_antigravity(prompt)
         assert "ToolSearch" not in result
         assert "Import MCP tools" not in result
         assert "Tools are available" in result
@@ -49,37 +49,37 @@ class TestAdaptPromptForGemini:
 
     def test_remaps_todoist_tool_names(self):
         prompt = "Call mcp__todoist__find-tasks with projectId"
-        result = BaseAgent._adapt_prompt_for_gemini(prompt)
+        result = BaseAgent._adapt_prompt_for_antigravity(prompt)
         assert "mcp_todoist_find-tasks" in result
         assert "mcp__todoist__" not in result
 
     def test_remaps_gmail_tool_names(self):
         prompt = "Send via mcp__gmail__gmail_send"
-        result = BaseAgent._adapt_prompt_for_gemini(prompt)
+        result = BaseAgent._adapt_prompt_for_antigravity(prompt)
         assert "mcp_gmail_gmail_send" in result
         assert "mcp__gmail__" not in result
 
     def test_remaps_calendar_tool_names(self):
         prompt = "Call mcp__google_calendar__gcal_list_events"
-        result = BaseAgent._adapt_prompt_for_gemini(prompt)
+        result = BaseAgent._adapt_prompt_for_antigravity(prompt)
         assert "mcp_google-calendar_gcal_list_events" in result
         assert "mcp__google_calendar__" not in result
 
     def test_replaces_webfetch(self):
         prompt = "Fetch all feeds below via WebFetch"
-        result = BaseAgent._adapt_prompt_for_gemini(prompt)
+        result = BaseAgent._adapt_prompt_for_antigravity(prompt)
         assert "WebFetch" not in result
         assert "curl" in result
 
     def test_replaces_toolsearch_outside_step1(self):
         prompt = "Use ToolSearch to find the tool"
-        result = BaseAgent._adapt_prompt_for_gemini(prompt)
+        result = BaseAgent._adapt_prompt_for_antigravity(prompt)
         assert "ToolSearch" not in result
         assert "the appropriate tool" in result
 
     def test_preserves_unrelated_content(self):
         prompt = "## Step 2: Fetch data\nDo something normal."
-        result = BaseAgent._adapt_prompt_for_gemini(prompt)
+        result = BaseAgent._adapt_prompt_for_antigravity(prompt)
         assert result == prompt
 
     def test_handles_multiple_tool_references(self):
@@ -87,7 +87,7 @@ class TestAdaptPromptForGemini:
             "Call mcp__todoist__find-tasks then mcp__gmail__gmail_send "
             "and mcp__google_calendar__gcal_list_events"
         )
-        result = BaseAgent._adapt_prompt_for_gemini(prompt)
+        result = BaseAgent._adapt_prompt_for_antigravity(prompt)
         assert "mcp_todoist_find-tasks" in result
         assert "mcp_gmail_gmail_send" in result
         assert "mcp_google-calendar_gcal_list_events" in result
@@ -100,7 +100,7 @@ class TestAdaptPromptForGemini:
 
 class TestSynthesize:
     @patch("agents.base.subprocess.run")
-    def test_gemini_succeeds_first_try(self, mock_run):
+    def test_agy_succeeds_first_try(self, mock_run):
         mock_run.return_value = mock_result(stdout="briefing output")
         agent = make_agent()
 
@@ -109,12 +109,12 @@ class TestSynthesize:
         assert result == "briefing output"
         assert mock_run.call_count == 1
         cmd = mock_run.call_args[0][0]
-        assert cmd[0] == "gemini"
+        assert cmd[0] == "agy"
 
     @patch("agents.base.subprocess.run")
     @patch("time.sleep", return_value=None)
-    def test_falls_back_to_claude_on_gemini_failure(self, mock_sleep, mock_run):
-        """Gemini fails 3 times, then Claude succeeds."""
+    def test_falls_back_to_claude_on_agy_failure(self, mock_sleep, mock_run):
+        """Antigravity fails 3 times, then Claude succeeds."""
         mock_run.side_effect = [
             mock_result(returncode=1, stderr="transient error"),
             mock_result(returncode=1, stderr="transient error"),
@@ -127,7 +127,7 @@ class TestSynthesize:
 
         assert result == "claude output"
         assert mock_run.call_count == 4
-        assert mock_run.call_args_list[0][0][0][0] == "gemini"
+        assert mock_run.call_args_list[0][0][0][0] == "agy"
         assert mock_run.call_args_list[3][0][0][0] == "claude"
 
     @patch("agents.base.subprocess.run")
@@ -163,10 +163,10 @@ class TestSynthesize:
         assert result == "claude output"
 
     @patch("agents.base.subprocess.run")
-    def test_gemini_timeout_is_terminal_no_failover(self, mock_run):
+    def test_agy_timeout_is_terminal_no_failover(self, mock_run):
         """Timeouts must NOT trigger Claude failover or retries."""
         mock_run.side_effect = [
-            subprocess.TimeoutExpired(cmd="gemini", timeout=600),
+            subprocess.TimeoutExpired(cmd="agy", timeout=600),
             mock_result(stdout="claude output"),
         ]
         agent = make_agent()
@@ -199,30 +199,30 @@ class TestSynthesize:
 
         result = agent.synthesize("test prompt")
 
-        # Should skip Gemini retries and succeed on Claude
+        # Should skip Antigravity retries and succeed on Claude
         assert result == "claude output"
         assert mock_run.call_count == 2
-        assert mock_run.call_args_list[0][0][0][0] == "gemini"
+        assert mock_run.call_args_list[0][0][0][0] == "agy"
         assert mock_run.call_args_list[1][0][0][0] == "claude"
 
     @patch("agents.base.subprocess.run")
-    def test_gemini_prompt_is_adapted_by_default(self, mock_run):
-        """Gemini is tried first, and its prompt should be adapted."""
+    def test_agy_prompt_is_adapted_by_default(self, mock_run):
+        """Antigravity is tried first, and its prompt should be adapted."""
         mock_run.return_value = mock_result(stdout="output")
         agent = make_agent()
 
         prompt = "Call mcp__todoist__find-tasks"
         agent.synthesize(prompt)
 
-        gemini_cmd = mock_run.call_args[0][0]
-        p_index = gemini_cmd.index("-p")
-        gemini_prompt = gemini_cmd[p_index + 1]
-        assert "mcp_todoist_find-tasks" in gemini_prompt
+        agy_cmd = mock_run.call_args[0][0]
+        p_index = agy_cmd.index("-p")
+        agy_prompt = agy_cmd[p_index + 1]
+        assert "mcp_todoist_find-tasks" in agy_prompt
 
     @patch("agents.base.subprocess.run")
     @patch("time.sleep", return_value=None)
     def test_claude_prompt_is_not_adapted_on_fallback(self, mock_sleep, mock_run):
-        """When Gemini fails 3 times, Claude gets the UNADAPTED prompt."""
+        """When Antigravity fails 3 times, Claude gets the UNADAPTED prompt."""
         mock_run.side_effect = [
             mock_result(returncode=1, stderr="error"),
             mock_result(returncode=1, stderr="error"),
@@ -254,23 +254,23 @@ class TestSynthesize:
 
     @patch("agents.base.subprocess.run")
     @patch("time.sleep", return_value=None)
-    def test_providers_override_falls_back_to_gemini(self, mock_sleep, mock_run):
-        """When Claude primary fails 3 times, Gemini is the fallback."""
+    def test_providers_override_falls_back_to_agy(self, mock_sleep, mock_run):
+        """When Claude primary fails 3 times, Antigravity is the fallback."""
         mock_run.side_effect = [
             mock_result(returncode=1, stderr="error"),
             mock_result(returncode=1, stderr="error"),
             mock_result(returncode=1, stderr="error"),
-            mock_result(stdout="gemini output"),
+            mock_result(stdout="agy output"),
         ]
         agent = make_agent()
         agent.providers = list(reversed(BaseAgent.PROVIDERS))
 
         result = agent.synthesize("test prompt")
 
-        assert result == "gemini output"
+        assert result == "agy output"
         assert mock_run.call_count == 4
         assert mock_run.call_args_list[0][0][0][0] == "claude"
-        assert mock_run.call_args_list[3][0][0][0] == "gemini"
+        assert mock_run.call_args_list[3][0][0][0] == "agy"
 
     @patch("agents.base.subprocess.run")
     def test_timeout_is_600_seconds(self, mock_run):
@@ -282,8 +282,8 @@ class TestSynthesize:
         assert mock_run.call_args[1]["timeout"] == 600
 
     @patch("agents.base.subprocess.run")
-    def test_model_attribute_does_not_inject_flag_to_gemini_by_default(self, mock_run):
-        """Gemini CLI uses its default model unless mapped."""
+    def test_model_attribute_does_not_inject_flag_to_agy_by_default(self, mock_run):
+        """Antigravity CLI uses its default model unless mapped."""
         mock_run.return_value = mock_result(stdout="output")
         agent = make_agent()
         agent.model = "claude-haiku-4-5"
@@ -296,7 +296,7 @@ class TestSynthesize:
     @patch("agents.base.subprocess.run")
     @patch("time.sleep", return_value=None)
     def test_model_attribute_injects_claude_model_flag_on_fallback(self, mock_sleep, mock_run):
-        """When Gemini fails 3 times, the fallback Claude call should include the --model flag."""
+        """When Antigravity fails 3 times, the fallback Claude call should include the --model flag."""
         mock_run.side_effect = [
             mock_result(returncode=1, stderr="error"),
             mock_result(returncode=1, stderr="error"),
@@ -308,7 +308,7 @@ class TestSynthesize:
 
         agent.synthesize("test")
 
-        # Index 3 is the 4th call (Gemini x3, then Claude)
+        # Index 3 is the 4th call (Antigravity x3, then Claude)
         claude_cmd = mock_run.call_args_list[3][0][0]
         assert "--model" in claude_cmd
         assert claude_cmd[claude_cmd.index("--model") + 1] == "claude-sonnet-4-6"

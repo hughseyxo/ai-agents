@@ -1,7 +1,7 @@
 import subprocess
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch, call
-from bot import start, handle_message, _call_gemini_fallback, _analyze_plant_image, handle_photo
+from bot import start, handle_message, _call_antigravity_fallback, _analyze_plant_image, handle_photo
 
 
 # ---------------------------------------------------------------------------
@@ -161,12 +161,12 @@ async def test_openrouter_error_returns_error_message(mocker):
 
 
 # ---------------------------------------------------------------------------
-# Gemini CLI fallback
+# Antigravity CLI fallback
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_all_openrouter_models_fail_triggers_gemini(mocker):
-    """When all OpenRouter models raise APIError, Gemini CLI is called."""
+async def test_all_openrouter_models_fail_triggers_antigravity(mocker):
+    """When all OpenRouter models raise APIError, Antigravity CLI is called."""
     from openai import RateLimitError
 
     mocker.patch("bot.ALLOWED_USER_ID", "1703830475")
@@ -190,14 +190,14 @@ async def test_all_openrouter_models_fail_triggers_gemini(mocker):
     await handle_message(update, context)
 
     mock_run.assert_called()
-    gemini_calls = [c for c in mock_run.call_args_list if "gemini" in c[0][0][0]]
-    assert len(gemini_calls) == 1
+    agy_calls = [c for c in mock_run.call_args_list if "agy" in c[0][0][0]]
+    assert len(agy_calls) == 1
     update.message.reply_text.assert_called_once_with("Agents all good.")
 
 
 @pytest.mark.asyncio
-async def test_gemini_fallback_failure_sends_unavailable_message(mocker):
-    """If Gemini CLI also fails, user gets a clear unavailable message."""
+async def test_antigravity_fallback_failure_sends_unavailable_message(mocker):
+    """If Antigravity CLI also fails, user gets a clear unavailable message."""
     from openai import RateLimitError
 
     mocker.patch("bot.ALLOWED_USER_ID", "1703830475")
@@ -224,8 +224,8 @@ async def test_gemini_fallback_failure_sends_unavailable_message(mocker):
     assert "unavailable" in update.message.reply_text.call_args[0][0].lower()
 
 
-def test_call_gemini_fallback_builds_prompt_with_server_state(mocker):
-    """_call_gemini_fallback includes tool results in the prompt passed to gemini."""
+def test_call_antigravity_fallback_builds_prompt_with_server_state(mocker):
+    """_call_antigravity_fallback includes tool results in the prompt passed to antigravity."""
     mocker.patch("bot.STATE_TOOL_FUNCTIONS", {
         "get_agent_status": lambda: "daily-briefing: success",
         "get_system_health": lambda: "CPU: 5%",
@@ -234,7 +234,7 @@ def test_call_gemini_fallback_builds_prompt_with_server_state(mocker):
     mock_run = mocker.patch("bot.subprocess.run")
     mock_run.return_value = MagicMock(returncode=0, stdout="All good.\n")
 
-    result = _call_gemini_fallback("how is everything?", "You are a concierge.")
+    result = _call_antigravity_fallback("how is everything?", "You are a concierge.")
 
     assert result == "All good."
     prompt_passed = mock_run.call_args.kwargs["input"]
@@ -261,7 +261,7 @@ def test_analyze_plant_image_returns_assessment_on_first_model(mocker):
     mock_response.choices = [MagicMock(message=MagicMock(content="Leaves look healthy."))]
     mocker.patch("bot.client").chat.completions.create.return_value = mock_response
 
-    result = _analyze_plant_image(FAKE_IMAGE, FAKE_PLANT)
+    result, _ = _analyze_plant_image(FAKE_IMAGE, FAKE_PLANT)
 
     assert "healthy" in result.lower()
 
@@ -275,7 +275,7 @@ def test_analyze_plant_image_tries_second_model_on_failure(mocker):
         good_response,
     ]
 
-    result = _analyze_plant_image(FAKE_IMAGE, FAKE_PLANT)
+    result, _ = _analyze_plant_image(FAKE_IMAGE, FAKE_PLANT)
 
     assert "fine" in result.lower()
     assert mock_client.chat.completions.create.call_count == 2
@@ -285,7 +285,7 @@ def test_analyze_plant_image_returns_unavailable_when_all_vision_models_fail(moc
     mock_client = mocker.patch("bot.client")
     mock_client.chat.completions.create.side_effect = Exception("all fail")
 
-    result = _analyze_plant_image(FAKE_IMAGE, FAKE_PLANT)
+    result, _ = _analyze_plant_image(FAKE_IMAGE, FAKE_PLANT)
 
     assert "unavailable" in result.lower()
 
@@ -343,7 +343,7 @@ async def test_handle_photo_llm_resolves_common_name(mocker):
     fake_plant = {"name": "Passiflora", "location": "outdoor", "last_watered": "2026-05-20", "frequency_days": 5}
     mocker.patch("bot.get_plant", return_value=None)
     mocker.patch("bot._resolve_plant_name", return_value=fake_plant)
-    mocker.patch("bot._analyze_plant_image", return_value="Looks healthy.")
+    mocker.patch("bot._analyze_plant_image", return_value=("Looks healthy.", None))
     mocker.patch("bot.save_plant_assessment", return_value="saved.")
 
     update = _make_photo_update(caption="passion flower")
@@ -385,7 +385,7 @@ async def test_handle_photo_happy_path(mocker):
     mocker.patch("bot.ALLOWED_USER_ID", "1703830475")
     fake_plant = {"name": "Monstera", "location": "indoor", "last_watered": "2026-05-20", "frequency_days": 7}
     mocker.patch("bot.get_plant", return_value=fake_plant)
-    mocker.patch("bot._analyze_plant_image", return_value="Leaves look healthy.")
+    mocker.patch("bot._analyze_plant_image", return_value=("Leaves look healthy.", None))
     mocker.patch("bot.save_plant_assessment", return_value="Monstera assessment saved.")
 
     update = _make_photo_update(caption="monstera")

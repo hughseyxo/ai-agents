@@ -13,7 +13,7 @@ Needed a way to research trips (search for flights + hotels) and plan itinerarie
 A `BaseAgent` subclass was chosen over a Claude Code skill because:
 - Can be triggered remotely via the MCP bridge and Telegram bot
 - Saves output to `output/` with dedup
-- Gets Claude→Gemini failover from `BaseAgent.synthesize()`
+- Gets Claude→Antigravity failover from `BaseAgent.synthesize()`
 - Skills are interactive terminal commands; this is a background task
 
 ### No External API Keys

@@ -278,7 +278,7 @@ def research_plant_watering(plant_name: str) -> str:
     )
     try:
         res = subprocess.run(
-            ["gemini", "-y", "-o", "text"],
+            ["agy", "-y", "-o", "text"],
             input=prompt,
             capture_output=True, text=True, timeout=30,
             cwd=str(REPO_ROOT),
@@ -301,7 +301,7 @@ def research_plant_sunlight(plant_name: str) -> str:
     )
     try:
         res = subprocess.run(
-            ["gemini", "-y", "-o", "text"],
+            ["agy", "-y", "-o", "text"],
             input=prompt,
             capture_output=True, text=True, timeout=30,
             cwd=str(REPO_ROOT),
@@ -327,7 +327,7 @@ def research_plant_water_sensitivity(plant_name: str) -> str:
     )
     try:
         res = subprocess.run(
-            ["gemini", "-y", "-o", "text"],
+            ["agy", "-y", "-o", "text"],
             input=prompt,
             capture_output=True, text=True, timeout=30,
             cwd=str(REPO_ROOT),

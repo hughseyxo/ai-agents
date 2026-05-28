@@ -23,7 +23,7 @@ class NewsBriefingAgent(BaseAgent):
     name = "news-briefing"
     schedule = "0 4 * * *"
     model = "claude-haiku-4-5"
-    # Claude primary, Gemini fallback (default PROVIDERS is Gemini-first)
+    # Claude primary, Antigravity fallback (default PROVIDERS is Antigravity-first)
     providers = list(reversed(BaseAgent.PROVIDERS))
 
     FEEDS = {

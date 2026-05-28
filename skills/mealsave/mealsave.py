@@ -433,14 +433,14 @@ def llm_extract(text: str, source_hint: str = "") -> dict:
         )
         if result.returncode == 0 and result.stdout.strip():
             return _parse_json_response(result.stdout)
-        print(f"[mealsave] Claude failed (rc={result.returncode}), trying Gemini fallback...", file=sys.stderr)
+        print(f"[mealsave] Claude failed (rc={result.returncode}), trying Antigravity fallback...", file=sys.stderr)
     except Exception as e:
-        print(f"[mealsave] Claude error: {e}, trying Gemini fallback...", file=sys.stderr)
+        print(f"[mealsave] Claude error: {e}, trying Antigravity fallback...", file=sys.stderr)
 
-    # Fallback to Gemini
+    # Fallback to Antigravity
     try:
         result = subprocess.run(
-            ["gemini", "-y", "-p", prompt, "-o", "text"],
+            ["agy", "-y", "-p", prompt, "-o", "text"],
             capture_output=True,
             text=True,
             timeout=120,
@@ -448,9 +448,9 @@ def llm_extract(text: str, source_hint: str = "") -> dict:
         )
         if result.returncode == 0 and result.stdout.strip():
             return _parse_json_response(result.stdout)
-        die(f"Both LLMs failed. Gemini error: {result.stderr.strip()[:200]}")
+        die(f"Both LLMs failed. Antigravity error: {result.stderr.strip()[:200]}")
     except Exception as e:
-        die(f"Both LLMs failed. Gemini exception: {e}")
+        die(f"Both LLMs failed. Antigravity exception: {e}")
 
 
 def _parse_json_response(output: str) -> dict:
