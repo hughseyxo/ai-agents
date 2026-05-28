@@ -677,13 +677,18 @@ def _analyze_plant_image(image_bytes: bytes, plant: dict) -> tuple[str, dict | N
     if not raw_response:
         return "Plant assessment unavailable right now. Try again later.", None
 
-    # Try to parse as JSON
+    # Try to parse as JSON — handle code fences, leading/trailing prose, and partial wrapping
     try:
-        import re as _re
         text = raw_response.strip()
+        # Strip markdown code fences
         if text.startswith("```"):
-            text = _re.sub(r"^```[a-z]*\n?", "", text)
-            text = _re.sub(r"\n?```$", "", text.strip())
+            text = re.sub(r"^```[a-z]*\n?", "", text)
+            text = re.sub(r"\n?```$", "", text.strip())
+        # If there's prose around the JSON, extract just the outermost {...} object
+        if not text.startswith("{"):
+            m = re.search(r'\{.*\}', text, re.DOTALL)
+            if m:
+                text = m.group(0)
         parsed = json.loads(text)
         # Validate consistency with a text LLM (catches vision model contradictions)
         parsed, was_corrected = _validate_plant_assessment(parsed, plant)
