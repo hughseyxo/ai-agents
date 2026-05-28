@@ -39,6 +39,11 @@ class DailyBriefingAgent(BaseAgent):
     schedule = "5 4 * * *"
     model = "claude-haiku-4-5"
 
+    def configure(self, args):
+        if getattr(args, "force", False):
+            today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            self.db.delete_seen("email_sent", today, agent=self.name)
+
     def plan(self):
         last = self.last_run()
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")

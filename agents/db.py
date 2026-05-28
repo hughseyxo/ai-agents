@@ -9,6 +9,13 @@ from pathlib import Path
 DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent / "data" / "agents.db"
 
 SCHEMA = """
+CREATE TABLE IF NOT EXISTS plant_weather_cache (
+    plant_name      TEXT PRIMARY KEY,
+    adjusted_date   TEXT NOT NULL,
+    adjustment_reason TEXT NOT NULL DEFAULT '',
+    updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS runs (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     agent       TEXT NOT NULL,
@@ -137,3 +144,36 @@ class AgentDB:
             (agent, category, identifier),
         )
         self._conn.commit()
+
+    def delete_seen(self, category: str, identifier: str, agent: str = ""):
+        if agent:
+            self._conn.execute(
+                "DELETE FROM seen WHERE agent=? AND category=? AND identifier=?",
+                (agent, category, identifier),
+            )
+        else:
+            self._conn.execute(
+                "DELETE FROM seen WHERE category=? AND identifier=?",
+                (category, identifier),
+            )
+        self._conn.commit()
+
+    # --- Plant weather cache ---
+
+    def upsert_plant_weather_cache(self, plant_name: str, adjusted_date: str, adjustment_reason: str):
+        self._conn.execute(
+            "INSERT INTO plant_weather_cache (plant_name, adjusted_date, adjustment_reason, updated_at) "
+            "VALUES (?, ?, ?, datetime('now')) "
+            "ON CONFLICT(plant_name) DO UPDATE SET "
+            "adjusted_date = excluded.adjusted_date, "
+            "adjustment_reason = excluded.adjustment_reason, "
+            "updated_at = excluded.updated_at",
+            (plant_name, adjusted_date, adjustment_reason),
+        )
+        self._conn.commit()
+
+    def get_plant_weather_cache(self) -> list[dict]:
+        rows = self._conn.execute(
+            "SELECT plant_name, adjusted_date, adjustment_reason, updated_at FROM plant_weather_cache"
+        ).fetchall()
+        return [dict(r) for r in rows]
