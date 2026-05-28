@@ -645,13 +645,35 @@ def _analyze_plant_image(image_bytes: bytes, plant: dict) -> tuple[str, dict | N
             parsed["profile_notes"] = existing_notes + "\n[Validator: structured fields corrected for consistency with observations]"
             logger.info(f"[{plant['name']}] Assessment corrected by validation LLM")
         # Build display text from structured data
-        display = f"**{plant['name']}** — {parsed.get('status', 'Assessment')}\n\n{parsed.get('summary', '')}"
+        status = parsed.get("status", "Assessment")
+        summary = parsed.get("summary", "")
         obs = parsed.get("observations", [])
+        rec = parsed.get("watering_recommendation", "")
+        freq = parsed.get("frequency_suggestion")
+
+        WATERING_LABELS = {
+            "immediate": "💧 Water now",
+            "on_schedule": "✅ On schedule",
+            "delay": "⏳ Delay watering",
+        }
+        STATUS_EMOJI = {
+            "Healthy": "🟢",
+            "Stressed": "🟡",
+            "Concerning": "🟠",
+            "Underwatered": "🔵",
+            "Overwatered": "🔴",
+        }
+        emoji = STATUS_EMOJI.get(status, "⚪")
+
+        lines = [f"{emoji} *{plant['name']}* — {status}", "", summary]
         if obs:
-            display += "\n\n**Observations:**\n" + "\n".join(f"• {o}" for o in obs)
-        rec = parsed.get("watering_recommendation")
+            lines += ["", "*Observations:*"] + [f"• {o}" for o in obs]
         if rec:
-            display += f"\n\n**Watering:** {rec}"
+            lines += ["", WATERING_LABELS.get(rec, f"Watering: {rec}")]
+        if freq and isinstance(freq, dict):
+            lines += [f"📅 Suggested frequency: every {freq.get('days')} days"]
+
+        display = "\n".join(lines)
         return display, parsed
     except (json.JSONDecodeError, ValueError, KeyError):
         # JSON parse failed — return raw text, no structured data
@@ -788,7 +810,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
         # Send assessment text
         for chunk in [display_text[i:i+4000] for i in range(0, len(display_text), 4000)]:
-            await update.message.reply_text(chunk)
+            await update.message.reply_text(chunk, parse_mode="Markdown")
 
         # If frequency change suggested, send inline keyboard
         freq_suggestion = parsed.get("frequency_suggestion")
