@@ -215,8 +215,8 @@ class TestSynthesize:
         agent.synthesize(prompt)
 
         agy_cmd = mock_run.call_args[0][0]
-        p_index = agy_cmd.index("-p")
-        agy_prompt = agy_cmd[p_index + 1]
+        assert "-p" not in agy_cmd
+        agy_prompt = mock_run.call_args[1]["input"]
         assert "mcp_todoist_find-tasks" in agy_prompt
 
     @patch("agents.base.subprocess.run")
@@ -235,8 +235,8 @@ class TestSynthesize:
         agent.synthesize(prompt)
 
         claude_cmd = mock_run.call_args_list[3][0][0]
-        p_index = claude_cmd.index("-p")
-        claude_prompt = claude_cmd[p_index + 1]
+        assert "-p" not in claude_cmd
+        claude_prompt = mock_run.call_args_list[3][1]["input"]
         assert "mcp__todoist__find-tasks" in claude_prompt
 
     @patch("agents.base.subprocess.run")
@@ -323,8 +323,7 @@ class TestSynthesize:
         (learnings_dir / f"{agent.name}.md").write_text("- Keep responses short\n")
         with patch("agents.base.REPO_ROOT", tmp_path):
             agent.synthesize("Do a thing")
-        cmd = mock_run.call_args[0][0]
-        prompt = cmd[cmd.index("-p") + 1]
+        prompt = mock_run.call_args[1]["input"]
         assert "Agent Learnings" in prompt
         assert "Keep responses short" in prompt
         assert "Do a thing" in prompt
@@ -336,7 +335,6 @@ class TestSynthesize:
         agent.name = "test-agent"
         with patch("agents.base.REPO_ROOT", tmp_path):
             agent.synthesize("Do a thing")
-        cmd = mock_run.call_args[0][0]
-        prompt = cmd[cmd.index("-p") + 1]
+        prompt = mock_run.call_args[1]["input"]
         assert "Agent Learnings" not in prompt
         assert prompt == "Do a thing"
