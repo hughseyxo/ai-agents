@@ -468,6 +468,16 @@ def save_plant_assessment(plant_name: str, summary: str) -> str:
         return f"Failed to save assessment: {e}"
 
 
+def note_plant_observation(name: str, notes: str) -> str:
+    slug = name.lower().replace(" ", "-")
+    profile_path = REPO_ROOT / "docs" / "plants" / f"{slug}.md"
+    if not profile_path.exists():
+        return f"No profile doc found for {name}"
+    with open(profile_path, "a") as f:
+        f.write(f"\n{notes}")
+    return f"Observation recorded for {name}"
+
+
 MEALSAVE_PY = REPO_ROOT / "skills" / "mealsave" / "mealsave.py"
 MEALSAVE_PYTHON = REPO_ROOT / "skills" / "mealsave" / ".venv" / "bin" / "python"
 
