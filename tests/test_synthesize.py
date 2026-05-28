@@ -178,6 +178,23 @@ class TestSynthesize:
 
     @patch("agents.base.subprocess.run")
     @patch("time.sleep", return_value=None)
+    def test_oserror_falls_back_to_next_provider(self, mock_sleep, mock_run):
+        """OSError (e.g. binary not found) should trigger provider failover, not crash."""
+        mock_run.side_effect = [
+            OSError("No such file or directory: 'agy'"),
+            mock_result(stdout="claude output"),
+        ]
+        agent = make_agent()
+
+        result = agent.synthesize("test prompt")
+
+        assert result == "claude output"
+        assert mock_run.call_count == 2
+        assert mock_run.call_args_list[0][0][0][0] == "agy"
+        assert mock_run.call_args_list[1][0][0][0] == "claude"
+
+    @patch("agents.base.subprocess.run")
+    @patch("time.sleep", return_value=None)
     def test_raises_when_both_providers_fail(self, mock_sleep, mock_run):
         """Both fail 3 times each."""
         mock_run.side_effect = [mock_result(returncode=1, stderr="err")] * 6

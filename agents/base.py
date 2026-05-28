@@ -127,13 +127,13 @@ class BaseAgent:
     PROVIDERS = [
         {
             "name": "antigravity",
-            "cmd_prefix": ["agy", "--dangerously-skip-permissions", "-p"],
+            "cmd_prefix": ["agy", "--dangerously-skip-permissions"],
             "cmd_suffix": [],
             "adapt_prompt": True,
         },
         {
             "name": "claude",
-            "cmd_prefix": ["claude", "--dangerously-skip-permissions", "-p"],
+            "cmd_prefix": ["claude", "--dangerously-skip-permissions"],
             "cmd_suffix": ["--output-format", "text"],
             "adapt_prompt": False,
         },
@@ -158,16 +158,17 @@ class BaseAgent:
         last_error = None
         for provider in (self.providers or self.PROVIDERS):
             p_prompt = self._adapt_prompt_for_antigravity(prompt) if provider["adapt_prompt"] else prompt
-            cmd = list(provider["cmd_prefix"]) + [p_prompt] + list(provider["cmd_suffix"])
-            
+            cmd = list(provider["cmd_prefix"]) + list(provider["cmd_suffix"])
+
             if provider["name"] == "claude" and self.model:
                 cmd += ["--model", self.model]
-            
+
             # For each provider, we allow up to 3 attempts for transient CLI failures
             for attempt in range(3):
                 try:
+                    print(f"[synthesize] Calling {provider['name']} (attempt {attempt+1})...", file=sys.stderr)
                     result = subprocess.run(
-                        cmd, capture_output=True, text=True,
+                        cmd, input=p_prompt, capture_output=True, text=True,
                         cwd=str(REPO_ROOT), timeout=600,
                     )
                     if result.returncode == 0 and result.stdout.strip():
@@ -196,6 +197,10 @@ class BaseAgent:
                     msg = f"{provider['name']} timed out after 600s"
                     print(f"[synthesize] {msg}", file=sys.stderr)
                     raise LLMTimeoutError(msg)
+                except OSError as e:
+                    print(f"[synthesize] {provider['name']} OS error: {e}", file=sys.stderr)
+                    last_error = str(e)
+                    break  # Try next provider — no side effects executed, safe to fall over
 
         raise RuntimeError(f"All LLM providers failed. Last error: {last_error}")
 
