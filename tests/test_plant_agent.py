@@ -163,7 +163,7 @@ class TestPhotoRequests:
         mock_resp = MagicMock()
         mock_resp.ok = True
 
-        env = {"TELEGRAM_BOT_TOKEN": "fake-token", "TELEGRAM_USER_ID": "123456"}
+        env = {"CONCIERGE_BOT_TOKEN": "fake-token", "TELEGRAM_USER_ID": "123456"}
         with patch.dict(os.environ, env), \
              patch("agents.plant_agent.requests.post", return_value=mock_resp) as mock_post:
             result = agent._photo_requests()
@@ -179,7 +179,7 @@ class TestPhotoRequests:
         mock_resp = MagicMock()
         mock_resp.ok = True
 
-        env = {"TELEGRAM_BOT_TOKEN": "fake-token", "TELEGRAM_USER_ID": "123456"}
+        env = {"CONCIERGE_BOT_TOKEN": "fake-token", "TELEGRAM_USER_ID": "123456"}
         with patch.dict(os.environ, env), \
              patch("agents.plant_agent.requests.post", return_value=mock_resp) as mock_post:
             result = agent._photo_requests()
@@ -198,7 +198,7 @@ class TestPhotoRequests:
         mock_resp = MagicMock()
         mock_resp.ok = True
 
-        env = {"TELEGRAM_BOT_TOKEN": "fake-token", "TELEGRAM_USER_ID": "123456"}
+        env = {"CONCIERGE_BOT_TOKEN": "fake-token", "TELEGRAM_USER_ID": "123456"}
         with patch.dict(os.environ, env), \
              patch("agents.plant_agent.requests.post", return_value=mock_resp) as mock_post:
             result = agent._photo_requests()
@@ -214,7 +214,7 @@ class TestPhotoRequests:
         mock_resp = MagicMock()
         mock_resp.ok = True
 
-        env = {"TELEGRAM_BOT_TOKEN": "fake-token", "TELEGRAM_USER_ID": "123456"}
+        env = {"CONCIERGE_BOT_TOKEN": "fake-token", "TELEGRAM_USER_ID": "123456"}
         with patch.dict(os.environ, env), \
              patch("agents.plant_agent.requests.post", return_value=mock_resp) as mock_post:
             result = agent._photo_requests()
