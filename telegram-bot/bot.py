@@ -7,8 +7,8 @@ import subprocess
 from pathlib import Path
 from dotenv import load_dotenv
 from openai import OpenAI, APIError
-from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.ext import ApplicationBuilder, CallbackQueryHandler, CommandHandler, MessageHandler, filters, ContextTypes
 
 from tools import (
     get_agent_status,
@@ -29,6 +29,7 @@ from tools import (
     get_plant,
     get_all_plants,
     save_plant_assessment,
+    note_plant_observation,
 )
 
 load_dotenv()
@@ -72,6 +73,10 @@ CONCIERGE_PATH = Path(__file__).parent / "CONCIERGE.md"
 SYSTEM_PROMPT = CONCIERGE_PATH.read_text() if CONCIERGE_PATH.exists() else (
     "You are a concierge assistant for Cian's home server. Be concise and direct."
 )
+
+PLANT_ASSESSMENT_DIR = Path(__file__).parent.parent / "docs" / "plants"
+_ASSESSMENT_PROMPT_PATH = Path(__file__).parent.parent / "agents" / "prompts" / "plant_photo_assessment.md"
+PLANT_ASSESSMENT_SYSTEM = _ASSESSMENT_PROMPT_PATH.read_text() if _ASSESSMENT_PROMPT_PATH.exists() else PLANT_HEALTH_SYSTEM
 
 # State-reading tools — called in Gemini fallback to build context snapshot
 STATE_TOOL_FUNCTIONS = {
@@ -443,8 +448,8 @@ def _resolve_plant_name(caption: str, plants: list[dict]) -> dict | None:
     return None
 
 
-def _analyze_plant_image(image_bytes: bytes, plant: dict) -> str:
-    """Analyze a plant image using vision models with Gemini fallback."""
+def _analyze_plant_image(image_bytes: bytes, plant: dict) -> tuple[str, dict | None]:
+    """Analyze a plant image. Returns (display_text, parsed_json_or_None)."""
     from datetime import date as _date
     last_watered = plant.get("last_watered", "unknown")
     try:
@@ -453,28 +458,61 @@ def _analyze_plant_image(image_bytes: bytes, plant: dict) -> str:
     except Exception:
         days_str = "unknown"
 
+    # Load plant profile doc for context
+    slug = plant["name"].lower().replace(" ", "-")
+    profile_path = PLANT_ASSESSMENT_DIR / f"{slug}.md"
+    profile_context = ""
+    if profile_path.exists():
+        profile_context = f"\n\nPlant profile history:\n{profile_path.read_text()}"
+
     user_text = (
         f"This is a {plant['name']} ({plant.get('location', 'unknown location')}). "
         f"Last watered {last_watered} ({days_str})."
+        f"Base watering frequency: every {plant.get('frequency_days', '?')} days."
+        f"{profile_context}"
     )
     b64 = base64.b64encode(image_bytes).decode()
     messages = [
-        {"role": "system", "content": PLANT_HEALTH_SYSTEM},
+        {"role": "system", "content": PLANT_ASSESSMENT_SYSTEM},
         {"role": "user", "content": [
             {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
             {"type": "text", "text": user_text},
         ]},
     ]
 
+    raw_response = None
     for model in VISION_MODELS:
         try:
             response = client.chat.completions.create(model=model, messages=messages)
-            return response.choices[0].message.content or "No assessment returned."
+            raw_response = response.choices[0].message.content or ""
+            break
         except Exception as e:
             logger.warning(f"Vision model {model} failed: {e}")
             continue
 
-    return "Plant assessment unavailable right now. Try again later."
+    if not raw_response:
+        return "Plant assessment unavailable right now. Try again later.", None
+
+    # Try to parse as JSON
+    try:
+        import re as _re
+        text = raw_response.strip()
+        if text.startswith("```"):
+            text = _re.sub(r"^```[a-z]*\n?", "", text)
+            text = _re.sub(r"\n?```$", "", text.strip())
+        parsed = json.loads(text)
+        # Build display text from structured data
+        display = f"**{parsed.get('status', 'Assessment')}**\n\n{parsed.get('summary', '')}"
+        obs = parsed.get("observations", [])
+        if obs:
+            display += "\n\n**Observations:**\n" + "\n".join(f"• {o}" for o in obs)
+        rec = parsed.get("watering_recommendation")
+        if rec:
+            display += f"\n\n**Watering:** {rec}"
+        return display, parsed
+    except (json.JSONDecodeError, ValueError, KeyError):
+        # JSON parse failed — return raw text, no structured data
+        return raw_response, None
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -570,7 +608,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         all_plants = get_all_plants()
         plant = _resolve_plant_name(caption, all_plants)
     if not plant:
-        names = ", ".join(p["name"] for p in all_plants) or "none"
+        names = ", ".join(p["name"] for p in get_all_plants()) or "none"
         await update.message.reply_text(
             f"No plant named '{caption}' found. Known plants: {names}"
         )
@@ -582,12 +620,94 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     await file.download_to_memory(buf)
     image_bytes = buf.getvalue()
 
-    assessment = _analyze_plant_image(image_bytes, plant)
-    save_result = save_plant_assessment(plant["name"], assessment)
-    if "saved" not in save_result.lower():
-        logger.warning(f"Failed to save plant assessment: {save_result}")
-    for chunk in [assessment[i:i+4000] for i in range(0, len(assessment), 4000)]:
-        await update.message.reply_text(chunk)
+    display_text, parsed = _analyze_plant_image(image_bytes, plant)
+
+    if parsed:
+        # Save structured notes to plant profile doc
+        profile_notes = parsed.get("profile_notes", "")
+        if profile_notes:
+            note_plant_observation(plant["name"], profile_notes)
+
+        # Save assessment summary to DB state (existing behaviour)
+        save_plant_assessment(plant["name"], parsed.get("summary", display_text))
+
+        # Send assessment text
+        for chunk in [display_text[i:i+4000] for i in range(0, len(display_text), 4000)]:
+            await update.message.reply_text(chunk)
+
+        # If frequency change suggested, send inline keyboard
+        freq_suggestion = parsed.get("frequency_suggestion")
+        if freq_suggestion and isinstance(freq_suggestion, dict):
+            new_days = freq_suggestion.get("days")
+            reason = freq_suggestion.get("reason", "")
+            current_days = plant.get("frequency_days", "?")
+            if new_days and new_days != current_days:
+                keyboard = InlineKeyboardMarkup([[
+                    InlineKeyboardButton(
+                        "✓ Apply",
+                        callback_data=f"plant_freq:{plant['name']}:{new_days}"
+                    ),
+                    InlineKeyboardButton(
+                        "✗ Dismiss",
+                        callback_data=f"plant_freq_dismiss:{plant['name']}"
+                    ),
+                ]])
+                await update.message.reply_text(
+                    f"💡 Suggest changing *{plant['name']}* watering: "
+                    f"{current_days}→{new_days} days\n_{reason}_",
+                    parse_mode="Markdown",
+                    reply_markup=keyboard,
+                )
+    else:
+        # Fallback: plain text behaviour
+        save_result = save_plant_assessment(plant["name"], display_text)
+        if "saved" not in save_result.lower():
+            logger.warning(f"Failed to save plant assessment: {save_result}")
+        for chunk in [display_text[i:i+4000] for i in range(0, len(display_text), 4000)]:
+            await update.message.reply_text(chunk)
+
+
+async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle inline keyboard callbacks for plant frequency change proposals."""
+    query = update.callback_query
+    await query.answer()
+
+    data = query.data or ""
+
+    if data.startswith("plant_freq_dismiss:"):
+        plant_name = data.split(":", 1)[1]
+        await query.edit_message_text(f"Dismissed frequency change for {plant_name}.")
+        return
+
+    if data.startswith("plant_freq:"):
+        parts = data.split(":")
+        if len(parts) != 3:
+            await query.edit_message_text("Invalid callback data.")
+            return
+        _, plant_name, new_days_str = parts
+        try:
+            new_days = int(new_days_str)
+        except ValueError:
+            await query.edit_message_text("Invalid frequency value.")
+            return
+
+        update_plant(plant_name, {"frequency_days": new_days})
+
+        # Append to plant profile doc
+        from datetime import date as _date
+        today = _date.today().isoformat()
+        freq_note = f"\n| {today} | ?→{new_days} days | Applied via Telegram photo assessment |"
+        slug = plant_name.lower().replace(" ", "-")
+        profile_path = PLANT_ASSESSMENT_DIR / f"{slug}.md"
+        if profile_path.exists():
+            existing = profile_path.read_text()
+            if "## Frequency History" in existing:
+                existing = existing.rstrip() + freq_note + "\n"
+                profile_path.write_text(existing)
+
+        await query.edit_message_text(
+            f"✓ Updated {plant_name} watering frequency to every {new_days} days."
+        )
 
 
 def main() -> None:
@@ -599,6 +719,7 @@ def main() -> None:
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+    app.add_handler(CallbackQueryHandler(_handle_callback))
     logger.info("Concierge bot starting...")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
