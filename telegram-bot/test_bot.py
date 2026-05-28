@@ -1,7 +1,8 @@
+import json
 import subprocess
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch, call
-from bot import start, handle_message, _call_antigravity_fallback, _analyze_plant_image, handle_photo, _identify_plant_from_image, _build_identification_context, _build_common_name_lookup
+from bot import start, handle_message, _call_antigravity_fallback, _analyze_plant_image, handle_photo, _identify_plant_from_image, _build_identification_context, _build_common_name_lookup, _validate_plant_assessment
 
 
 # ---------------------------------------------------------------------------
@@ -241,6 +242,51 @@ def test_call_antigravity_fallback_builds_prompt_with_server_state(mocker):
     assert "daily-briefing: success" in prompt_passed
     assert "CPU: 5%" in prompt_passed
     assert "how is everything?" in prompt_passed
+
+
+# ---------------------------------------------------------------------------
+# _validate_plant_assessment
+# ---------------------------------------------------------------------------
+
+POLKA_DOT = {"name": "Polka Dot Plant", "location": "indoor", "last_watered": "2026-05-27", "frequency_days": 4}
+CONTRADICTORY_ASSESSMENT = {
+    "status": "Concerning",
+    "summary": "Drooping and dry soil suggest underwatering.",
+    "observations": ["dry soil", "drooping leaves"],
+    "watering_recommendation": "delay",
+    "frequency_suggestion": None,
+    "profile_notes": "### 2026-05-28 — Concerning\nDrooping leaves observed.",
+}
+
+
+def test_validate_assessment_returns_original_when_valid(mocker):
+    mock_result = MagicMock(returncode=0, stdout="VALID")
+    mocker.patch.object(subprocess, "run", return_value=mock_result)
+    mocker.patch("bot._load_species_context", return_value="")
+
+    result, was_corrected = _validate_plant_assessment(CONTRADICTORY_ASSESSMENT, POLKA_DOT)
+    assert was_corrected is False
+    assert result == CONTRADICTORY_ASSESSMENT
+
+
+def test_validate_assessment_corrects_contradiction(mocker):
+    corrected = {**CONTRADICTORY_ASSESSMENT, "watering_recommendation": "immediate"}
+    mock_result = MagicMock(returncode=0, stdout=json.dumps(corrected))
+    mocker.patch.object(subprocess, "run", return_value=mock_result)
+    mocker.patch("bot._load_species_context", return_value="")
+
+    result, was_corrected = _validate_plant_assessment(CONTRADICTORY_ASSESSMENT, POLKA_DOT)
+    assert was_corrected is True
+    assert result["watering_recommendation"] == "immediate"
+
+
+def test_validate_assessment_falls_back_on_failure(mocker):
+    mocker.patch.object(subprocess, "run", side_effect=Exception("timeout"))
+    mocker.patch("bot._load_species_context", return_value="")
+
+    result, was_corrected = _validate_plant_assessment(CONTRADICTORY_ASSESSMENT, POLKA_DOT)
+    assert was_corrected is False
+    assert result == CONTRADICTORY_ASSESSMENT
 
 
 # ---------------------------------------------------------------------------

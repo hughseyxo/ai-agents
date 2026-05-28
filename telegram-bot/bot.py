@@ -3,6 +3,7 @@ import io
 import json
 import logging
 import os
+import re
 import subprocess
 from pathlib import Path
 from dotenv import load_dotenv
@@ -74,6 +75,7 @@ SYSTEM_PROMPT = CONCIERGE_PATH.read_text() if CONCIERGE_PATH.exists() else (
     "You are a concierge assistant for Cian's home server. Be concise and direct."
 )
 
+REPO_ROOT = Path(__file__).parent.parent
 PLANT_ASSESSMENT_DIR = Path(__file__).parent.parent / "docs" / "plants"
 _ASSESSMENT_PROMPT_PATH = Path(__file__).parent.parent / "agents" / "prompts" / "plant_photo_assessment.md"
 PLANT_ASSESSMENT_SYSTEM = _ASSESSMENT_PROMPT_PATH.read_text() if _ASSESSMENT_PROMPT_PATH.exists() else PLANT_HEALTH_SYSTEM
@@ -467,6 +469,43 @@ def _load_species_context(plant_name: str) -> str:
         return ""
 
 
+_VALIDATOR_PROMPT_PATH = REPO_ROOT / "agents" / "prompts" / "plant_assessment_validator.md"
+
+
+def _validate_plant_assessment(parsed: dict, plant: dict) -> tuple[dict, bool]:
+    """Validate vision model JSON with a text LLM. Returns (result, was_corrected)."""
+    try:
+        template = _VALIDATOR_PROMPT_PATH.read_text()
+    except Exception:
+        return parsed, False
+
+    species_context = _load_species_context(plant["name"])
+    prompt = (template
+              .replace("{{plant_name}}", plant["name"])
+              .replace("{{species_reference}}", species_context or "No reference available.")
+              .replace("{{assessment_json}}", json.dumps(parsed, indent=2)))
+
+    for cmd in [
+        ["agy", "--dangerously-skip-permissions", "-p", prompt],
+        ["claude", "--dangerously-skip-permissions", "-p", prompt, "--output-format", "text"],
+    ]:
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True,
+                                    cwd=str(REPO_ROOT), timeout=60)
+            if result.returncode != 0 or not result.stdout.strip():
+                continue
+            response = result.stdout.strip()
+            if response.upper() == "VALID":
+                return parsed, False
+            text = re.sub(r"^```[a-z]*\n?", "", response)
+            text = re.sub(r"\n?```$", "", text.strip())
+            corrected = json.loads(text)
+            return corrected, True
+        except Exception:
+            continue
+    return parsed, False
+
+
 _GENERIC_ASSESSMENT_CAPTIONS = {"assess", "check", "identify"}
 
 
@@ -595,6 +634,12 @@ def _analyze_plant_image(image_bytes: bytes, plant: dict) -> tuple[str, dict | N
             text = _re.sub(r"^```[a-z]*\n?", "", text)
             text = _re.sub(r"\n?```$", "", text.strip())
         parsed = json.loads(text)
+        # Validate consistency with a text LLM (catches vision model contradictions)
+        parsed, was_corrected = _validate_plant_assessment(parsed, plant)
+        if was_corrected:
+            existing_notes = parsed.get("profile_notes", "")
+            parsed["profile_notes"] = existing_notes + "\n[Validator: structured fields corrected for consistency with observations]"
+            logger.info(f"[{plant['name']}] Assessment corrected by validation LLM")
         # Build display text from structured data
         display = f"**{plant['name']}** — {parsed.get('status', 'Assessment')}\n\n{parsed.get('summary', '')}"
         obs = parsed.get("observations", [])
