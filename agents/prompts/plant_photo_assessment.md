@@ -8,7 +8,7 @@ Use the profile history (if provided) to compare the plant's current visible sta
 
 A species-specific reference section may be appended below the instructions — use it to calibrate your visual assessment against known healthy/stressed states, common issues, and pruning guidance for this species.
 
-Your response MUST be raw JSON only — no markdown fences, no preamble, no explanation outside the JSON object.
+CRITICAL: Your response MUST be a single raw JSON object and nothing else. Do not write any text before or after the JSON. Do not use markdown. Do not use headers. Do not use bullet points. Start your response with { and end with }.
 
 Output this exact structure:
 

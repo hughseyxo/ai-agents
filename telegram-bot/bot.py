@@ -452,6 +452,32 @@ def _resolve_plant_name(caption: str, plants: list[dict]) -> dict | None:
 
 _SPECIES_REFERENCE_PATH = Path(__file__).parent.parent / "docs" / "plants" / "species_reference.md"
 
+_WATERING_REC_MAP = {
+    "immediate": "immediate", "now": "immediate", "water now": "immediate",
+    "on schedule": "on_schedule", "on_schedule": "on_schedule", "schedule": "on_schedule",
+    "delay": "delay", "delay watering": "delay",
+}
+
+
+def _extract_assessment_from_text(raw: str) -> dict | None:
+    """Try to salvage structured fields from a non-JSON markdown assessment response."""
+    status_m = re.search(r'\*{0,2}[Ss]tatus\*{0,2}\s*[:\-]\s*([A-Za-z]+)', raw)
+    summary_m = re.search(r'\*{0,2}[Ss]ummary\*{0,2}\s*[:\-]\s*(.+?)(?=\n\*{0,2}[A-Z]|\Z)', raw, re.DOTALL)
+    watering_m = re.search(r'\*{0,2}[Ww]atering[^:\n]*\*{0,2}\s*[:\-]\s*([A-Za-z _]+)', raw)
+    obs_m = re.search(r'\*{0,2}[Oo]bservations?\*{0,2}\s*[:\-]\s*(.+?)(?=\n\*{0,2}[A-Z]|\Z)', raw, re.DOTALL)
+
+    status = status_m.group(1).strip() if status_m else "Assessment"
+    summary = summary_m.group(1).strip().rstrip("*").strip() if summary_m else raw[:300].strip()
+    rec_raw = watering_m.group(1).strip().lower() if watering_m else ""
+    rec = next((v for k, v in _WATERING_REC_MAP.items() if k in rec_raw), None)
+    obs_text = obs_m.group(1).strip() if obs_m else ""
+    obs = [l.lstrip("•*- ").strip() for l in obs_text.splitlines() if l.strip()] if obs_text else []
+
+    if not (status_m or summary_m):
+        return None
+    return {"status": status, "summary": summary, "observations": obs,
+            "watering_recommendation": rec, "frequency_suggestion": None, "profile_notes": ""}
+
 
 def _load_species_context(plant_name: str) -> str:
     """Extract the section for this plant from species_reference.md. Returns '' on any failure."""
@@ -579,6 +605,27 @@ def _identify_plant_from_image(image_bytes: bytes, plants: list) -> dict | None:
     return None
 
 
+_WATERING_LABELS = {"immediate": "💧 Water now", "on_schedule": "✅ On schedule", "delay": "⏳ Delay watering"}
+_STATUS_EMOJI = {"Healthy": "🟢", "Stressed": "🟡", "Concerning": "🟠", "Underwatered": "🔵", "Overwatered": "🔴"}
+
+
+def _build_assessment_display(parsed: dict, plant: dict) -> str:
+    status = parsed.get("status", "Assessment")
+    summary = parsed.get("summary", "")
+    obs = parsed.get("observations", [])
+    rec = parsed.get("watering_recommendation", "")
+    freq = parsed.get("frequency_suggestion")
+    emoji = _STATUS_EMOJI.get(status, "⚪")
+    lines = [f"{emoji} *{plant['name']}* — {status}", "", summary]
+    if obs:
+        lines += ["", "*Observations:*"] + [f"• {o}" for o in obs]
+    if rec:
+        lines += ["", _WATERING_LABELS.get(rec, f"Watering: {rec}")]
+    if freq and isinstance(freq, dict):
+        lines += [f"📅 Suggested frequency: every {freq.get('days')} days"]
+    return "\n".join(lines)
+
+
 def _analyze_plant_image(image_bytes: bytes, plant: dict) -> tuple[str, dict | None]:
     """Analyze a plant image. Returns (display_text, parsed_json_or_None)."""
     from datetime import date as _date
@@ -644,40 +691,14 @@ def _analyze_plant_image(image_bytes: bytes, plant: dict) -> tuple[str, dict | N
             existing_notes = parsed.get("profile_notes", "")
             parsed["profile_notes"] = existing_notes + "\n[Validator: structured fields corrected for consistency with observations]"
             logger.info(f"[{plant['name']}] Assessment corrected by validation LLM")
-        # Build display text from structured data
-        status = parsed.get("status", "Assessment")
-        summary = parsed.get("summary", "")
-        obs = parsed.get("observations", [])
-        rec = parsed.get("watering_recommendation", "")
-        freq = parsed.get("frequency_suggestion")
-
-        WATERING_LABELS = {
-            "immediate": "💧 Water now",
-            "on_schedule": "✅ On schedule",
-            "delay": "⏳ Delay watering",
-        }
-        STATUS_EMOJI = {
-            "Healthy": "🟢",
-            "Stressed": "🟡",
-            "Concerning": "🟠",
-            "Underwatered": "🔵",
-            "Overwatered": "🔴",
-        }
-        emoji = STATUS_EMOJI.get(status, "⚪")
-
-        lines = [f"{emoji} *{plant['name']}* — {status}", "", summary]
-        if obs:
-            lines += ["", "*Observations:*"] + [f"• {o}" for o in obs]
-        if rec:
-            lines += ["", WATERING_LABELS.get(rec, f"Watering: {rec}")]
-        if freq and isinstance(freq, dict):
-            lines += [f"📅 Suggested frequency: every {freq.get('days')} days"]
-
-        display = "\n".join(lines)
+        display = _build_assessment_display(parsed, plant)
         return display, parsed
     except (json.JSONDecodeError, ValueError, KeyError):
-        # JSON parse failed — return raw text, no structured data
-        return raw_response, None
+        # JSON parse failed — try to salvage structured fields from markdown prose
+        salvaged = _extract_assessment_from_text(raw_response)
+        if salvaged:
+            return _build_assessment_display(salvaged, plant), salvaged
+        return f"*{plant['name']}*\n\n{raw_response}", None
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
