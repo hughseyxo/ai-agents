@@ -473,7 +473,8 @@ _VALIDATOR_PROMPT_PATH = REPO_ROOT / "agents" / "prompts" / "plant_assessment_va
 
 
 def _validate_plant_assessment(parsed: dict, plant: dict) -> tuple[dict, bool]:
-    """Validate vision model JSON with a text LLM. Returns (result, was_corrected)."""
+    """Validate vision model JSON via agy/claude subprocess (text-only, no tool access).
+    Returns (result, was_corrected)."""
     try:
         template = _VALIDATOR_PROMPT_PATH.read_text()
     except Exception:
@@ -485,12 +486,15 @@ def _validate_plant_assessment(parsed: dict, plant: dict) -> tuple[dict, bool]:
               .replace("{{species_reference}}", species_context or "No reference available.")
               .replace("{{assessment_json}}", json.dumps(parsed, indent=2)))
 
+    # Safe invocation: prompt via stdin, no --dangerously-skip-permissions.
+    # Without that flag any tool-use attempt needs a terminal to prompt — there is none
+    # in a subprocess, so agy/claude produce text-only output.
     for cmd in [
-        ["agy", "--dangerously-skip-permissions", "-p", prompt],
-        ["claude", "--dangerously-skip-permissions", "-p", prompt, "--output-format", "text"],
+        ["agy", "-y", "-o", "text"],
+        ["claude", "--print", "--output-format", "text"],
     ]:
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True,
+            result = subprocess.run(cmd, input=prompt, capture_output=True, text=True,
                                     cwd=str(REPO_ROOT), timeout=60)
             if result.returncode != 0 or not result.stdout.strip():
                 continue
