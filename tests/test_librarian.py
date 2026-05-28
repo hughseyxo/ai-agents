@@ -122,7 +122,7 @@ def test_collect_data_samples_output_files(tmp_path):
     agent.context["plan"] = {"mode": "audit", "today": "2026-05-22"}
     output_dir = tmp_path / "output"
     output_dir.mkdir()
-    (output_dir / "daily-briefing-2026-05-22.md").write_text("## Daily Briefing\nContent.")
+    (output_dir / "daily-briefing-2026-05-22.html").write_text("<h1>Daily Briefing</h1>")
     (tmp_path / "agents" / "prompts").mkdir(parents=True)
     with patch("agents.librarian.REPO_ROOT", tmp_path):
         agent._collect_data()
