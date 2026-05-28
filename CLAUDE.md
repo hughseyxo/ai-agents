@@ -44,7 +44,7 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 │   ├── commit_security.py      # Commit security agent (on-demand) — LLM-based scan of git diff for secrets/vulnerabilities. run_hook() used by .git/hooks/pre-push; blocks push on Critical/High. Also runnable via CLI.
 │   ├── travel_agent.py         # Travel agent (on-demand) — search mode: finds flights/hotels/activities; plan mode: itinerary from existing bookings. model: claude-sonnet-4-6. Design doc: docs/travel-agent.md
 │   ├── librarian.py            # Librarian agent (on-demand, cron-managed: audit Sun 06:00 UTC, watch Mon-Sat 06:00 UTC). Reads agent run history + output files, calls LLM to produce findings. Auto-applies learnings (confidence ≥0.8), emails prompt proposals (0.5-0.79) with approve/reject links via bridge server.
-│   ├── plant_weather_agent.py  # Plant Weather agent (schedule: 0 * * * * / hourly). Fetches weather, recalculates weather-adjusted watering dates for all plants, writes results to plant_weather_cache table in SQLite. No LLM, no email — purely deterministic cache refresh.
+│   ├── plant_agent.py          # Master Plant Agent (schedule: 0 * * * * / hourly, model: claude-haiku-4-5). Steps (all frequency-gated): weather_update (every run, deterministic) → sync_watering (24h, LLM reads Todoist completed tasks) → create_tasks (12h, LLM creates due water tasks) → photo_requests (24h, Telegram photo requests for plants needing assessment) → send_status_email (24h, LLM sends plant status table email) → intelligence_run (72h, LLM analyses plant profiles, flags needs_photo, appends notes to docs/plants/<slug>.md). Design doc: docs/superpowers/specs/2026-05-26-plant-sensitivity-and-underwatering-design.md
 │   └── prompts/                # LLM CLI synthesis prompt templates
 │       ├── daily_briefing.md
 │       ├── news_briefing.md
@@ -53,7 +53,10 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 │       ├── travel_agent_plan.md     # Plan mode: day-by-day itinerary from existing bookings
 │       ├── librarian_audit.md       # Weekly full analysis prompt
 │       ├── librarian_watch.md       # Daily failure-scan prompt
-│       └── librarian_report.md      # Email send prompt
+│       ├── librarian_report.md      # Email send prompt
+│       ├── plant_status_email.md    # Plant status table email (used by send_status_email step)
+│       ├── plant_intelligence.md    # Intelligence analysis prompt (used by intelligence_run step)
+│       └── plant_photo_assessment.md # Photo assessment prompt (used by Telegram bot save_plant_assessment)
 ├── telegram-bot/       # Server concierge Telegram bot (OpenRouter-backed)
 │   ├── bot.py                  # Bot: polling, auth gate, tool-use loop, model fallback
 │   ├── tools.py                # Tool functions: get_agent_status, get_plant_status, get_yopflix_status, get_system_health, get_cron_schedule, get_agent_logs, water_plant, add_plant, remove_plant, save_recipe, get_plant, get_all_plants, save_plant_assessment
@@ -134,11 +137,11 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 # Plant Watering Tracker
 - Data lives in `data/agents.db` (SQLite state table); CLI tool is `plant.sh` (add/list/remove/--outdoor)
 - Plant data model: `{name, frequency_days, last_watered, location, sunlight, water_sensitivity}` — location is `"indoor"` or `"outdoor"`; water_sensitivity is `"high"/"medium"/"low"` (auto-researched via Antigravity at add time, defaults to `"medium"`)
-- **Weather-aware:** `PlantWeatherAgent` runs hourly and writes adjusted dates to `plant_weather_cache` table. `get_plant_status()` in the concierge bot reads from this cache. Daily briefing also applies adjustments independently for its email output.
-  - Indoor: ±1-2 days based on temp/humidity (subtle)
-  - Outdoor: ±1-3 days based on rain, heatwaves, dry spells (larger adjustments)
+- **Master agent:** `PlantAgent` (hourly) owns the full plant lifecycle — weather cache refresh, Todoist sync, task creation, photo requests, status email, and intelligence runs. Replaces the old `PlantWeatherAgent`.
+  - Weather cache written to `plant_weather_cache` table; `get_plant_status()` in the concierge bot reads from it
+  - Indoor: ±1-2 days adjustment based on temp/humidity; Outdoor: ±1-3 days based on rain/heatwaves
   - Weather fetch failure is non-fatal — cache not updated, bot falls back to base schedule
-- Daily briefing agent checks plants and creates Todoist reminders automatically
+- **Plant profiles:** `docs/plants/<slug>.md` — created automatically, updated by intelligence runs. Contain observed behaviour, health assessments, frequency history, and LLM notes.
 - **When adding a plant without an explicit frequency:** search the web for recommended indoor watering cadence, check at least 3 sources, and use the consensus value. Do NOT default to 7 days.
 
 # Available MCP Integrations

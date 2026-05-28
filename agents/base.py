@@ -127,8 +127,8 @@ class BaseAgent:
     PROVIDERS = [
         {
             "name": "antigravity",
-            "cmd_prefix": ["agy", "-y", "-p"],
-            "cmd_suffix": ["-o", "text"],
+            "cmd_prefix": ["agy", "--dangerously-skip-permissions", "-p"],
+            "cmd_suffix": [],
             "adapt_prompt": True,
         },
         {
