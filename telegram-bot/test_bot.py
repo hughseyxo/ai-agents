@@ -324,16 +324,25 @@ def _make_photo_update(caption=None, user_id=1703830475):
 
 
 @pytest.mark.asyncio
-async def test_handle_photo_no_caption_replies_with_instruction(mocker):
+async def test_handle_photo_no_caption_triggers_visual_id(mocker):
+    """No caption (e.g. subsequent photos in a media group) should trigger visual identification."""
     mocker.patch("bot.ALLOWED_USER_ID", "1703830475")
+    fake_plant = {"name": "Monstera", "location": "indoor", "last_watered": "2026-05-28", "frequency_days": 10}
+    mocker.patch("bot.get_all_plants", return_value=[fake_plant])
+    mocker.patch("bot._identify_plant_from_image", return_value=fake_plant)
+    mocker.patch("bot._analyze_plant_image", return_value=("Healthy.", None))
+    mocker.patch("bot.save_plant_assessment", return_value="saved.")
+
     update = _make_photo_update(caption=None)
     context = MagicMock()
     context.bot.send_chat_action = AsyncMock()
+    mock_file = AsyncMock()
+    mock_file.download_to_memory = AsyncMock(side_effect=lambda buf: buf.write(b"fakejpeg"))
+    context.bot.get_file = AsyncMock(return_value=mock_file)
 
     await handle_photo(update, context)
 
-    update.message.reply_text.assert_called_once()
-    assert "caption" in update.message.reply_text.call_args[0][0].lower()
+    update.message.reply_text.assert_called_once_with("Healthy.")
 
 
 @pytest.mark.asyncio

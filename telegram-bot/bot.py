@@ -651,13 +651,8 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
 
     caption = (update.message.caption or "").strip()
-    if not caption:
-        await update.message.reply_text(
-            "Please include the plant name as a caption (e.g. 'monstera' or 'assess')."
-        )
-        return
 
-    if caption.lower() in _GENERIC_ASSESSMENT_CAPTIONS:
+    if not caption or caption.lower() in _GENERIC_ASSESSMENT_CAPTIONS:
         # Visual identification path — download image then ask vision model which plant it is
         photo = update.message.photo[-1]
         file = await context.bot.get_file(photo.file_id)
