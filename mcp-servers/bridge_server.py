@@ -44,7 +44,9 @@ def _handle_librarian_approve(proposal_id: str) -> tuple[int, str]:
     proposal = json.loads(pf.read_text())
     if proposal.get("status") != "pending":
         return 400, f"<h1>Already {proposal['status']}</h1>"
-    target = REPO_ROOT / proposal["file"]
+    target = (REPO_ROOT / proposal["file"]).resolve()
+    if not str(target).startswith(str(REPO_ROOT.resolve()) + "/"):
+        return 400, "<h1>Invalid file path</h1>"
     target.write_text(proposal["proposed"])
     try:
         subprocess.run(["git", "add", proposal["file"]], cwd=str(REPO_ROOT), check=True)
@@ -416,7 +418,7 @@ class MCPBridgeHandler(BaseHTTPRequestHandler):
         params = parse_qs(parsed.query)
         token = params.get("token", [""])[0]
 
-        if token != BRIDGE_TOKEN:
+        if not BRIDGE_TOKEN or token != BRIDGE_TOKEN:
             self.send_response(401)
             self.end_headers()
             self.wfile.write(b"Unauthorized")
