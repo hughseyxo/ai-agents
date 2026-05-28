@@ -76,7 +76,10 @@ class PlantAgent(BaseAgent):
         last = self.get_state(f"last_{key}")
         if not last:
             return True
-        elapsed = (datetime.now(timezone.utc) - datetime.fromisoformat(last)).total_seconds()
+        last_dt = datetime.fromisoformat(last)
+        if last_dt.tzinfo is None:
+            last_dt = last_dt.replace(tzinfo=timezone.utc)
+        elapsed = (datetime.now(timezone.utc) - last_dt).total_seconds()
         return elapsed > hours * 3600
 
     def _mark_ran(self, key: str):
@@ -311,7 +314,11 @@ class PlantAgent(BaseAgent):
         prompt_path = REPO_ROOT / "agents" / "prompts" / "plant_status_email.md"
         prompt = prompt_path.read_text()
         prompt = prompt.replace("{{plant_table}}", plant_table).replace("{{today}}", today.isoformat())
-        self.synthesize(prompt)
+        try:
+            self.synthesize(prompt)
+        except Exception as e:
+            print(f"[{self.name}] Failed to send status email: {e}", file=sys.stderr)
+            return {"skipped": True, "error": str(e)}
         self._mark_ran("send_status_email")
         return {"sent": True, "plants": len(plants)}
 
@@ -352,7 +359,12 @@ class PlantAgent(BaseAgent):
             .replace("{{agent_notes}}", agent_notes)
             .replace("{{today}}", today.isoformat()))
 
-        output = self.synthesize(prompt)
+        try:
+            output = self.synthesize(prompt)
+        except Exception as e:
+            print(f"[{self.name}] Intelligence run LLM failed: {e}", file=sys.stderr)
+            self._mark_ran("intelligence_run")
+            return {"skipped": True, "error": str(e)}
         self._apply_intelligence_output(output, plants)
         self._mark_ran("intelligence_run")
         return {"ran": True}
