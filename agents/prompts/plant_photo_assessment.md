@@ -6,6 +6,8 @@ The context you may receive includes:
 
 Use the profile history (if provided) to compare the plant's current visible state against past observations. Note any changes — improvements, deterioration, or new symptoms.
 
+A species-specific reference section may be appended below the instructions — use it to calibrate your visual assessment against known healthy/stressed states, common issues, and pruning guidance for this species.
+
 Your response MUST be raw JSON only — no markdown fences, no preamble, no explanation outside the JSON object.
 
 Output this exact structure:

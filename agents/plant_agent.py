@@ -396,6 +396,28 @@ class PlantAgent(BaseAgent):
                     content += f"\n## Intelligence Notes\n<!-- Appended by each intelligence run -->{entry}"
                 profile_path.write_text(content)
 
+        pruning_m = re.search(r'\[PRUNING\](.*?)\[/PRUNING\]', output, re.DOTALL)
+        if pruning_m:
+            for line in pruning_m.group(1).strip().splitlines():
+                line = line.strip()
+                if not line or " — " not in line:
+                    continue
+                plant_name, action = line.split(" — ", 1)
+                plant_name = plant_name.strip()
+                slug = plant_name.lower().replace(" ", "-").replace("/", "-")
+                profile_path = PLANTS_DIR / f"{slug}.md"
+                if profile_path.exists():
+                    content = profile_path.read_text()
+                    entry = f"\n### {today} (pruning)\n- {action.strip()}\n"
+                    if "## Intelligence Notes" in content:
+                        content = content.replace(
+                            "<!-- Appended by each intelligence run -->",
+                            f"<!-- Appended by each intelligence run -->{entry}"
+                        )
+                    else:
+                        content += f"\n## Intelligence Notes\n<!-- Appended by each intelligence run -->{entry}"
+                    profile_path.write_text(content)
+
         needs_photo_m = re.search(r'\[NEEDS_PHOTO\](.*?)\[/NEEDS_PHOTO\]', output, re.DOTALL)
         if needs_photo_m:
             flagged_raw = needs_photo_m.group(1).strip()

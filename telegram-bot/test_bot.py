@@ -1,7 +1,7 @@
 import subprocess
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch, call
-from bot import start, handle_message, _call_antigravity_fallback, _analyze_plant_image, handle_photo
+from bot import start, handle_message, _call_antigravity_fallback, _analyze_plant_image, handle_photo, _identify_plant_from_image
 
 
 # ---------------------------------------------------------------------------
@@ -398,6 +398,49 @@ async def test_handle_photo_happy_path(mocker):
     await handle_photo(update, context)
 
     update.message.reply_text.assert_called_once_with("Leaves look healthy.")
+
+
+@pytest.mark.asyncio
+async def test_handle_photo_assess_caption_uses_visual_id(mocker):
+    """Caption 'assess' triggers visual identification then runs full assessment."""
+    mocker.patch("bot.ALLOWED_USER_ID", "1703830475")
+    fake_plant = {"name": "Monstera", "location": "indoor", "last_watered": "2026-05-28", "frequency_days": 10}
+    mocker.patch("bot.get_all_plants", return_value=[fake_plant])
+    mocker.patch("bot._identify_plant_from_image", return_value=fake_plant)
+    mocker.patch("bot._analyze_plant_image", return_value=("Looks healthy.", None))
+    mocker.patch("bot.save_plant_assessment", return_value="Monstera assessment saved.")
+
+    update = _make_photo_update(caption="assess")
+    context = MagicMock()
+    context.bot.send_chat_action = AsyncMock()
+    mock_file = AsyncMock()
+    mock_file.download_to_memory = AsyncMock(side_effect=lambda buf: buf.write(b"fakejpeg"))
+    context.bot.get_file = AsyncMock(return_value=mock_file)
+
+    await handle_photo(update, context)
+
+    update.message.reply_text.assert_called_once_with("Looks healthy.")
+
+
+@pytest.mark.asyncio
+async def test_handle_photo_assess_caption_identification_fails(mocker):
+    """When visual ID returns None, bot asks user to name the plant."""
+    mocker.patch("bot.ALLOWED_USER_ID", "1703830475")
+    fake_plant = {"name": "Monstera", "location": "indoor", "last_watered": "2026-05-28", "frequency_days": 10}
+    mocker.patch("bot.get_all_plants", return_value=[fake_plant])
+    mocker.patch("bot._identify_plant_from_image", return_value=None)
+
+    update = _make_photo_update(caption="assess")
+    context = MagicMock()
+    context.bot.send_chat_action = AsyncMock()
+    mock_file = AsyncMock()
+    mock_file.download_to_memory = AsyncMock(side_effect=lambda buf: buf.write(b"fakejpeg"))
+    context.bot.get_file = AsyncMock(return_value=mock_file)
+
+    await handle_photo(update, context)
+
+    reply = update.message.reply_text.call_args[0][0].lower()
+    assert "identify" in reply or "couldn't" in reply
 
 
 @pytest.mark.asyncio

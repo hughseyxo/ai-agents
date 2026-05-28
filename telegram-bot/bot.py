@@ -448,6 +448,54 @@ def _resolve_plant_name(caption: str, plants: list[dict]) -> dict | None:
     return None
 
 
+_SPECIES_REFERENCE_PATH = Path(__file__).parent.parent / "docs" / "plants" / "species_reference.md"
+
+
+def _load_species_context(plant_name: str) -> str:
+    """Extract the section for this plant from species_reference.md. Returns '' on any failure."""
+    try:
+        text = _SPECIES_REFERENCE_PATH.read_text()
+        heading = f"## {plant_name}"
+        start = text.find(heading)
+        if start == -1:
+            return ""
+        # Find next ## heading after the start
+        next_heading = text.find("\n## ", start + len(heading))
+        section = text[start:next_heading].strip() if next_heading != -1 else text[start:].strip()
+        return section
+    except Exception:
+        return ""
+
+
+_GENERIC_ASSESSMENT_CAPTIONS = {"assess", "check", "identify"}
+
+
+def _identify_plant_from_image(image_bytes: bytes, plants: list) -> dict | None:
+    """Ask vision model which known plant is in the image. Returns plant dict or None."""
+    names = "\n".join(f"- {p['name']}" for p in plants)
+    prompt = (
+        f"Which plant from this list is shown in the photo?\n{names}\n\n"
+        "Reply with ONLY the exact plant name from the list, or NONE if you cannot identify it."
+    )
+    b64 = base64.b64encode(image_bytes).decode()
+    messages = [{"role": "user", "content": [
+        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
+        {"type": "text", "text": prompt},
+    ]}]
+    for model in VISION_MODELS:
+        try:
+            response = client.chat.completions.create(model=model, messages=messages)
+            answer = (response.choices[0].message.content or "").strip()
+            if answer.upper() == "NONE":
+                return None
+            match = next((p for p in plants if p["name"].lower() == answer.lower()), None)
+            if match:
+                return match
+        except Exception:
+            continue
+    return None
+
+
 def _analyze_plant_image(image_bytes: bytes, plant: dict) -> tuple[str, dict | None]:
     """Analyze a plant image. Returns (display_text, parsed_json_or_None)."""
     from datetime import date as _date
@@ -465,6 +513,12 @@ def _analyze_plant_image(image_bytes: bytes, plant: dict) -> tuple[str, dict | N
     if profile_path.exists():
         profile_context = f"\n\nPlant profile history:\n{profile_path.read_text()}"
 
+    # Load species reference for this plant
+    species_context = _load_species_context(plant["name"])
+    system_prompt = PLANT_ASSESSMENT_SYSTEM
+    if species_context:
+        system_prompt += f"\n\n## Species Reference\n{species_context}"
+
     user_text = (
         f"This is a {plant['name']} ({plant.get('location', 'unknown location')}). "
         f"Last watered {last_watered} ({days_str})."
@@ -473,7 +527,7 @@ def _analyze_plant_image(image_bytes: bytes, plant: dict) -> tuple[str, dict | N
     )
     b64 = base64.b64encode(image_bytes).decode()
     messages = [
-        {"role": "system", "content": PLANT_ASSESSMENT_SYSTEM},
+        {"role": "system", "content": system_prompt},
         {"role": "user", "content": [
             {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
             {"type": "text", "text": user_text},
@@ -599,26 +653,43 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     caption = (update.message.caption or "").strip()
     if not caption:
         await update.message.reply_text(
-            "Please include the plant name as a caption (e.g. 'monstera')."
+            "Please include the plant name as a caption (e.g. 'monstera' or 'assess')."
         )
         return
 
-    plant = get_plant(caption)
-    if not plant:
+    if caption.lower() in _GENERIC_ASSESSMENT_CAPTIONS:
+        # Visual identification path — download image then ask vision model which plant it is
+        photo = update.message.photo[-1]
+        file = await context.bot.get_file(photo.file_id)
+        buf = io.BytesIO()
+        await file.download_to_memory(buf)
+        image_bytes = buf.getvalue()
+
         all_plants = get_all_plants()
-        plant = _resolve_plant_name(caption, all_plants)
-    if not plant:
-        names = ", ".join(p["name"] for p in get_all_plants()) or "none"
-        await update.message.reply_text(
-            f"No plant named '{caption}' found. Known plants: {names}"
-        )
-        return
+        plant = _identify_plant_from_image(image_bytes, all_plants)
+        if not plant:
+            await update.message.reply_text(
+                "Couldn't identify the plant from the photo. Send it again with the plant name as caption."
+            )
+            return
+    else:
+        # Text-based lookup — no download needed if plant not found
+        plant = get_plant(caption)
+        if not plant:
+            all_plants = get_all_plants()
+            plant = _resolve_plant_name(caption, all_plants)
+        if not plant:
+            names = ", ".join(p["name"] for p in get_all_plants()) or "none"
+            await update.message.reply_text(
+                f"No plant named '{caption}' found. Known plants: {names}"
+            )
+            return
 
-    photo = update.message.photo[-1]
-    file = await context.bot.get_file(photo.file_id)
-    buf = io.BytesIO()
-    await file.download_to_memory(buf)
-    image_bytes = buf.getvalue()
+        photo = update.message.photo[-1]
+        file = await context.bot.get_file(photo.file_id)
+        buf = io.BytesIO()
+        await file.download_to_memory(buf)
+        image_bytes = buf.getvalue()
 
     display_text, parsed = _analyze_plant_image(image_bytes, plant)
 
