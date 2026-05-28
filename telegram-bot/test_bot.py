@@ -1,7 +1,7 @@
 import subprocess
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch, call
-from bot import start, handle_message, _call_antigravity_fallback, _analyze_plant_image, handle_photo, _identify_plant_from_image
+from bot import start, handle_message, _call_antigravity_fallback, _analyze_plant_image, handle_photo, _identify_plant_from_image, _build_identification_context, _build_common_name_lookup
 
 
 # ---------------------------------------------------------------------------
@@ -241,6 +241,53 @@ def test_call_antigravity_fallback_builds_prompt_with_server_state(mocker):
     assert "daily-briefing: success" in prompt_passed
     assert "CPU: 5%" in prompt_passed
     assert "how is everything?" in prompt_passed
+
+
+# ---------------------------------------------------------------------------
+# _identify_plant_from_image helpers
+# ---------------------------------------------------------------------------
+
+def test_identify_plant_partial_name_match(mocker):
+    """Model returns 'Monstera' — should match 'Monstera Deliciosa'."""
+    plants = [{"name": "Monstera Deliciosa", "location": "indoor", "last_watered": "2026-05-20", "frequency_days": 10}]
+    mock_response = MagicMock()
+    mock_response.choices = [MagicMock(message=MagicMock(content="Monstera"))]
+    mocker.patch("bot.client").chat.completions.create.return_value = mock_response
+    mocker.patch("bot._build_identification_context", return_value="- Monstera Deliciosa: glossy leaves")
+    mocker.patch("bot._build_common_name_lookup", return_value={})
+
+    result = _identify_plant_from_image(b"img", plants)
+    assert result is not None
+    assert result["name"] == "Monstera Deliciosa"
+
+
+def test_identify_plant_common_name_match(mocker):
+    """Model returns 'snake plant' — should match 'Dracaena Trifasciata'."""
+    dracaena = {"name": "Dracaena Trifasciata", "location": "indoor", "last_watered": "2026-05-20", "frequency_days": 14}
+    plants = [dracaena]
+    mock_response = MagicMock()
+    mock_response.choices = [MagicMock(message=MagicMock(content="snake plant"))]
+    mocker.patch("bot.client").chat.completions.create.return_value = mock_response
+    mocker.patch("bot._build_identification_context", return_value="- Dracaena Trifasciata (also: snake plant): sword-like leaves")
+    mocker.patch("bot._build_common_name_lookup", return_value={"snake plant": dracaena, "mother-in-law's tongue": dracaena})
+
+    result = _identify_plant_from_image(b"img", plants)
+    assert result is not None
+    assert result["name"] == "Dracaena Trifasciata"
+
+
+def test_build_common_name_lookup_parses_aliases(mocker):
+    """_build_common_name_lookup returns a dict keyed by lowercase alias."""
+    dracaena = {"name": "Dracaena Trifasciata", "location": "indoor", "last_watered": "2026-05-20", "frequency_days": 14}
+    mocker.patch("bot._load_species_context", return_value=(
+        "## Dracaena Trifasciata (Snake Plant)\n\n"
+        "**Also known as:** snake plant, mother-in-law's tongue\n\n"
+        "**Healthy indicators:** Upright sword-like leaves."
+    ))
+    lookup = _build_common_name_lookup([dracaena])
+    assert "snake plant" in lookup
+    assert lookup["snake plant"]["name"] == "Dracaena Trifasciata"
+    assert "mother-in-law's tongue" in lookup
 
 
 # ---------------------------------------------------------------------------

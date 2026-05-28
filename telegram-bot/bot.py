@@ -470,12 +470,47 @@ def _load_species_context(plant_name: str) -> str:
 _GENERIC_ASSESSMENT_CAPTIONS = {"assess", "check", "identify"}
 
 
+def _build_identification_context(plants: list) -> str:
+    """One-liner per plant: formal name (common names) + healthy indicator description."""
+    lines = []
+    for plant in plants:
+        section = _load_species_context(plant["name"])
+        indicator, also_known = "", ""
+        for line in section.splitlines():
+            if line.startswith("**Healthy indicators:**"):
+                indicator = line.replace("**Healthy indicators:**", "").strip()
+            elif line.startswith("**Also known as:**"):
+                also_known = line.replace("**Also known as:**", "").strip()
+        label = plant["name"]
+        if also_known:
+            label += f" (also: {also_known})"
+        lines.append(f"- {label}: {indicator}" if indicator else f"- {label}")
+    return "\n".join(lines)
+
+
+def _build_common_name_lookup(plants: list) -> dict:
+    """Map lowercase common/alias names → plant dict."""
+    lookup = {}
+    for plant in plants:
+        section = _load_species_context(plant["name"])
+        for line in section.splitlines():
+            if line.startswith("**Also known as:**"):
+                aliases = line.replace("**Also known as:**", "").strip()
+                for alias in aliases.split(","):
+                    lookup[alias.strip().lower()] = plant
+    return lookup
+
+
 def _identify_plant_from_image(image_bytes: bytes, plants: list) -> dict | None:
     """Ask vision model which known plant is in the image. Returns plant dict or None."""
-    names = "\n".join(f"- {p['name']}" for p in plants)
+    plant_context = _build_identification_context(plants)
+    common_name_lookup = _build_common_name_lookup(plants)
     prompt = (
-        f"Which plant from this list is shown in the photo?\n{names}\n\n"
-        "Reply with ONLY the exact plant name from the list, or NONE if you cannot identify it."
+        "Which plant from the following list is shown in the photo?\n"
+        "Visual indicators and common names are provided to help you match what you see.\n\n"
+        f"{plant_context}\n\n"
+        "Reply with ONLY the formal plant name from the list (copy it exactly as written "
+        "before any parentheses), or NONE if you cannot identify it with confidence."
     )
     b64 = base64.b64encode(image_bytes).decode()
     messages = [{"role": "user", "content": [
@@ -485,10 +520,15 @@ def _identify_plant_from_image(image_bytes: bytes, plants: list) -> dict | None:
     for model in VISION_MODELS:
         try:
             response = client.chat.completions.create(model=model, messages=messages)
-            answer = (response.choices[0].message.content or "").strip()
+            answer = (response.choices[0].message.content or "").strip().strip(".,!?\"'")
             if answer.upper() == "NONE":
                 return None
-            match = next((p for p in plants if p["name"].lower() == answer.lower()), None)
+            al = answer.lower()
+            match = (
+                next((p for p in plants if p["name"].lower() == al), None)
+                or next((p for p in plants if p["name"].lower() in al or al in p["name"].lower()), None)
+                or common_name_lookup.get(al)
+            )
             if match:
                 return match
         except Exception:

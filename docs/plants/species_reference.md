@@ -6,6 +6,8 @@ Species-specific visual health indicators, stress signs, common issues, pruning 
 
 ## Monstera Deliciosa
 
+**Also known as:** Swiss cheese plant, split-leaf philodendron
+
 **Healthy indicators:** Large, glossy dark-green leaves with firm texture; mature leaves develop fenestrations (splits/holes); new growth unfurls as pale green; aerial roots present but not excessive.
 
 **Underwatering:** Leaves droop and lose turgor, edges may curl inward; soil visibly dry and pulling from pot edges; new growth stunted or slow.
@@ -23,6 +25,8 @@ Species-specific visual health indicators, stress signs, common issues, pruning 
 ---
 
 ## Polka Dot Plant
+
+**Also known as:** hypoestes, freckle face plant, measles plant
 
 **Healthy indicators:** Vivid pink/red/white spotted leaves with bright colour contrast against green; compact, bushy growth; leaves slightly firm.
 
@@ -60,6 +64,8 @@ Species-specific visual health indicators, stress signs, common issues, pruning 
 
 ## Dracaena Trifasciata (Snake Plant)
 
+**Also known as:** snake plant, mother-in-law's tongue, sansevieria, Saint George's sword
+
 **Healthy indicators:** Upright, firm, sword-like leaves with clear yellow margins (on variegated varieties); deep green banding; slow but consistent upright growth.
 
 **Underwatering:** Leaves wrinkle slightly or lose rigidity; tips brown and dry; very slow to show — this plant is extremely drought-tolerant.
@@ -77,6 +83,8 @@ Species-specific visual health indicators, stress signs, common issues, pruning 
 ---
 
 ## Yucca Plant
+
+**Also known as:** yucca, spineless yucca, soft-tip yucca
 
 **Healthy indicators:** Stiff, sword-like green leaves radiating from a woody trunk or cane; firm texture; lower leaves naturally yellow and drop over time as the trunk forms.
 
@@ -132,6 +140,8 @@ Species-specific visual health indicators, stress signs, common issues, pruning 
 
 ## Passionflower
 
+**Also known as:** passion flower, passiflora, maypop
+
 **Healthy indicators:** Vigorous climbing stems with tendrils; deeply lobed green leaves; exotic multi-part flowers (if in bloom); fast-growing in warm conditions.
 
 **Underwatering:** Wilting tendrils and leaves; leaf drop; slowed growth.
@@ -149,6 +159,8 @@ Species-specific visual health indicators, stress signs, common issues, pruning 
 ---
 
 ## Lantana
+
+**Also known as:** shrub verbena, ham 'n' eggs, Spanish flag
 
 **Healthy indicators:** Dense clusters of small multicoloured flowers (orange/yellow/red/pink); rough-textured aromatic leaves; bushy compact growth.
 
@@ -168,6 +180,8 @@ Species-specific visual health indicators, stress signs, common issues, pruning 
 
 ## Fuschia
 
+**Also known as:** fuchsia, lady's eardrops
+
 **Healthy indicators:** Pendulous bi-coloured flowers (purple/red/pink/white); mid-green oval leaves with slight sheen; compact trailing or bushy habit depending on variety.
 
 **Underwatering:** Wilting (often sudden); bud and flower drop; leaf drop; very sensitive to drying out.
@@ -186,6 +200,8 @@ Species-specific visual health indicators, stress signs, common issues, pruning 
 
 ## Marguerite Daisies
 
+**Also known as:** marguerite daisy, Paris daisy, argyranthemum
+
 **Healthy indicators:** Bright white/yellow/pink daisy flowers with yellow centres; fine feathery aromatic foliage; compact bushy mound; prolific flowering from spring to autumn.
 
 **Underwatering:** Wilting; flowers and buds drop; foliage becomes limp; rapid — they are not drought-tolerant.
@@ -203,6 +219,8 @@ Species-specific visual health indicators, stress signs, common issues, pruning 
 ---
 
 ## Gazania
+
+**Also known as:** treasure flower, African daisy
 
 **Healthy indicators:** Bright daisy-like flowers (orange/yellow/red/pink with contrasting centres); silver-grey-green foliage; low-growing rosette; drought-tolerant once established.
 
