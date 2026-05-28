@@ -160,32 +160,42 @@ class BaseAgent:
             p_prompt = self._adapt_prompt_for_gemini(prompt) if provider["adapt_prompt"] else prompt
             cmd = list(provider["cmd_prefix"]) + [p_prompt] + list(provider["cmd_suffix"])
             
-            # Model selection
             if provider["name"] == "claude" and self.model:
                 cmd += ["--model", self.model]
-            # Gemini CLI default is used (managed via gemini config or CLI default)
             
-            try:
-                result = subprocess.run(
-                    cmd, capture_output=True, text=True,
-                    cwd=str(REPO_ROOT), timeout=600,
-                )
-                if result.returncode == 0 and result.stdout.strip():
-                    print(f"[synthesize] {provider['name']} succeeded", file=sys.stderr)
-                    return result.stdout
+            # For each provider, we allow up to 3 attempts for transient CLI failures
+            for attempt in range(3):
+                try:
+                    result = subprocess.run(
+                        cmd, capture_output=True, text=True,
+                        cwd=str(REPO_ROOT), timeout=600,
+                    )
+                    if result.returncode == 0 and result.stdout.strip():
+                        print(f"[synthesize] {provider['name']} succeeded", file=sys.stderr)
+                        return result.stdout
 
-                stderr = result.stderr or ""
-                # Non-retriable errors — raise immediately
-                if any(s in stderr.lower() for s in self._NON_RETRIABLE):
-                    raise RuntimeError(f"{provider['name']} failed (non-retriable): {stderr[:500]}")
+                    stderr = result.stderr or ""
+                    # Non-retriable errors (e.g. context length) — move to next provider immediately
+                    if any(s in stderr.lower() for s in self._NON_RETRIABLE):
+                        print(f"[synthesize] {provider['name']} failed (non-retriable): {stderr[:200]}", file=sys.stderr)
+                        last_error = stderr[:500]
+                        break
 
-                last_error = f"{provider['name']} failed (rc={result.returncode}): {stderr[:500]}"
-                print(f"[synthesize] {last_error}", file=sys.stderr)
+                    # Transient or unknown error — retry current provider with backoff
+                    print(f"[synthesize] {provider['name']} attempt {attempt+1} failed (rc={result.returncode}): {stderr[:200]}", file=sys.stderr)
+                    last_error = stderr[:500]
+                    
+                    if attempt < 2:
+                        time.sleep(2 ** attempt)
+                        continue
+                    else:
+                        # Exhausted attempts for this provider
+                        break
 
-            except subprocess.TimeoutExpired:
-                msg = f"{provider['name']} timed out after 600s"
-                print(f"[synthesize] {msg}", file=sys.stderr)
-                raise LLMTimeoutError(msg)
+                except subprocess.TimeoutExpired:
+                    msg = f"{provider['name']} timed out after 600s"
+                    print(f"[synthesize] {msg}", file=sys.stderr)
+                    raise LLMTimeoutError(msg)
 
         raise RuntimeError(f"All LLM providers failed. Last error: {last_error}")
 

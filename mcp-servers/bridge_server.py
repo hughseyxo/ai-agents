@@ -24,7 +24,7 @@ BIND_PORT = 4242
 BRIDGE_TOKEN = os.environ.get("MCP_BRIDGE_TOKEN", "")
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DB_PATH = REPO_ROOT / "data" / "agents.db"
-AGENT_REGISTRY = ["daily-briefing", "news-briefing", "security-audit"]
+AGENT_REGISTRY = ["daily-briefing", "news-briefing", "security-audit", "librarian"]
 ALLOWED_PATH_PREFIX = "/home/cian/"
 DEFAULT_WORKING_DIR = "/home/cian"
 BLOCKED_PATTERNS = [
@@ -35,6 +35,70 @@ BLOCKED_PATTERNS = [
 
 
 # --- Tool implementations ---
+
+def _handle_librarian_approve(proposal_id: str) -> tuple[int, str]:
+    proposals_dir = REPO_ROOT / "output" / "librarian" / "proposals"
+    pf = proposals_dir / f"{proposal_id}.json"
+    if not pf.exists():
+        return 404, "<h1>Proposal not found</h1>"
+    proposal = json.loads(pf.read_text())
+    if proposal.get("status") != "pending":
+        return 400, f"<h1>Already {proposal['status']}</h1>"
+    target = REPO_ROOT / proposal["file"]
+    target.write_text(proposal["proposed"])
+    try:
+        subprocess.run(["git", "add", proposal["file"]], cwd=str(REPO_ROOT), check=True)
+        subprocess.run(["git", "commit", "-m", f"librarian: apply proposal {proposal_id}"],
+                       cwd=str(REPO_ROOT), check=True)
+    except Exception as e:
+        return 500, f"<h1>Git Error</h1><p>{str(e)}</p>"
+    proposal["status"] = "approved"
+    pf.write_text(json.dumps(proposal, indent=2))
+    return 200, f"<h1>&#10003; Approved</h1><p>Applied to <code>{proposal['file']}</code> and committed.</p>"
+
+
+def _handle_librarian_reject(proposal_id: str) -> tuple[int, str]:
+    proposals_dir = REPO_ROOT / "output" / "librarian" / "proposals"
+    pf = proposals_dir / f"{proposal_id}.json"
+    if not pf.exists():
+        return 404, "<h1>Proposal not found</h1>"
+    proposal = json.loads(pf.read_text())
+    proposal["status"] = "rejected"
+    pf.write_text(json.dumps(proposal, indent=2))
+    return 200, "<h1>&#10007; Rejected</h1><p>No changes were made.</p>"
+
+
+def _handle_librarian_create_plan(proposal_id: str) -> tuple[int, str]:
+    proposals_dir = REPO_ROOT / "output" / "librarian" / "proposals"
+    pf = proposals_dir / f"{proposal_id}.json"
+    if not pf.exists():
+        return 404, "<h1>Proposal not found</h1>"
+    proposal = json.loads(pf.read_text())
+    if proposal.get("status") != "pending":
+        return 400, f"<h1>Already {proposal['status']}</h1>"
+        
+    plans_dir = REPO_ROOT / "docs" / "superpowers" / "plans"
+    plans_dir.mkdir(parents=True, exist_ok=True)
+    today = datetime.now().strftime("%Y-%m-%d")
+    plan_file = plans_dir / f"{today}-librarian-arch-{proposal_id}.md"
+    
+    content = f"# Architectural Plan: {proposal['agent']}\n\n"
+    content += f"**ID**: {proposal_id}\n"
+    content += f"**Finding**: {proposal['finding']}\n\n"
+    content += proposal.get("proposed_plan", "No plan provided.")
+    
+    plan_file.write_text(content)
+    
+    proposal["status"] = "plan_created"
+    proposal["plan_file"] = str(plan_file.relative_to(REPO_ROOT))
+    pf.write_text(json.dumps(proposal, indent=2))
+    
+    return 200, (
+        f"<h1>&#10003; Plan Created</h1>"
+        f"<p>Written to <code>{proposal['plan_file']}</code>.</p>"
+        f"<p><b>Next Step:</b> Run Gemini CLI and ask it to implement this plan.</p>"
+    )
+
 
 def tool_list_agents(_args: dict) -> str:
     try:
@@ -345,8 +409,40 @@ class MCPBridgeHandler(BaseHTTPRequestHandler):
         # /health is intentionally unauthenticated (liveness check)
         if self.path == "/health":
             self._json(200, {"status": "ok", "server": "mcp-bridge"})
+            return
+
+        from urllib.parse import urlparse, parse_qs
+        parsed = urlparse(self.path)
+        params = parse_qs(parsed.query)
+        token = params.get("token", [""])[0]
+
+        if token != BRIDGE_TOKEN:
+            self.send_response(401)
+            self.end_headers()
+            self.wfile.write(b"Unauthorized")
+            return
+
+        proposal_id = params.get("id", [""])[0]
+        if not re.match(r'^[a-f0-9-]{8,36}$', proposal_id):
+            self.send_response(400)
+            self.end_headers()
+            self.wfile.write(b"Invalid id")
+            return
+
+        if parsed.path == "/librarian/approve":
+            status, body = _handle_librarian_approve(proposal_id)
+        elif parsed.path == "/librarian/reject":
+            status, body = _handle_librarian_reject(proposal_id)
+        elif parsed.path == "/librarian/create_plan":
+            status, body = _handle_librarian_create_plan(proposal_id)
         else:
             self._json(404, {"error": "not found"})
+            return
+
+        self.send_response(status)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.end_headers()
+        self.wfile.write(body.encode())
 
     def do_POST(self):
         if not self._auth_ok():

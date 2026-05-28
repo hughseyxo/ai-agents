@@ -112,9 +112,13 @@ class TestSynthesize:
         assert cmd[0] == "gemini"
 
     @patch("agents.base.subprocess.run")
-    def test_falls_back_to_claude_on_gemini_failure(self, mock_run):
+    @patch("time.sleep", return_value=None)
+    def test_falls_back_to_claude_on_gemini_failure(self, mock_sleep, mock_run):
+        """Gemini fails 3 times, then Claude succeeds."""
         mock_run.side_effect = [
-            mock_result(returncode=1, stdout="", stderr="rate limit exceeded"),
+            mock_result(returncode=1, stderr="transient error"),
+            mock_result(returncode=1, stderr="transient error"),
+            mock_result(returncode=1, stderr="transient error"),
             mock_result(stdout="claude output"),
         ]
         agent = make_agent()
@@ -122,16 +126,18 @@ class TestSynthesize:
         result = agent.synthesize("test prompt")
 
         assert result == "claude output"
-        assert mock_run.call_count == 2
-        first_cmd = mock_run.call_args_list[0][0][0]
-        second_cmd = mock_run.call_args_list[1][0][0]
-        assert first_cmd[0] == "gemini"
-        assert second_cmd[0] == "claude"
+        assert mock_run.call_count == 4
+        assert mock_run.call_args_list[0][0][0][0] == "gemini"
+        assert mock_run.call_args_list[3][0][0][0] == "claude"
 
     @patch("agents.base.subprocess.run")
-    def test_falls_back_on_empty_stdout(self, mock_run):
+    @patch("time.sleep", return_value=None)
+    def test_falls_back_on_empty_stdout(self, mock_sleep, mock_run):
+        """Empty stdout is treated as transient failure, retries 3 times then fails over."""
         mock_run.side_effect = [
-            mock_result(returncode=0, stdout="", stderr=""),
+            mock_result(stdout=""),
+            mock_result(stdout=""),
+            mock_result(stdout=""),
             mock_result(stdout="claude output"),
         ]
         agent = make_agent()
@@ -139,12 +145,15 @@ class TestSynthesize:
         result = agent.synthesize("test prompt")
 
         assert result == "claude output"
-        assert mock_run.call_count == 2
+        assert mock_run.call_count == 4
 
     @patch("agents.base.subprocess.run")
-    def test_falls_back_on_whitespace_only_stdout(self, mock_run):
+    @patch("time.sleep", return_value=None)
+    def test_falls_back_on_whitespace_only_stdout(self, mock_sleep, mock_run):
         mock_run.side_effect = [
-            mock_result(returncode=0, stdout="   \n  ", stderr=""),
+            mock_result(stdout="  "),
+            mock_result(stdout="  "),
+            mock_result(stdout="  "),
             mock_result(stdout="claude output"),
         ]
         agent = make_agent()
@@ -155,7 +164,7 @@ class TestSynthesize:
 
     @patch("agents.base.subprocess.run")
     def test_gemini_timeout_is_terminal_no_failover(self, mock_run):
-        """Timeouts must NOT trigger Claude failover."""
+        """Timeouts must NOT trigger Claude failover or retries."""
         mock_run.side_effect = [
             subprocess.TimeoutExpired(cmd="gemini", timeout=600),
             mock_result(stdout="claude output"),
@@ -168,30 +177,33 @@ class TestSynthesize:
         assert mock_run.call_count == 1
 
     @patch("agents.base.subprocess.run")
-    def test_raises_when_both_providers_fail(self, mock_run):
-        mock_run.side_effect = [
-            mock_result(returncode=1, stderr="rate limit"),
-            mock_result(returncode=1, stderr="quota exceeded"),
-        ]
+    @patch("time.sleep", return_value=None)
+    def test_raises_when_both_providers_fail(self, mock_sleep, mock_run):
+        """Both fail 3 times each."""
+        mock_run.side_effect = [mock_result(returncode=1, stderr="err")] * 6
         agent = make_agent()
 
         with pytest.raises(RuntimeError, match="All LLM providers failed"):
             agent.synthesize("test prompt")
 
-        assert mock_run.call_count == 2
+        assert mock_run.call_count == 6
 
     @patch("agents.base.subprocess.run")
     def test_non_retriable_error_raises_immediately(self, mock_run):
-        mock_run.return_value = mock_result(
-            returncode=1, stderr="context_length exceeded"
-        )
+        """Non-retriable error (e.g. context length) skips retries and falls back to next provider."""
+        mock_run.side_effect = [
+            mock_result(returncode=1, stderr="context_length exceeded"),
+            mock_result(stdout="claude output"),
+        ]
         agent = make_agent()
 
-        with pytest.raises(RuntimeError, match="non-retriable"):
-            agent.synthesize("test prompt")
+        result = agent.synthesize("test prompt")
 
-        # Should NOT try claude
-        assert mock_run.call_count == 1
+        # Should skip Gemini retries and succeed on Claude
+        assert result == "claude output"
+        assert mock_run.call_count == 2
+        assert mock_run.call_args_list[0][0][0][0] == "gemini"
+        assert mock_run.call_args_list[1][0][0][0] == "claude"
 
     @patch("agents.base.subprocess.run")
     def test_gemini_prompt_is_adapted_by_default(self, mock_run):
@@ -208,9 +220,12 @@ class TestSynthesize:
         assert "mcp_todoist_find-tasks" in gemini_prompt
 
     @patch("agents.base.subprocess.run")
-    def test_claude_prompt_is_not_adapted_on_fallback(self, mock_run):
-        """When Gemini fails, Claude gets the UNADAPTED prompt."""
+    @patch("time.sleep", return_value=None)
+    def test_claude_prompt_is_not_adapted_on_fallback(self, mock_sleep, mock_run):
+        """When Gemini fails 3 times, Claude gets the UNADAPTED prompt."""
         mock_run.side_effect = [
+            mock_result(returncode=1, stderr="error"),
+            mock_result(returncode=1, stderr="error"),
             mock_result(returncode=1, stderr="error"),
             mock_result(stdout="output"),
         ]
@@ -219,7 +234,7 @@ class TestSynthesize:
         prompt = "Call mcp__todoist__find-tasks"
         agent.synthesize(prompt)
 
-        claude_cmd = mock_run.call_args_list[1][0][0]
+        claude_cmd = mock_run.call_args_list[3][0][0]
         p_index = claude_cmd.index("-p")
         claude_prompt = claude_cmd[p_index + 1]
         assert "mcp__todoist__find-tasks" in claude_prompt
@@ -238,9 +253,12 @@ class TestSynthesize:
         assert cmd[0] == "claude"
 
     @patch("agents.base.subprocess.run")
-    def test_providers_override_falls_back_to_gemini(self, mock_run):
-        """When Claude primary fails with reversed providers, Gemini is the fallback."""
+    @patch("time.sleep", return_value=None)
+    def test_providers_override_falls_back_to_gemini(self, mock_sleep, mock_run):
+        """When Claude primary fails 3 times, Gemini is the fallback."""
         mock_run.side_effect = [
+            mock_result(returncode=1, stderr="error"),
+            mock_result(returncode=1, stderr="error"),
             mock_result(returncode=1, stderr="error"),
             mock_result(stdout="gemini output"),
         ]
@@ -250,9 +268,9 @@ class TestSynthesize:
         result = agent.synthesize("test prompt")
 
         assert result == "gemini output"
-        assert mock_run.call_count == 2
+        assert mock_run.call_count == 4
         assert mock_run.call_args_list[0][0][0][0] == "claude"
-        assert mock_run.call_args_list[1][0][0][0] == "gemini"
+        assert mock_run.call_args_list[3][0][0][0] == "gemini"
 
     @patch("agents.base.subprocess.run")
     def test_timeout_is_600_seconds(self, mock_run):
@@ -276,9 +294,12 @@ class TestSynthesize:
         assert "--model" not in cmd
 
     @patch("agents.base.subprocess.run")
-    def test_model_attribute_injects_claude_model_flag_on_fallback(self, mock_run):
-        """When Gemini fails, the fallback Claude call should include the --model flag."""
+    @patch("time.sleep", return_value=None)
+    def test_model_attribute_injects_claude_model_flag_on_fallback(self, mock_sleep, mock_run):
+        """When Gemini fails 3 times, the fallback Claude call should include the --model flag."""
         mock_run.side_effect = [
+            mock_result(returncode=1, stderr="error"),
+            mock_result(returncode=1, stderr="error"),
             mock_result(returncode=1, stderr="error"),
             mock_result(stdout="output"),
         ]
@@ -287,7 +308,8 @@ class TestSynthesize:
 
         agent.synthesize("test")
 
-        claude_cmd = mock_run.call_args_list[1][0][0]
+        # Index 3 is the 4th call (Gemini x3, then Claude)
+        claude_cmd = mock_run.call_args_list[3][0][0]
         assert "--model" in claude_cmd
         assert claude_cmd[claude_cmd.index("--model") + 1] == "claude-sonnet-4-6"
 

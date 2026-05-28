@@ -1,4 +1,19 @@
-This project uses Claude for agents. For all project rules, context, and conventions, you MUST read and follow the instructions in `CLAUDE.md`. Do not duplicate rules here.
+# Gemini CLI Tool Mapping
 
-### Maintenance
-- **Before Finishing**: Before concluding a session, check if you added, removed, or renamed any workflows, scripts, skills, MCP servers, or `run-*.sh` entrypoints. If so, update `CLAUDE.md`'s Project Structure tree and any affected sections (Workflow Conventions, Available MCP Integrations) to reflect the current state. If nothing structural changed, do nothing.
+Skills use Claude Code tool names. When you encounter these in a skill, use your platform equivalent:
+
+| Skill references | Gemini CLI equivalent |
+|-----------------|----------------------|
+| `Read` (file reading) | `read_file` |
+| `Write` (file creation) | `write_file` |
+| `Edit` (file editing) | `replace` |
+| `Bash` (run commands) | `run_shell_command` |
+| `Grep` (search file content) | `grep_search` |
+| `Glob` (search files by name) | `glob` |
+| `Skill` tool (invoke a skill) | `activate_skill` |
+
+## Mealie Setup
+
+The `mealsave` skill requires a configured `.env` file at `~/.config/mealsave/.env` with:
+- `MEALIE_URL`
+- `MEALIE_TOKEN`

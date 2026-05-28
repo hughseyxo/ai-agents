@@ -142,3 +142,162 @@ def test_collect_data_reads_existing_learnings(tmp_path):
     with patch("agents.librarian.REPO_ROOT", tmp_path):
         agent._collect_data()
     assert agent.context["collected"]["learnings"]["news-briefing"] == "- Keep HTML short\n"
+
+
+import json as _json
+
+
+def test_analyze_parses_llm_findings(tmp_path):
+    agent = make_agent(tmp_path)
+    agent.context["collected"] = {"agent_stats": {}, "output_samples": {}, "prompts": {}, "learnings": {}}
+    findings = [{"agent": "news-briefing", "type": "reliability", "description": "Fails often",
+                 "confidence": 0.9, "fix_type": "learnings", "suggested_fix": "Reduce size",
+                 "learnings_entry": "- Keep HTML under 50KB"}]
+    prompts_dir = tmp_path / "agents" / "prompts"
+    prompts_dir.mkdir(parents=True)
+    (prompts_dir / "librarian_audit.md").write_text("{{DATA}}")
+    with patch.object(agent, "synthesize", return_value=_json.dumps(findings)):
+        with patch("agents.librarian.REPO_ROOT", tmp_path):
+            result = agent._analyze()
+    assert result["findings"] == 1
+    assert agent.context["findings"][0]["agent"] == "news-briefing"
+
+
+def test_analyze_strips_markdown_fences(tmp_path):
+    agent = make_agent(tmp_path)
+    agent.context["collected"] = {"agent_stats": {}, "output_samples": {}, "prompts": {}, "learnings": {}}
+    findings = [{"agent": "news-briefing", "type": "quality", "description": "ok",
+                 "confidence": 0.3, "fix_type": "report_only", "suggested_fix": "none"}]
+    prompts_dir = tmp_path / "agents" / "prompts"
+    prompts_dir.mkdir(parents=True)
+    (prompts_dir / "librarian_audit.md").write_text("{{DATA}}")
+    with patch.object(agent, "synthesize", return_value=f"```json\n{_json.dumps(findings)}\n```"):
+        with patch("agents.librarian.REPO_ROOT", tmp_path):
+            result = agent._analyze()
+    assert result["findings"] == 1
+
+
+def test_apply_learnings_writes_high_confidence_entry(tmp_path):
+    agent = make_agent(tmp_path)
+    agent.context["findings"] = [{"agent": "news-briefing", "confidence": 0.9,
+                                   "fix_type": "learnings", "learnings_entry": "- Keep HTML under 50KB"}]
+    (tmp_path / "docs" / "agent-learnings").mkdir(parents=True)
+    with patch("agents.librarian.REPO_ROOT", tmp_path):
+        result = agent._apply_learnings()
+    assert result["applied"] == 1
+    lf = tmp_path / "docs" / "agent-learnings" / "news-briefing.md"
+    assert "Keep HTML under 50KB" in lf.read_text()
+
+
+def test_apply_learnings_skips_below_threshold(tmp_path):
+    agent = make_agent(tmp_path)
+    agent.context["findings"] = [{"agent": "news-briefing", "confidence": 0.4,
+                                   "fix_type": "learnings", "learnings_entry": "- Some tip"}]
+    (tmp_path / "docs" / "agent-learnings").mkdir(parents=True)
+    with patch("agents.librarian.REPO_ROOT", tmp_path):
+        result = agent._apply_learnings()
+    assert result["applied"] == 0
+
+
+def test_apply_learnings_does_not_duplicate(tmp_path):
+    agent = make_agent(tmp_path)
+    agent.context["findings"] = [{"agent": "news-briefing", "confidence": 0.9,
+                                   "fix_type": "learnings", "learnings_entry": "- Keep HTML under 50KB"}]
+    ld = tmp_path / "docs" / "agent-learnings"
+    ld.mkdir(parents=True)
+    (ld / "news-briefing.md").write_text("- Keep HTML under 50KB\n")
+    with patch("agents.librarian.REPO_ROOT", tmp_path):
+        agent._apply_learnings()
+    assert (ld / "news-briefing.md").read_text().count("Keep HTML under 50KB") == 1
+
+
+def test_analyze_failures_calls_llm_when_failures_exist(tmp_path):
+    agent = make_agent(tmp_path)
+    agent.context["check_failures"] = {
+        "failing_agents": ["news-briefing"],
+        "error_details": {"news-briefing": ["Claude CLI failed"]},
+    }
+    findings = [{"agent": "news-briefing", "type": "reliability", "description": "CLI fails",
+                 "confidence": 0.85, "fix_type": "learnings", "suggested_fix": "x",
+                 "learnings_entry": "- Tip"}]
+    prompts_dir = tmp_path / "agents" / "prompts"
+    prompts_dir.mkdir(parents=True)
+    (prompts_dir / "librarian_watch.md").write_text("{{DATA}}")
+    with patch.object(agent, "synthesize", return_value=_json.dumps(findings)):
+        with patch("agents.librarian.REPO_ROOT", tmp_path):
+            result = agent._analyze_failures()
+    assert result["findings"] == 1
+
+
+def test_propose_changes_saves_medium_confidence_prompt_edit(tmp_path):
+    agent = make_agent(tmp_path)
+    prompt_file = tmp_path / "agents" / "prompts" / "news_briefing.md"
+    prompt_file.parent.mkdir(parents=True)
+    prompt_file.write_text("# Original")
+    agent.context["findings"] = [{"agent": "news-briefing", "confidence": 0.65,
+                                   "fix_type": "prompt_edit", "description": "Too verbose",
+                                   "suggested_fix": "Shorten", "proposed_prompt_section": "# Shorter"}]
+    with patch("agents.librarian.REPO_ROOT", tmp_path):
+        result = agent._propose_changes()
+    assert result["proposals"] == 1
+    files = list((tmp_path / "output" / "librarian" / "proposals").glob("*.json"))
+    assert len(files) == 1
+    p = _json.loads(files[0].read_text())
+    assert p["original"] == "# Original"
+    assert p["proposed"] == "# Shorter"
+    assert p["status"] == "pending"
+
+
+def test_propose_changes_skips_high_confidence(tmp_path):
+    agent = make_agent(tmp_path)
+    agent.context["findings"] = [{"agent": "news-briefing", "confidence": 0.9,
+                                   "fix_type": "prompt_edit", "description": "x",
+                                   "proposed_prompt_section": "y"}]
+    with patch("agents.librarian.REPO_ROOT", tmp_path):
+        (tmp_path / "agents" / "prompts").mkdir(parents=True)
+        result = agent._propose_changes()
+    assert result["proposals"] == 0
+
+
+def test_propose_changes_skips_report_only(tmp_path):
+    agent = make_agent(tmp_path)
+    agent.context["findings"] = [{"agent": "news-briefing", "confidence": 0.6,
+                                   "fix_type": "report_only", "description": "x"}]
+    with patch("agents.librarian.REPO_ROOT", tmp_path):
+        (tmp_path / "agents" / "prompts").mkdir(parents=True)
+        result = agent._propose_changes()
+    assert result["proposals"] == 0
+
+
+def test_send_report_calls_synthesize(tmp_path):
+    agent = make_agent(tmp_path)
+    agent.context["plan"] = {"mode": "audit", "today": "2026-05-22"}
+    agent.context["findings"] = []
+    agent.context["applied_learnings"] = []
+    agent.context["proposals"] = []
+    agent.context["collected"] = {"agent_stats": {}, "output_samples": {}, "prompts": {}, "learnings": {}}
+    (tmp_path / "agents" / "prompts").mkdir(parents=True)
+    (tmp_path / "agents" / "prompts" / "librarian_report.md").write_text("{{TODAY}}\n{{HTML_EMAIL}}")
+    with patch.object(agent, "synthesize", return_value="sent") as mock_s:
+        with patch("agents.librarian.REPO_ROOT", tmp_path):
+            result = agent._send_report()
+    assert result.get("sent") is True
+    prompt = mock_s.call_args[0][0]
+    assert "2026-05-22" in prompt
+    assert "<!DOCTYPE html>" in prompt
+
+
+def test_alert_calls_synthesize_when_failures_exist(tmp_path):
+    agent = make_agent(tmp_path)
+    agent.context["plan"] = {"mode": "watch", "today": "2026-05-22"}
+    agent.context["check_failures"] = {"failing_agents": ["news-briefing"],
+                                        "error_details": {"news-briefing": ["CLI failed"]}}
+    agent.context["findings"] = []
+    agent.context["applied_learnings"] = []
+    (tmp_path / "agents" / "prompts").mkdir(parents=True)
+    (tmp_path / "agents" / "prompts" / "librarian_report.md").write_text("{{TODAY}}\n{{HTML_EMAIL}}")
+    with patch.object(agent, "synthesize", return_value="sent") as mock_s:
+        with patch("agents.librarian.REPO_ROOT", tmp_path):
+            result = agent._alert()
+    assert result.get("sent") is True
+    assert mock_s.called
