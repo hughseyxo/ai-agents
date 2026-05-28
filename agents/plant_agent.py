@@ -222,7 +222,7 @@ class PlantAgent(BaseAgent):
         if not self._gate("photo_requests", 24):
             return {"skipped": True}
 
-        token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+        token = os.environ.get("CONCIERGE_BOT_TOKEN", "")
         user_id = os.environ.get("TELEGRAM_USER_ID", "")
         if not token or not user_id:
             return {"skipped": True, "reason": "no_telegram_config"}
