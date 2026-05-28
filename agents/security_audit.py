@@ -567,6 +567,11 @@ class SecurityAuditAgent(BaseAgent):
                 pass
 
         if issues:
+            fix_cmds = []
+            if env_file.exists():
+                fix_cmds.append("chmod 600 .env")
+            if any("bash history" in issue for issue in issues):
+                fix_cmds.append("history -c && history -w")
             self._finding(
                 severity="Critical" if "git history" in str(issues) else "High",
                 check="Secrets hygiene",
@@ -574,7 +579,7 @@ class SecurityAuditAgent(BaseAgent):
                 context="Leaked secrets in version control or shell history persist even after rotation",
                 risk="Credential theft from git history or history file; secrets may already be compromised",
                 impact="Rotating secrets requires updating all services that use them",
-                fix_commands=["chmod 600 .env"] if env_file.exists() else None,
+                fix_commands=fix_cmds or None,
             )
         else:
             self._pass("Secrets hygiene: no exposed tokens in git history or shell history")
