@@ -13,19 +13,19 @@ from pathlib import Path
 
 from .base import BaseAgent, REPO_ROOT
 
-AGENT_NAMES = ["daily-briefing", "news-briefing", "security-audit", "librarian", "telegram-bot"]
+AGENT_NAMES = ["daily-briefing", "news-briefing", "security-audit", "librarian", "telegram-bot", "plant-agent"]
 
 OUTPUT_PATTERNS = {
-    "daily-briefing": "daily-briefing-*.md",
+    "daily-briefing": "daily-briefing-*.html",
     "news-briefing": "daily-news-briefing-*.md",
     "security-audit": "security-audit-*.md",
-    "librarian": "librarian-report-*.md",
 }
 
 PROMPT_STEMS = {
     "daily-briefing": "daily_briefing",
     "news-briefing": "news_briefing",
     "librarian": "librarian_audit",
+    "plant-agent": "plant_intelligence",
 }
 
 # Agents whose source lives outside agents/{stem}.py
