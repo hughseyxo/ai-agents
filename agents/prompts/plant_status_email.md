@@ -1,6 +1,7 @@
-You are the email-send step of the Plant Agent. Send the pre-computed plant status email.
+Send a daily plant status email. Data is pre-computed — your only job is to format and send it.
 
-## Pre-computed Plant Data
+## Pre-computed plant table
+
 {{plant_table}}
 
 ## Step 1: Import MCP tools
@@ -10,7 +11,7 @@ Use ToolSearch to load: gmail (gmail_send).
 
 Send via mcp__gmail__gmail_send:
 - to: cianohughes@gmail.com
-- subject: Plant Status — YYYY-MM-DD (use today's actual date)
+- subject: Plant Status — {{today}}
 - mimeType: text/html
 
 Use this HTML template:
@@ -24,7 +25,7 @@ Use this HTML template:
       <table width="600" cellpadding="0" cellspacing="0" style="background:#161b22;border-radius:8px;overflow:hidden;border:1px solid #30363d;">
         <tr><td style="background:#0d1117;padding:28px 32px;border-bottom:1px solid #30363d;">
           <p style="margin:0;color:#8b949e;font-size:13px;letter-spacing:1px;text-transform:uppercase;">Plant Agent</p>
-          <h1 style="margin:4px 0 0;color:#c9d1d9;font-size:24px;">🌱 Plant Status</h1>
+          <h1 style="margin:4px 0 0;color:#c9d1d9;font-size:24px;">🌱 Plant Status — {{today}}</h1>
         </td></tr>
         <tr><td style="padding:24px 32px;">
           {{RENDER_PLANT_TABLE}}
@@ -38,15 +39,15 @@ Use this HTML template:
 </body>
 </html>
 
-For {{RENDER_PLANT_TABLE}}: render each plant as a row with status colour:
-- Overdue: border-left: 3px solid #f85149 (red)
-- Due today: border-left: 3px solid #d29922 (yellow)  
-- Due within 3 days: border-left: 3px solid #58a6ff (blue)
-- OK: border-left: 3px solid #3fb950 (green)
+For {{RENDER_PLANT_TABLE}}: render each plant from the pre-computed table as a styled row. Status colour rules:
+- Overdue (⚠): border-left: 3px solid #f85149
+- Due today (💧): border-left: 3px solid #d29922
+- Due within 3 days ("In 1d", "In 2d", "In 3d"): border-left: 3px solid #58a6ff
+- Otherwise (OK): border-left: 3px solid #3fb950
 
-Each row:
+Row template:
 <p style="margin:0 0 8px;padding:10px 14px;background:#1c2128;border-left:3px solid [COLOR];border-radius:4px;font-size:14px;color:#c9d1d9;">
-  <strong>[Plant Name]</strong> — [Location] — Next: [DATE] [adjustment note if any]
+  <strong>[Plant Name]</strong> — Next: [Next Water Date] — [Status] [adjustment if not —]
 </p>
 
 ## Step 3: Output

@@ -28,7 +28,7 @@ AGENT_REGISTRY = {
     "security-audit": "agents.security_audit:SecurityAuditAgent",
     "travel-agent": "agents.travel_agent:TravelAgent",
     "librarian": "agents.librarian:LibrarianAgent",
-    "plant-weather": "agents.plant_weather_agent:PlantWeatherAgent",
+    "plant-agent": "agents.plant_agent:PlantAgent",
 }
 
 

@@ -1,72 +1,69 @@
-You are the intelligence step of the Plant Agent. Perform a deep analysis of all plant data and produce structured output.
+You are analyzing all plant data to produce insights, update plant profiles, and flag any plants needing attention.
 
-## Input Data (injected by Python)
+## Input Data
 
-### Current Plant State
+**Current date:** {{today}}
+
+**Plant state:**
 {{plant_state_json}}
 
-### Weather Forecast (14 days)
-{{weather_json}}
+**Weather-adjusted watering cache:**
+{{weather_cache_json}}
 
-### Plant Profile Documents
+**Plant profiles:**
 {{plant_profiles}}
 
-### Recent Agent Notes (plant-agent entries)
+**Recent agent notes:**
 {{agent_notes}}
 
 ## Your Task
 
-Analyse all data to identify:
+Analyze all data to identify:
 1. Patterns in watering adherence vs schedule
-2. Seasonal behaviour (compare to same period in prior years if data exists)
-3. Plants showing signs of stress, overwatering, or frequency mismatch
-4. Plants that would benefit from a photo health check
-5. Any actionable changes to watering frequency
+2. Plants showing signs of stress, overwatering, or frequency mismatch based on data trends
+3. Plants that would benefit from a photo health check (long gap since last assessment, concerning data patterns, weather stress)
+4. Actionable changes to watering frequency or care
 
-## Output Format
+## Output
 
-Produce the following sections in EXACTLY this format. All sections are required even if empty.
+Produce the following delimited sections FIRST, before any MCP calls. All sections are required even if empty.
 
-[PROFILE:plant-name-lowercase-no-spaces]
-Updated content for ## Observed Behaviour and ## Intelligence Notes sections only.
-Write in first-person observational style. Append to existing notes, do not replace them.
-Date each entry: "### YYYY-MM-DD"
+**Per-plant profile notes** (one block per plant where there is something worth noting):
+
+[PROFILE:Plant Name As In State JSON]
+2-5 bullet points about patterns, trends, anything notable from the data.
+Use the plant's actual name exactly as it appears in the plant state JSON.
 [/PROFILE]
 
-(one [PROFILE] block per plant)
-
-[EMAIL]
-Subject: Plant Intelligence Report — YYYY-MM-DD
-
-Write a concise HTML email body (no full HTML document — just the inner content).
-Cover: key findings, pattern changes, frequency recommendations, what to watch.
-Use <h3> for section headings, <p> for content, <ul><li> for lists.
-Address the user directly. Be specific about plant names and dates.
-[/EMAIL]
+**Photo check flags:**
 
 [NEEDS_PHOTO]
-comma-separated list of plant names that need a photo health check, or empty if none
+Comma-separated list of plant names that should get a photo check soon. Criteria: concerning data patterns, last assessment >14 days ago, or weather stress warranting visual verification. If none: leave empty.
 [/NEEDS_PHOTO]
 
+**Insight email body:**
+
+[EMAIL]
+Plain text or simple markdown. What changed or was noticed across all plants. Actionable recommendations. Max 300 words. Address the user directly by name if known, otherwise directly ("Your plants...").
+[/EMAIL]
+
+**Todoist action tasks:**
+
 [TASKS]
-List Todoist task instructions here, one per line, in the format:
-CREATE TASK: "<task content>" due:<YYYY-MM-DD> priority:<p1|p2|p3|p4>
-Or write NONE if no tasks needed.
+One per line, format: Content: "task text", due: YYYY-MM-DD, priority: p3
+Only for clearly actionable items (e.g. "Review Monstera watering frequency", "Check outdoor plants after heatwave").
+If none needed, leave empty.
 [/TASKS]
 
-## Step 1: Import MCP tools
-Use ToolSearch to load: gmail (gmail_send), todoist (add-tasks, find-tasks).
+## After producing the above sections:
 
-## Step 2: Analyse data
-Work through each plant systematically.
+**Send the email** via mcp__gmail__gmail_send:
+- to: cianohughes@gmail.com
+- subject: Plant Intelligence Report — {{today}}
+- mimeType: text/html
+- body: wrap the [EMAIL] content in a minimal HTML shell (dark theme: background #0d1117, text #c9d1d9)
 
-## Step 3: Create Todoist tasks
-For any TASKS lines, check if the task already exists (mcp__todoist__find-tasks with content search), then create missing ones via mcp__todoist__add-tasks in project 6Crf3cH2RF5v86wc.
+**Create the tasks** from [TASKS] in Todoist project 6Crf3cH2RF5v86wc via mcp__todoist__add-tasks.
+For each task, first check with mcp__todoist__find-tasks whether it already exists (by content), and skip if it does.
 
-## Step 4: Send insight email
-Send the [EMAIL] content via mcp__gmail__gmail_send to cianohughes@gmail.com.
-Subject: Plant Intelligence Report — YYYY-MM-DD
-mimeType: text/html
-
-## Step 5: Output
-After sending, output ONLY the full structured response (all sections including [PROFILE] blocks, [EMAIL], [NEEDS_PHOTO], [TASKS]) — no preamble, no summary.
+Output the delimited sections FIRST, then perform the MCP calls.
