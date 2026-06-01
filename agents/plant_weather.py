@@ -15,12 +15,27 @@ def _clamp(value: int, lo: int, hi: int) -> int:
     return max(lo, min(hi, value))
 
 
-def apply_frequency_step(current_baseline: int, target: int) -> int:
-    """Move baseline toward target by at most MAX_FREQUENCY_STEP, clamped 1-30."""
-    target = _clamp(int(target), MIN_FREQUENCY, MAX_FREQUENCY)
-    if target > current_baseline:
-        return min(target, current_baseline + MAX_FREQUENCY_STEP)
-    return max(target, current_baseline - MAX_FREQUENCY_STEP)
+def _sunlight_modifier(adj: int, plant: dict) -> int:
+    """Shade tolerance modulates a non-zero weather adjustment.
+
+    Full sun dries faster (amplify drying / dampen deferral); shade holds
+    moisture (dampen drying / amplify deferral). Partial shade / unknown: no change.
+    """
+    if adj == 0:
+        return 0
+    sun = (plant.get("sunlight") or "").strip().lower()
+    if adj < 0:  # drying — water sooner
+        if sun == "full sun":
+            return adj - 1
+        if sun == "shade":
+            return adj + 1
+        return adj
+    # adj > 0 — wetter, defer
+    if sun == "shade":
+        return adj + 1
+    if sun == "full sun":
+        return adj - 1
+    return adj
 
 
 def calculate_adjustment(plant: dict, weather: dict) -> int:
@@ -32,6 +47,7 @@ def calculate_adjustment(plant: dict, weather: dict) -> int:
     else:
         adj = _indoor_adjustment(weather)
 
+    adj = _sunlight_modifier(adj, plant)
     return max(-MAX_ADJUSTMENT, min(MAX_ADJUSTMENT, adj))
 
 
@@ -110,6 +126,20 @@ def adjust_watering_date(base_date: date, frequency_days: int,
     return adjusted, reason
 
 
+def weather_adjusted_frequency(plant: dict, weather: dict | None) -> tuple[int, str]:
+    """Effective frequency = clamp(baseline + weather delta, 1, 30).
+
+    Returns (frequency_days, reason). reason is '' when no weather or no delta.
+    """
+    baseline = plant.get("baseline_frequency_days") or plant.get("frequency_days")
+    if not weather:
+        return _clamp(baseline, MIN_FREQUENCY, MAX_FREQUENCY), ""
+    delta = calculate_adjustment(plant, weather)
+    freq = _clamp(baseline + delta, MIN_FREQUENCY, MAX_FREQUENCY)
+    reason = _build_reason(delta, plant, weather) if delta else ""
+    return freq, reason
+
+
 def is_heatwave_incoming(weather: dict) -> bool:
     """Return True when ≥2 forecast days >30°C and no forecast day has ≥5mm rain."""
     forecast = weather.get("forecast", [])
@@ -148,3 +178,11 @@ def _build_reason(adj: int, plant: dict, weather: dict) -> str:
             return f"{days}d {direction} — hot dry conditions ({temp:.0f}°C, {humidity:.0f}% humidity)"
         else:
             return f"{days}d {direction} — cold humid conditions ({temp:.0f}°C, {humidity:.0f}% humidity)"
+
+
+def apply_frequency_step(current_baseline: int, target: int) -> int:
+    """Move baseline toward target by at most MAX_FREQUENCY_STEP, clamped 1-30."""
+    target = _clamp(int(target), MIN_FREQUENCY, MAX_FREQUENCY)
+    if target > current_baseline:
+        return min(target, current_baseline + MAX_FREQUENCY_STEP)
+    return max(target, current_baseline - MAX_FREQUENCY_STEP)

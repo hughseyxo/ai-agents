@@ -409,3 +409,96 @@ class TestApplyIntelligenceOutput:
 
         assert "Fern looks lush." in (plants_dir / "fern.md").read_text()
         assert "Cactus is thriving." in (plants_dir / "cactus.md").read_text()
+
+
+# ---------------------------------------------------------------------------
+# Weather recompute + baseline migration (Task 4)
+# ---------------------------------------------------------------------------
+
+from datetime import date
+
+
+class TestWeatherRecompute:
+    HOT = {"current": {"temp_c": 28, "humidity_pct": 50},
+           "recent_precip_mm": 0.0,
+           "forecast": [{"temp_max_c": 33, "precip_mm": 0.0},
+                        {"temp_max_c": 34, "precip_mm": 0.0}]}
+
+    def _agent(self, plants, weather, monkeypatch, tmp_path):
+        from agents import plant_agent as mod
+        monkeypatch.setattr(mod, "fetch_weather", lambda: weather)
+        a = mod.PlantAgent(db_path=tmp_path / "wr.db")
+        a.context = {"plan": {"plants": plants, "weather_cache": {}}}
+        return a
+
+    def test_migrates_baseline(self, monkeypatch, tmp_path):
+        plants = [{"name": "X", "frequency_days": 7, "location": "indoor", "last_watered": "2026-05-31"}]
+        self._agent(plants, None, monkeypatch, tmp_path)._weather_update()
+        assert plants[0]["baseline_frequency_days"] == 7
+
+    def test_folds_weather(self, monkeypatch, tmp_path):
+        plants = [{"name": "X", "frequency_days": 7, "baseline_frequency_days": 7,
+                   "location": "outdoor", "sunlight": "full sun", "last_watered": "2026-05-31"}]
+        self._agent(plants, self.HOT, monkeypatch, tmp_path)._weather_update()
+        assert plants[0]["frequency_days"] == 4   # 7-3
+
+    def test_weather_failure_resets_to_baseline(self, monkeypatch, tmp_path):
+        plants = [{"name": "X", "frequency_days": 4, "baseline_frequency_days": 7,
+                   "location": "outdoor", "last_watered": "2026-05-31"}]
+        self._agent(plants, None, monkeypatch, tmp_path)._weather_update()
+        assert plants[0]["frequency_days"] == 7
+
+
+# ---------------------------------------------------------------------------
+# due_water_tasks (Task 5)
+# ---------------------------------------------------------------------------
+
+from agents.plant_agent import due_water_tasks
+
+
+class TestDueWaterTasks:
+    HOT = TestWeatherRecompute.HOT  # heatwave: 2 days >30, dry
+
+    def test_includes_overdue(self):
+        today = date(2026, 6, 1)
+        plants = [{"name": "X", "frequency_days": 4, "last_watered": "2026-05-27", "location": "indoor"}]
+        assert due_water_tasks(plants, today, None) == [{"name": "X", "due": "2026-05-31"}]
+
+    def test_excludes_future(self):
+        today = date(2026, 6, 1)
+        plants = [{"name": "Y", "frequency_days": 7, "last_watered": "2026-05-31", "location": "indoor"}]
+        assert due_water_tasks(plants, today, None) == []
+
+    def test_heatwave_creates_one_day_early(self):
+        today = date(2026, 6, 1)
+        plants = [{"name": "Z", "frequency_days": 3, "last_watered": "2026-05-30", "location": "outdoor"}]
+        assert due_water_tasks(plants, today, self.HOT) == [{"name": "Z", "due": "2026-06-02", "heatwave": True}]
+
+
+# ---------------------------------------------------------------------------
+# Intelligence [FREQUENCY] application (Task 6)
+# ---------------------------------------------------------------------------
+
+class TestIntelligenceFrequency:
+    def test_applies_with_step_limit_and_logs(self, tmp_path, monkeypatch):
+        from agents import plant_agent as mod
+        from agents import plant_profiles as pp
+        monkeypatch.setattr(pp, "PLANTS_DIR", tmp_path)
+        monkeypatch.setattr(mod, "fetch_weather", lambda: None)
+        (tmp_path / "lantana.md").write_text(
+            "# Lantana\n## Frequency History\n| Date | Change | Reason |\n|---|---|---|\n")
+        a = mod.PlantAgent(db_path=tmp_path / "intel.db")
+        plants = [{"name": "Lantana", "frequency_days": 7, "baseline_frequency_days": 7,
+                   "location": "outdoor", "last_watered": "2026-05-31"}]
+        a.context = {"plan": {"plants": plants}}
+        a._apply_intelligence_output("[FREQUENCY]\nLantana — 3 — wilting\n[/FREQUENCY]", plants)
+        assert plants[0]["baseline_frequency_days"] == 5   # 7 -> 5 (step -2)
+        assert plants[0]["frequency_days"] == 5            # no weather -> baseline
+        assert "7→5 days" in (tmp_path / "lantana.md").read_text()
+
+
+def test_intelligence_prompt_documents_frequency_marker():
+    import agents.plant_agent as mod
+    text = (mod.REPO_ROOT / "agents" / "prompts" / "plant_intelligence.md").read_text()
+    assert "[FREQUENCY]" in text and "[/FREQUENCY]" in text
+    assert "baseline" in text.lower()

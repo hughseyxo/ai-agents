@@ -10,7 +10,8 @@ from pathlib import Path
 import requests
 
 from .base import BaseAgent, REPO_ROOT
-from .plant_weather import adjust_watering_date, is_heatwave_incoming
+from .plant_weather import weather_adjusted_frequency, apply_frequency_step, is_heatwave_incoming
+from .plant_profiles import append_frequency_history
 from .weather import fetch_weather
 
 PERSONAL_PROJECT_ID = "6Crf3cH2RF5v86wc"
@@ -38,6 +39,22 @@ Use mcp__todoist__find-tasks to search for an existing task with content "{conte
 due on {due}. Only call mcp__todoist__add-tasks if no such task exists.
 Return only the word "created" or "exists".
 """
+
+
+def due_water_tasks(plants: list, today, weather) -> list:
+    """Plants whose folded next-water date is due today/overdue (or +1 day for
+    outdoor plants when a heatwave is incoming)."""
+    tasks = []
+    for plant in plants:
+        last_watered = datetime.strptime(plant["last_watered"], "%Y-%m-%d").date()
+        due_date = last_watered + timedelta(days=plant["frequency_days"])
+        if due_date <= today:
+            tasks.append({"name": plant["name"], "due": due_date.isoformat()})
+        elif (plant.get("location") == "outdoor" and weather
+              and is_heatwave_incoming(weather)
+              and due_date <= today + timedelta(days=1)):
+            tasks.append({"name": plant["name"], "due": due_date.isoformat(), "heatwave": True})
+    return tasks
 
 
 def _build_status_table(plants: list, weather_cache: dict, today) -> str:
@@ -135,19 +152,22 @@ class PlantAgent(BaseAgent):
 
     def _weather_update(self):
         weather = fetch_weather()
-        if not weather:
-            return {"skipped": True}
-
         plants = self.context["plan"]["plants"]
-        updated = 0
+        changed = False
         for plant in plants:
+            if "baseline_frequency_days" not in plant:
+                plant["baseline_frequency_days"] = plant["frequency_days"]
+                changed = True
+            new_freq, reason = weather_adjusted_frequency(plant, weather)
+            if new_freq != plant.get("frequency_days"):
+                plant["frequency_days"] = new_freq
+                changed = True
             last_watered = datetime.strptime(plant["last_watered"], "%Y-%m-%d").date()
-            base_date = last_watered + timedelta(days=plant["frequency_days"])
-            adjusted, reason = adjust_watering_date(base_date, plant["frequency_days"], plant, weather)
-            self.db.upsert_plant_weather_cache(plant["name"], adjusted.isoformat(), reason)
-            updated += 1
-
-        return {"updated": updated}
+            next_date = last_watered + timedelta(days=plant["frequency_days"])
+            self.db.upsert_plant_weather_cache(plant["name"], next_date.isoformat(), reason)
+        if changed:
+            self.db.set_state("daily-briefing", "plants", plants)
+        return {"updated": len(plants)}
 
     def _sync_watering(self):
         if not self._gate("sync_watering", 24):
@@ -201,22 +221,7 @@ class PlantAgent(BaseAgent):
         today = datetime.now(timezone.utc).date()
         weather = fetch_weather()
 
-        tasks_to_create = []
-        for plant in plants:
-            last_watered = datetime.strptime(plant["last_watered"], "%Y-%m-%d").date()
-            base_date = last_watered + timedelta(days=plant["frequency_days"])
-
-            if weather:
-                adjusted, reason = adjust_watering_date(base_date, plant["frequency_days"], plant, weather)
-            else:
-                adjusted = base_date
-
-            if adjusted <= today:
-                tasks_to_create.append({"name": plant["name"], "due": adjusted.isoformat()})
-            elif (plant.get("location") == "outdoor"
-                  and weather and is_heatwave_incoming(weather)
-                  and adjusted <= today + timedelta(days=1)):
-                tasks_to_create.append({"name": plant["name"], "due": adjusted.isoformat(), "heatwave": True})
+        tasks_to_create = due_water_tasks(plants, today, weather)
 
         if not tasks_to_create:
             self._mark_ran("create_tasks")
@@ -427,6 +432,35 @@ class PlantAgent(BaseAgent):
                     else:
                         content += f"\n## Intelligence Notes\n<!-- Appended by each intelligence run -->{entry}"
                     profile_path.write_text(content)
+
+        freq_m = re.search(r'\[FREQUENCY\](.*?)\[/FREQUENCY\]', output, re.DOTALL)
+        if freq_m:
+            changed = False
+            for line in freq_m.group(1).strip().splitlines():
+                line = line.strip()
+                if " — " not in line:
+                    continue
+                parts = [s.strip() for s in line.split(" — ")]
+                if len(parts) < 2:
+                    continue
+                name = parts[0]
+                try:
+                    target = int(parts[1])
+                except ValueError:
+                    continue
+                note = parts[2] if len(parts) > 2 else ""
+                plant = next((p for p in plants if p["name"].lower() == name.lower()), None)
+                if not plant:
+                    continue
+                old = plant.get("baseline_frequency_days", plant["frequency_days"])
+                new = apply_frequency_step(old, target)
+                if new != old:
+                    plant["baseline_frequency_days"] = new
+                    plant["frequency_days"], _ = weather_adjusted_frequency(plant, fetch_weather())
+                    append_frequency_history(plant["name"], old, new, f"intelligence: {note}".rstrip(": ").strip())
+                    changed = True
+            if changed:
+                self.db.set_state("daily-briefing", "plants", plants)
 
         needs_photo_m = re.search(r'\[NEEDS_PHOTO\](.*?)\[/NEEDS_PHOTO\]', output, re.DOTALL)
         if needs_photo_m:

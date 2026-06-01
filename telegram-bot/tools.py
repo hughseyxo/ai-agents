@@ -14,6 +14,9 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from agents.db import AgentDB
+from agents.plant_weather import weather_adjusted_frequency, MIN_FREQUENCY, MAX_FREQUENCY
+from agents.weather import fetch_weather
+from agents.plant_profiles import append_frequency_history
 
 AGENTS = ["daily-briefing", "news-briefing", "security-audit", "travel-agent"]
 DB_PATH = Path(__file__).parent.parent / "data" / "agents.db"
@@ -388,6 +391,8 @@ def update_plant(plant_name: str, location: str = "", frequency_days: int = 0, s
             match["location"] = location
             changes.append(f"location → {location}")
         if frequency_days > 0:
+            # Set the baseline too, else the hourly weather recompute reverts it.
+            match["baseline_frequency_days"] = frequency_days
             match["frequency_days"] = frequency_days
             changes.append(f"frequency → every {frequency_days} days")
         if sunlight in SUNLIGHT_VALUES:
@@ -542,3 +547,29 @@ def get_travel_report() -> str:
         return f"Latest travel report: {latest.name} — ready ({size_kb} KB, saved {modified})."
     except Exception as e:
         return f"Travel report check unavailable: {e}"
+
+
+def set_plant_frequency(plant_name: str, frequency_days: int, reason: str = "") -> str:
+    """Set a plant's BASELINE watering frequency (1-30 days). Weather is folded
+    into the effective schedule automatically. Logs the change to the profile."""
+    try:
+        db = AgentDB(DB_PATH)
+        plants = db.get_state("daily-briefing", "plants") or []
+        match = _find_plant(plant_name, plants)
+        if not match:
+            names = ", ".join(p["name"] for p in plants)
+            db.close()
+            return f"No plant named '{plant_name}' found. Known plants: {names or 'none'}"
+        target = max(MIN_FREQUENCY, min(MAX_FREQUENCY, int(frequency_days)))
+        old = match.get("baseline_frequency_days", match["frequency_days"])
+        match["baseline_frequency_days"] = target
+        match["frequency_days"], _ = weather_adjusted_frequency(match, fetch_weather())
+        db.set_state("daily-briefing", "plants", plants)
+        db.close()
+        if old != target:
+            append_frequency_history(match["name"], old, target, f"bot: {reason}".rstrip(": ").strip())
+        eff = match["frequency_days"]
+        suffix = f" (effective {eff}d after weather)" if eff != target else ""
+        return f"{match['name']} base frequency set to {target} days{suffix}."
+    except Exception as e:
+        return f"Failed to set frequency: {e}"

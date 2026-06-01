@@ -17,7 +17,7 @@ EXPECTED_TOOLS = {
     "get_agent_status", "get_plant_status", "get_yopflix_status",
     "get_system_health", "get_cron_schedule", "get_agent_logs",
     "run_travel_agent", "get_travel_report", "water_plants", "water_plant",
-    "add_plant", "update_plant", "research_plant_sunlight",
+    "add_plant", "update_plant", "set_plant_frequency", "research_plant_sunlight",
     "research_plant_watering", "save_recipe", "get_plant", "get_all_plants",
     "remove_plant",
 }

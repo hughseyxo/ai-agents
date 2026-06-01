@@ -20,6 +20,7 @@ from tools import (
     water_plants,
     add_plant,
     update_plant,
+    set_plant_frequency,
     remove_plant,
     research_plant_watering,
     research_plant_sunlight,
@@ -177,6 +178,20 @@ SPECS = [
             "required": ["plant_name"],
         },
         "func": update_plant,
+    },
+    {
+        "name": "set_plant_frequency",
+        "description": "Set a plant's baseline watering frequency in days (1-30). Weather is folded into the effective schedule automatically. Prefer this over update_plant when the user wants to change how often a plant is watered.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "plant_name": {"type": "string", "description": "Name of the plant (e.g. 'Lantana')."},
+                "frequency_days": {"type": "integer", "description": "New baseline watering interval in days (1-30)."},
+                "reason": {"type": "string", "description": "Short reason for the change (optional)."},
+            },
+            "required": ["plant_name", "frequency_days"],
+        },
+        "func": set_plant_frequency,
     },
     {
         "name": "research_plant_sunlight",

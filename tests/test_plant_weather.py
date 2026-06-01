@@ -7,7 +7,7 @@ from datetime import date
 
 import pytest
 
-from agents.plant_weather import calculate_adjustment, adjust_watering_date, is_heatwave_incoming, apply_frequency_step
+from agents.plant_weather import calculate_adjustment, adjust_watering_date, is_heatwave_incoming, weather_adjusted_frequency, apply_frequency_step
 
 
 # --- Weather data fixtures ---
@@ -299,8 +299,66 @@ class TestIsHeatwaveIncoming:
 
 
 # ===================================================================
-# apply_frequency_step
+# Sunlight modifier (shade tolerance)
 # ===================================================================
+
+class TestSunlightModifier:
+    HOT = {"current": {"temp_c": 28, "humidity_pct": 50},
+           "recent_precip_mm": 0.0,
+           "forecast": [{"temp_max_c": 33, "precip_mm": 0.0},
+                        {"temp_max_c": 34, "precip_mm": 0.0}]}
+    RAINY = {"current": {"temp_c": 15, "humidity_pct": 80},
+             "recent_precip_mm": 12.0,
+             "forecast": [{"temp_max_c": 16, "precip_mm": 3.0}]}
+    MILD = {"current": {"temp_c": 20, "humidity_pct": 55},
+            "recent_precip_mm": 0.0,
+            "forecast": [{"temp_max_c": 22, "precip_mm": 0.0}]}
+
+    def test_full_sun_amplifies_heat_drying(self):
+        assert calculate_adjustment({"location": "outdoor", "sunlight": "partial shade"}, self.HOT) == -2
+        assert calculate_adjustment({"location": "outdoor", "sunlight": "full sun"}, self.HOT) == -3
+        assert calculate_adjustment({"location": "outdoor", "sunlight": "shade"}, self.HOT) == -1
+
+    def test_shade_defers_more_in_rain_clamped(self):
+        assert calculate_adjustment({"location": "outdoor", "sunlight": "partial shade"}, self.RAINY) == 3
+        assert calculate_adjustment({"location": "outdoor", "sunlight": "shade"}, self.RAINY) == 3
+        assert calculate_adjustment({"location": "outdoor", "sunlight": "full sun"}, self.RAINY) == 2
+
+    def test_no_modifier_when_base_zero(self):
+        for sun in ("full sun", "shade", "partial shade"):
+            assert calculate_adjustment({"location": "outdoor", "sunlight": sun}, self.MILD) == 0
+
+    def test_unknown_sunlight_no_modifier(self):
+        assert calculate_adjustment({"location": "outdoor"}, self.HOT) == -2
+
+
+# ===================================================================
+# weather_adjusted_frequency — folding weather delta into frequency
+# ===================================================================
+
+class TestWeatherAdjustedFrequency:
+    HOT = {"current": {"temp_c": 28, "humidity_pct": 50},
+           "recent_precip_mm": 0.0,
+           "forecast": [{"temp_max_c": 33, "precip_mm": 0.0},
+                        {"temp_max_c": 34, "precip_mm": 0.0}]}
+
+    def test_folds_delta_full_sun(self):
+        plant = {"location": "outdoor", "sunlight": "full sun", "baseline_frequency_days": 7}
+        freq, reason = weather_adjusted_frequency(plant, self.HOT)
+        assert freq == 4          # 7 + (-3)
+        assert reason != ""
+
+    def test_no_weather_returns_baseline(self):
+        assert weather_adjusted_frequency({"baseline_frequency_days": 7, "location": "indoor"}, None) == (7, "")
+
+    def test_clamps_min(self):
+        plant = {"location": "outdoor", "sunlight": "full sun", "baseline_frequency_days": 2}
+        freq, _ = weather_adjusted_frequency(plant, self.HOT)
+        assert freq == 1          # 2-3 -> clamp 1
+
+    def test_baseline_missing_falls_back_to_frequency_days(self):
+        assert weather_adjusted_frequency({"frequency_days": 10, "location": "indoor"}, None) == (10, "")
+
 
 class TestApplyFrequencyStep:
     def test_limits_decrease(self):
