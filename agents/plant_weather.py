@@ -126,6 +126,20 @@ def adjust_watering_date(base_date: date, frequency_days: int,
     return adjusted, reason
 
 
+def weather_adjusted_frequency(plant: dict, weather: dict | None) -> tuple[int, str]:
+    """Effective frequency = clamp(baseline + weather delta, 1, 30).
+
+    Returns (frequency_days, reason). reason is '' when no weather or no delta.
+    """
+    baseline = plant.get("baseline_frequency_days") or plant.get("frequency_days")
+    if not weather:
+        return _clamp(baseline, MIN_FREQUENCY, MAX_FREQUENCY), ""
+    delta = calculate_adjustment(plant, weather)
+    freq = _clamp(baseline + delta, MIN_FREQUENCY, MAX_FREQUENCY)
+    reason = _build_reason(delta, plant, weather) if delta else ""
+    return freq, reason
+
+
 def is_heatwave_incoming(weather: dict) -> bool:
     """Return True when ≥2 forecast days >30°C and no forecast day has ≥5mm rain."""
     forecast = weather.get("forecast", [])

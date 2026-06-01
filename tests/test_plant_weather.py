@@ -7,7 +7,7 @@ from datetime import date
 
 import pytest
 
-from agents.plant_weather import calculate_adjustment, adjust_watering_date, is_heatwave_incoming
+from agents.plant_weather import calculate_adjustment, adjust_watering_date, is_heatwave_incoming, weather_adjusted_frequency
 
 
 # --- Weather data fixtures ---
@@ -330,3 +330,31 @@ class TestSunlightModifier:
 
     def test_unknown_sunlight_no_modifier(self):
         assert calculate_adjustment({"location": "outdoor"}, self.HOT) == -2
+
+
+# ===================================================================
+# weather_adjusted_frequency — folding weather delta into frequency
+# ===================================================================
+
+class TestWeatherAdjustedFrequency:
+    HOT = {"current": {"temp_c": 28, "humidity_pct": 50},
+           "recent_precip_mm": 0.0,
+           "forecast": [{"temp_max_c": 33, "precip_mm": 0.0},
+                        {"temp_max_c": 34, "precip_mm": 0.0}]}
+
+    def test_folds_delta_full_sun(self):
+        plant = {"location": "outdoor", "sunlight": "full sun", "baseline_frequency_days": 7}
+        freq, reason = weather_adjusted_frequency(plant, self.HOT)
+        assert freq == 4          # 7 + (-3)
+        assert reason != ""
+
+    def test_no_weather_returns_baseline(self):
+        assert weather_adjusted_frequency({"baseline_frequency_days": 7, "location": "indoor"}, None) == (7, "")
+
+    def test_clamps_min(self):
+        plant = {"location": "outdoor", "sunlight": "full sun", "baseline_frequency_days": 2}
+        freq, _ = weather_adjusted_frequency(plant, self.HOT)
+        assert freq == 1          # 2-3 -> clamp 1
+
+    def test_baseline_missing_falls_back_to_frequency_days(self):
+        assert weather_adjusted_frequency({"frequency_days": 10, "location": "indoor"}, None) == (10, "")
