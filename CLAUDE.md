@@ -45,6 +45,7 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 │   ├── travel_agent.py         # Travel agent (on-demand) — search mode: finds flights/hotels/activities; plan mode: itinerary from existing bookings. model: claude-sonnet-4-6. Design doc: docs/travel-agent.md
 │   ├── librarian.py            # Librarian agent (on-demand, cron-managed: audit Sun 06:00 UTC, watch Mon-Sat 06:00 UTC). Reads agent run history + output files, calls LLM to produce findings. Auto-applies learnings (confidence ≥0.8), emails prompt proposals (0.5-0.79) with approve/reject links via bridge server.
 │   ├── plant_agent.py          # Master Plant Agent (schedule: 0 * * * * / hourly, model: claude-haiku-4-5). Steps (all frequency-gated): weather_update (every run, deterministic) → sync_watering (24h, LLM reads Todoist completed tasks) → create_tasks (12h, LLM creates due water tasks) → photo_requests (24h, Telegram photo requests for plants needing assessment) → send_status_email (24h, LLM sends plant status table email) → intelligence_run (72h, LLM analyses plant profiles, flags needs_photo, appends notes to docs/plants/<slug>.md). Design doc: docs/superpowers/specs/2026-05-26-plant-sensitivity-and-underwatering-design.md
+│   ├── agent_health.py         # Agent Health monitor (schedule: 0 * * * * / hourly, deterministic, no LLM). Flags any scheduled agent whose last healthy run is older than 2× its cron interval; pushes Telegram alert (CONCIERGE_BOT_TOKEN) with dedup + recovery messages. Catches silently-dropped cron entries. Design doc: docs/agent-health-staleness-monitor.md
 │   └── prompts/                # LLM CLI synthesis prompt templates
 │       ├── daily_briefing.md
 │       ├── news_briefing.md
@@ -57,12 +58,17 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 │       ├── plant_status_email.md    # Plant status table email (used by send_status_email step)
 │       ├── plant_intelligence.md    # Intelligence analysis prompt (used by intelligence_run step)
 │       └── plant_photo_assessment.md # Photo assessment prompt (used by Telegram bot save_plant_assessment)
-├── telegram-bot/       # Server concierge Telegram bot (OpenRouter-backed)
-│   ├── bot.py                  # Bot: polling, auth gate, tool-use loop, model fallback
-│   ├── tools.py                # Tool functions: get_agent_status, get_plant_status, get_yopflix_status, get_system_health, get_cron_schedule, get_agent_logs, water_plant, add_plant, remove_plant, save_recipe, get_plant, get_all_plants, save_plant_assessment
+├── telegram-bot/       # Server concierge Telegram bot (claude CLI primary, OpenRouter fallback)
+│   ├── bot.py                  # Bot: polling, auth gate, claude-CLI primary path, OpenRouter+Antigravity fallback, photo assessment
+│   ├── claude_backend.py       # ask_claude(): runs `claude -p` (Sonnet) with concierge MCP tools + per-chat --resume memory. Returns None on failure → caller falls back.
+│   ├── tool_specs.py           # CANONICAL tool defs (SPECS). openai_tools() for OpenRouter path, mcp_tools() for MCP server, func_map() for dispatch. Add/change tools HERE.
+│   ├── concierge_mcp.json      # MCP config used by claude_backend — loads ONLY concierge_server (--strict-mcp-config)
+│   ├── tools.py                # Tool function implementations (DB/subprocess/file I/O); schemas live in tool_specs.py
 │   ├── concierge-bot.service   # systemd user service (symlinked to ~/.config/systemd/user/)
-│   ├── test_bot.py             # Bot handler tests (auth, tool-use loop)
+│   ├── test_bot.py             # Bot handler tests (auth, claude-primary, fallback loop)
 │   ├── test_tools.py           # Tool function unit tests (mocked deps)
+│   ├── test_tool_specs.py      # Canonical-spec consistency tests
+│   ├── test_claude_backend.py  # ask_claude tests (mocked subprocess: parsing, session resume, fallback)
 │   ├── .env                    # Private API keys (gitignored): TELEGRAM_BOT_TOKEN, OPENROUTER_API_KEY, TELEGRAM_USER_ID
 │   └── .env.example            # Template for setup
 ├── data/               # SQLite database (gitignored)
@@ -74,14 +80,15 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 │   │   ├── mealsave_bot.py     # Telegram bot for remote saving
 │   │   └── check-yt-auth.sh    # YouTube cookie expiry check
 │   └── free-time/              # Suggest best tasks for a free time window
-├── mcp-servers/        # Custom MCP servers (calendar, gmail auth) + bridge_server.py (HTTP MCP over Tailscale for laptop access). GET /librarian/approve?id=&token= and /librarian/reject?id=&token= for one-click proposal approval.
+├── mcp-servers/        # Custom MCP servers (calendar, gmail auth) + bridge_server.py (HTTP MCP over Tailscale for laptop access). GET /librarian/approve?id=&token= and /librarian/reject?id=&token= for one-click proposal approval. concierge_server.py exposes the concierge bot's tools (from telegram-bot/tool_specs.py) to the claude CLI.
 ├── triggers/           # Agent operation docs — how to run agents on demand via the MCP bridge from laptop Claude Code. See triggers/README.md.
 ├── tests/              # pytest test suite (run: pytest tests/)
 │   ├── test_synthesize.py      # Failover + prompt adaptation + providers override tests
 │   ├── test_news_briefing.py   # RSS parsing, dedup, Dutch translation, HTML/markdown builder tests
 │   ├── test_weather.py         # Open-Meteo weather fetch tests
 │   ├── test_plant_weather.py   # Watering adjustment logic tests
-│   ├── test_daily_briefing.py  # Daily briefing integration tests
+│   ├── test_daily_briefing.py  # Daily briefing integration tests + Coming Up Todoist-prompt guard
+│   ├── test_agent_health.py    # Cron-interval parsing, staleness eval, alert dedup tests
 │   ├── test_security_audit.py  # Cloudflare IP + Shodan exposure tests
 │   └── test_mealsave_tiktok.py # TikTok caption metadata fetch tests
 ├── docs/               # Design docs (mandatory for non-trivial changes)
@@ -93,6 +100,7 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 │   ├── telegram-bots.md        # Overview of all Telegram bots, status, failure history
 │   ├── mcp-bridge.md           # MCP bridge server design (Tailscale HTTP, 7 tools)
 │   ├── travel-agent.md         # Travel agent design (search + plan modes, no API keys)
+│   ├── agent-health-staleness-monitor.md  # Agent Health monitor design (cron-interval staleness, Telegram alerts)
 │   └── superpowers/
 │       ├── specs/
 │       │   └── 2026-05-17-server-concierge-bot-design.md  # Concierge bot spec
@@ -152,10 +160,11 @@ Configured for both Claude (`.mcp.json`) and Antigravity (`mcp_config.json`):
 - **Google Drive** — file access (authenticated via OAuth, Claude-native only)
 
 # Server Concierge Telegram Bot
-- **Role:** Natural-language interface to query server status. Ask about agent runs, plant watering, yopflix/seedbox, system health, cron schedules, and logs.
-- **Backend:** OpenRouter free tier with model fallback: `deepseek/deepseek-chat-v3-0324:free` → `google/gemma-3-27b-it:free` → `meta-llama/llama-3.3-70b-instruct:free`
+- **Role:** Natural-language interface to query/control server state. Ask about agent runs, plant watering, yopflix/seedbox, system health, cron schedules, logs; water plants, add/remove/update plants, run travel agent, save recipes.
+- **Backend (primary):** `claude` CLI in print mode (`claude_backend.py`, model `claude-sonnet-4-6`) on the Pro subscription — no API billing. Native tool use via the `concierge` MCP server (`mcp__concierge__*`, `--strict-mcp-config` so ONLY concierge tools, no Todoist/Gmail/Calendar). Multi-turn memory via per-chat `--resume` (in-memory; cleared on restart). Runs off the event loop via `run_in_executor`.
+- **Backend (fallback):** if the claude CLI fails (rc≠0/timeout/bad JSON → `ask_claude` returns None), falls through to the existing OpenRouter free-model tool-use loop → Antigravity CLI. Photo/vision path (`handle_photo`) stays on OpenRouter vision models.
+- **Tools:** defined once in `tool_specs.py` (canonical SPECS) — feeds both the MCP server and the OpenRouter path. `tools.py` holds the implementations.
 - **Auth:** `TELEGRAM_USER_ID` env var — all other users silently ignored
-- **Tool use:** LLM calls tool functions in `tools.py` to fetch live data; results injected back into conversation (max 3 tool-use iterations per message)
 - **Service:** `concierge-bot.service` (systemd user service, `~/.config/systemd/user/`)
-- **Note:** OpenRouter free models are the only viable LLM backend — Anthropic/Google API keys require separate paid API plans, not covered by Pro subscriptions
-- **Design doc:** `docs/superpowers/specs/2026-05-17-server-concierge-bot-design.md`
+- **Latency:** each claude-backed reply spawns the CLI + MCP server (~2–6s); "typing" indicator covers it.
+- **Design docs:** `docs/superpowers/specs/2026-05-17-server-concierge-bot-design.md` (original), `docs/superpowers/specs/2026-05-31-concierge-claude-backend-design.md` (claude backend)
