@@ -108,12 +108,20 @@ class TestWeatherUpdate:
             result = agent._weather_update()
         assert result["updated"] == 2
 
-    def test_skips_cache_write_when_no_weather(self, agent):
-        agent.context["plan"]["plants"] = SAMPLE_PLANTS
+    def test_no_weather_recomputes_to_baseline(self, agent):
+        # New behavior: with no weather, weather_update no longer skips — it still
+        # migrates baselines, resets effective frequency to baseline, and writes the
+        # cache with an empty adjustment reason.
+        plants = [dict(p) for p in SAMPLE_PLANTS]
+        agent.context["plan"]["plants"] = plants
         with patch("agents.plant_agent.fetch_weather", return_value=None):
             result = agent._weather_update()
-        assert result.get("skipped") is True
-        assert agent.db.get_plant_weather_cache() == []
+        assert result.get("skipped") is None
+        assert result["updated"] == len(plants)
+        assert plants[0]["baseline_frequency_days"] == plants[0]["frequency_days"]
+        cache = agent.db.get_plant_weather_cache()
+        assert {r["plant_name"] for r in cache} == {"Monstera", "Tomato"}
+        assert all(r["adjustment_reason"] == "" for r in cache)
 
     def test_handles_no_plants_gracefully(self, agent):
         agent.context["plan"]["plants"] = []
