@@ -29,6 +29,7 @@ AGENT_REGISTRY = {
     "travel-agent": "agents.travel_agent:TravelAgent",
     "librarian": "agents.librarian:LibrarianAgent",
     "plant-agent": "agents.plant_agent:PlantAgent",
+    "agent-health": "agents.agent_health:AgentHealthAgent",
 }
 
 
