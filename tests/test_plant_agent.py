@@ -224,6 +224,52 @@ class TestPhotoRequests:
 
 
 # ---------------------------------------------------------------------------
+# 3b. _build_status_table() — chronological ordering
+# ---------------------------------------------------------------------------
+
+class TestBuildStatusTable:
+    today = datetime(2026, 6, 1, tzinfo=timezone.utc).date()
+
+    def _rows(self, table):
+        # Drop header + separator, return the plant-name column of each data row
+        lines = [l for l in table.splitlines() if l.startswith("|")][2:]
+        return [l.split("|")[1].strip() for l in lines]
+
+    def test_rows_sorted_by_next_water_date(self):
+        from agents.plant_agent import _build_status_table
+        plants = [
+            _make_plant(name="Late", frequency_days=10, last_watered="2026-05-30"),    # next 2026-06-09
+            _make_plant(name="Soon", frequency_days=3, last_watered="2026-05-30"),      # next 2026-06-02
+            _make_plant(name="Overdue", frequency_days=2, last_watered="2026-05-25"),   # next 2026-05-27
+        ]
+        table = _build_status_table(plants, {}, self.today)
+        assert self._rows(table) == ["Overdue", "Soon", "Late"]
+
+    def test_weather_adjusted_date_drives_order(self):
+        from agents.plant_agent import _build_status_table
+        plants = [
+            _make_plant(name="Base", frequency_days=2, last_watered="2026-05-31"),  # next 2026-06-02
+            _make_plant(name="Adjusted", frequency_days=10, last_watered="2026-05-31"),
+        ]
+        cache = {"Adjusted": {"adjusted_date": "2026-06-01", "adjustment_reason": "heatwave"}}
+        table = _build_status_table(plants, cache, self.today)
+        assert self._rows(table) == ["Adjusted", "Base"]
+
+    def test_ties_broken_by_name(self):
+        from agents.plant_agent import _build_status_table
+        plants = [
+            _make_plant(name="Zinnia", frequency_days=5, last_watered="2026-05-30"),
+            _make_plant(name="Aster", frequency_days=5, last_watered="2026-05-30"),
+        ]
+        table = _build_status_table(plants, {}, self.today)
+        assert self._rows(table) == ["Aster", "Zinnia"]
+
+    def test_no_plants_returns_placeholder(self):
+        from agents.plant_agent import _build_status_table
+        assert _build_status_table([], {}, self.today) == "No plants tracked."
+
+
+# ---------------------------------------------------------------------------
 # 4. _apply_intelligence_output() — output parsing
 # ---------------------------------------------------------------------------
 

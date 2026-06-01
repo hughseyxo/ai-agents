@@ -39,7 +39,7 @@ Use this HTML template:
 </body>
 </html>
 
-For {{RENDER_PLANT_TABLE}}: render each plant from the pre-computed table as a styled row. Status colour rules:
+For {{RENDER_PLANT_TABLE}}: render each plant from the pre-computed table as a styled row, **preserving the exact row order** (the table is already sorted chronologically by next water date — do not re-sort). Status colour rules:
 - Overdue (⚠): border-left: 3px solid #f85149
 - Due today (💧): border-left: 3px solid #d29922
 - Due within 3 days ("In 1d", "In 2d", "In 3d"): border-left: 3px solid #58a6ff

@@ -40,6 +40,39 @@ Return only the word "created" or "exists".
 """
 
 
+def _build_status_table(plants: list, weather_cache: dict, today) -> str:
+    """Build the markdown plant-status table, ordered chronologically by next water date."""
+    entries = []
+    for plant in plants:
+        cache = weather_cache.get(plant["name"], {})
+        adjusted_str = cache.get("adjusted_date", "")
+        reason = cache.get("adjustment_reason", "") or "—"
+
+        if adjusted_str:
+            next_water = datetime.strptime(adjusted_str, "%Y-%m-%d").date()
+        else:
+            last_watered = datetime.strptime(plant["last_watered"], "%Y-%m-%d").date()
+            next_water = last_watered + timedelta(days=plant["frequency_days"])
+
+        days_until = (next_water - today).days
+        if days_until < 0:
+            status = f"⚠ Overdue {abs(days_until)}d"
+        elif days_until == 0:
+            status = "💧 Due today"
+        else:
+            status = f"In {days_until}d"
+
+        entries.append((next_water, plant["name"],
+                        f"| {plant['name']} | {next_water} | {status} | {reason} |"))
+
+    if not entries:
+        return "No plants tracked."
+
+    entries.sort(key=lambda e: (e[0], e[1]))
+    header = "| Plant | Next Water | Status | Adjustment |\n|---|---|---|---|"
+    return header + "\n" + "\n".join(e[2] for e in entries)
+
+
 def _create_profile_doc(path: Path, plant: dict):
     """Create a minimal profile doc for a plant that doesn't have one yet."""
     name = plant["name"]
@@ -286,30 +319,7 @@ class PlantAgent(BaseAgent):
         weather_cache = self.context["plan"]["weather_cache"]
         today = datetime.now(timezone.utc).date()
 
-        rows = []
-        header = "| Plant | Next Water | Status | Adjustment |\n|---|---|---|---|"
-        for plant in sorted(plants, key=lambda p: p["name"]):
-            cache = weather_cache.get(plant["name"], {})
-            adjusted_str = cache.get("adjusted_date", "")
-            reason = cache.get("adjustment_reason", "") or "—"
-
-            if adjusted_str:
-                next_water = datetime.strptime(adjusted_str, "%Y-%m-%d").date()
-            else:
-                last_watered = datetime.strptime(plant["last_watered"], "%Y-%m-%d").date()
-                next_water = last_watered + timedelta(days=plant["frequency_days"])
-
-            days_until = (next_water - today).days
-            if days_until < 0:
-                status = f"⚠ Overdue {abs(days_until)}d"
-            elif days_until == 0:
-                status = "💧 Due today"
-            else:
-                status = f"In {days_until}d"
-
-            rows.append(f"| {plant['name']} | {next_water} | {status} | {reason} |")
-
-        plant_table = header + "\n" + "\n".join(rows) if rows else "No plants tracked."
+        plant_table = _build_status_table(plants, weather_cache, today)
 
         prompt_path = REPO_ROOT / "agents" / "prompts" / "plant_status_email.md"
         prompt = prompt_path.read_text()
