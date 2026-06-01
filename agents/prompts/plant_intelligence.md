@@ -62,3 +62,20 @@ The insight summary text you sent in Step 2 (plain text version, for the record)
 [TASKS]
 Tasks you created in Step 3, one per line. Empty if none.
 [/TASKS]
+
+## Adjusting watering frequency (optional)
+
+If observations (photos, health assessments, recent weather trend) indicate a plant's
+**baseline** watering cadence should change, emit a `[FREQUENCY]` block. One line per
+plant: `PlantName — <new_baseline_days> — <short reason>`. Only include plants that
+genuinely need a change.
+
+- This sets the plant's **baseline** frequency (the system folds current weather in
+  automatically — do NOT pre-adjust for today's weather here).
+- Changes are clamped to 1–30 days and limited to a ±2-day step per run; large moves
+  converge over several runs.
+
+Example:
+[FREQUENCY]
+Lantana — 5 — wilting under full sun, soil dry before day 7
+[/FREQUENCY]

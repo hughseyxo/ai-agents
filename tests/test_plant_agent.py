@@ -495,3 +495,10 @@ class TestIntelligenceFrequency:
         assert plants[0]["baseline_frequency_days"] == 5   # 7 -> 5 (step -2)
         assert plants[0]["frequency_days"] == 5            # no weather -> baseline
         assert "7→5 days" in (tmp_path / "lantana.md").read_text()
+
+
+def test_intelligence_prompt_documents_frequency_marker():
+    import agents.plant_agent as mod
+    text = (mod.REPO_ROOT / "agents" / "prompts" / "plant_intelligence.md").read_text()
+    assert "[FREQUENCY]" in text and "[/FREQUENCY]" in text
+    assert "baseline" in text.lower()
