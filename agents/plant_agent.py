@@ -10,7 +10,7 @@ from pathlib import Path
 import requests
 
 from .base import BaseAgent, REPO_ROOT
-from .plant_weather import adjust_watering_date, is_heatwave_incoming
+from .plant_weather import weather_adjusted_frequency, apply_frequency_step, is_heatwave_incoming
 from .weather import fetch_weather
 
 PERSONAL_PROJECT_ID = "6Crf3cH2RF5v86wc"
@@ -135,19 +135,22 @@ class PlantAgent(BaseAgent):
 
     def _weather_update(self):
         weather = fetch_weather()
-        if not weather:
-            return {"skipped": True}
-
         plants = self.context["plan"]["plants"]
-        updated = 0
+        changed = False
         for plant in plants:
+            if "baseline_frequency_days" not in plant:
+                plant["baseline_frequency_days"] = plant["frequency_days"]
+                changed = True
+            new_freq, reason = weather_adjusted_frequency(plant, weather)
+            if new_freq != plant.get("frequency_days"):
+                plant["frequency_days"] = new_freq
+                changed = True
             last_watered = datetime.strptime(plant["last_watered"], "%Y-%m-%d").date()
-            base_date = last_watered + timedelta(days=plant["frequency_days"])
-            adjusted, reason = adjust_watering_date(base_date, plant["frequency_days"], plant, weather)
-            self.db.upsert_plant_weather_cache(plant["name"], adjusted.isoformat(), reason)
-            updated += 1
-
-        return {"updated": updated}
+            next_date = last_watered + timedelta(days=plant["frequency_days"])
+            self.db.upsert_plant_weather_cache(plant["name"], next_date.isoformat(), reason)
+        if changed:
+            self.db.set_state("daily-briefing", "plants", plants)
+        return {"updated": len(plants)}
 
     def _sync_watering(self):
         if not self._gate("sync_watering", 24):

@@ -409,3 +409,41 @@ class TestApplyIntelligenceOutput:
 
         assert "Fern looks lush." in (plants_dir / "fern.md").read_text()
         assert "Cactus is thriving." in (plants_dir / "cactus.md").read_text()
+
+
+# ---------------------------------------------------------------------------
+# Weather recompute + baseline migration (Task 4)
+# ---------------------------------------------------------------------------
+
+from datetime import date
+
+
+class TestWeatherRecompute:
+    HOT = {"current": {"temp_c": 28, "humidity_pct": 50},
+           "recent_precip_mm": 0.0,
+           "forecast": [{"temp_max_c": 33, "precip_mm": 0.0},
+                        {"temp_max_c": 34, "precip_mm": 0.0}]}
+
+    def _agent(self, plants, weather, monkeypatch, tmp_path):
+        from agents import plant_agent as mod
+        monkeypatch.setattr(mod, "fetch_weather", lambda: weather)
+        a = mod.PlantAgent(db_path=tmp_path / "wr.db")
+        a.context = {"plan": {"plants": plants, "weather_cache": {}}}
+        return a
+
+    def test_migrates_baseline(self, monkeypatch, tmp_path):
+        plants = [{"name": "X", "frequency_days": 7, "location": "indoor", "last_watered": "2026-05-31"}]
+        self._agent(plants, None, monkeypatch, tmp_path)._weather_update()
+        assert plants[0]["baseline_frequency_days"] == 7
+
+    def test_folds_weather(self, monkeypatch, tmp_path):
+        plants = [{"name": "X", "frequency_days": 7, "baseline_frequency_days": 7,
+                   "location": "outdoor", "sunlight": "full sun", "last_watered": "2026-05-31"}]
+        self._agent(plants, self.HOT, monkeypatch, tmp_path)._weather_update()
+        assert plants[0]["frequency_days"] == 4   # 7-3
+
+    def test_weather_failure_resets_to_baseline(self, monkeypatch, tmp_path):
+        plants = [{"name": "X", "frequency_days": 4, "baseline_frequency_days": 7,
+                   "location": "outdoor", "last_watered": "2026-05-31"}]
+        self._agent(plants, None, monkeypatch, tmp_path)._weather_update()
+        assert plants[0]["frequency_days"] == 7
