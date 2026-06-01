@@ -33,6 +33,7 @@ from tools import (
     research_plant_sunlight,
     research_plant_water_sensitivity,
     add_plant,
+    set_plant_frequency,
 )
 
 FAKE_PLANTS = [
@@ -896,3 +897,31 @@ def test_water_plants_db_error_returns_error():
     with patch("tools.AgentDB", side_effect=Exception("db locked")):
         result = water_plants("outdoor")
     assert "failed" in result.lower() or "error" in result.lower()
+
+
+# ---------------------------------------------------------------------------
+# set_plant_frequency
+# ---------------------------------------------------------------------------
+
+def test_set_plant_frequency_clamps_and_logs():
+    plants = [{"name": "Lantana", "frequency_days": 7, "last_watered": "2026-05-31", "location": "outdoor"}]
+    mock_db = _make_mock_db(plants)
+    with patch("tools.AgentDB", return_value=mock_db), \
+         patch("tools.fetch_weather", return_value=None), \
+         patch("tools.append_frequency_history") as mock_hist:
+        result = set_plant_frequency("Lantana", 99, "user request")
+    saved = mock_db.set_state.call_args[0][2]
+    assert saved[0]["baseline_frequency_days"] == 30   # clamped from 99
+    assert saved[0]["frequency_days"] == 30            # no weather -> baseline
+    assert "Lantana" in result and "30" in result
+    mock_hist.assert_called_once()
+    args = mock_hist.call_args[0]
+    assert args[0] == "Lantana" and args[1] == 7 and args[2] == 30
+    assert "user request" in args[3]
+
+
+def test_set_plant_frequency_not_found():
+    mock_db = _make_mock_db([])
+    with patch("tools.AgentDB", return_value=mock_db):
+        result = set_plant_frequency("Ghost", 5)
+    assert "No plant" in result
