@@ -447,3 +447,29 @@ class TestWeatherRecompute:
                    "location": "outdoor", "last_watered": "2026-05-31"}]
         self._agent(plants, None, monkeypatch, tmp_path)._weather_update()
         assert plants[0]["frequency_days"] == 7
+
+
+# ---------------------------------------------------------------------------
+# due_water_tasks (Task 5)
+# ---------------------------------------------------------------------------
+
+from agents.plant_agent import due_water_tasks
+
+
+class TestDueWaterTasks:
+    HOT = TestWeatherRecompute.HOT  # heatwave: 2 days >30, dry
+
+    def test_includes_overdue(self):
+        today = date(2026, 6, 1)
+        plants = [{"name": "X", "frequency_days": 4, "last_watered": "2026-05-27", "location": "indoor"}]
+        assert due_water_tasks(plants, today, None) == [{"name": "X", "due": "2026-05-31"}]
+
+    def test_excludes_future(self):
+        today = date(2026, 6, 1)
+        plants = [{"name": "Y", "frequency_days": 7, "last_watered": "2026-05-31", "location": "indoor"}]
+        assert due_water_tasks(plants, today, None) == []
+
+    def test_heatwave_creates_one_day_early(self):
+        today = date(2026, 6, 1)
+        plants = [{"name": "Z", "frequency_days": 3, "last_watered": "2026-05-30", "location": "outdoor"}]
+        assert due_water_tasks(plants, today, self.HOT) == [{"name": "Z", "due": "2026-06-02", "heatwave": True}]

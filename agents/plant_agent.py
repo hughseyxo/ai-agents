@@ -40,6 +40,22 @@ Return only the word "created" or "exists".
 """
 
 
+def due_water_tasks(plants: list, today, weather) -> list:
+    """Plants whose folded next-water date is due today/overdue (or +1 day for
+    outdoor plants when a heatwave is incoming)."""
+    tasks = []
+    for plant in plants:
+        last_watered = datetime.strptime(plant["last_watered"], "%Y-%m-%d").date()
+        due_date = last_watered + timedelta(days=plant["frequency_days"])
+        if due_date <= today:
+            tasks.append({"name": plant["name"], "due": due_date.isoformat()})
+        elif (plant.get("location") == "outdoor" and weather
+              and is_heatwave_incoming(weather)
+              and due_date <= today + timedelta(days=1)):
+            tasks.append({"name": plant["name"], "due": due_date.isoformat(), "heatwave": True})
+    return tasks
+
+
 def _build_status_table(plants: list, weather_cache: dict, today) -> str:
     """Build the markdown plant-status table, ordered chronologically by next water date."""
     entries = []
@@ -204,22 +220,7 @@ class PlantAgent(BaseAgent):
         today = datetime.now(timezone.utc).date()
         weather = fetch_weather()
 
-        tasks_to_create = []
-        for plant in plants:
-            last_watered = datetime.strptime(plant["last_watered"], "%Y-%m-%d").date()
-            base_date = last_watered + timedelta(days=plant["frequency_days"])
-
-            if weather:
-                adjusted, reason = adjust_watering_date(base_date, plant["frequency_days"], plant, weather)
-            else:
-                adjusted = base_date
-
-            if adjusted <= today:
-                tasks_to_create.append({"name": plant["name"], "due": adjusted.isoformat()})
-            elif (plant.get("location") == "outdoor"
-                  and weather and is_heatwave_incoming(weather)
-                  and adjusted <= today + timedelta(days=1)):
-                tasks_to_create.append({"name": plant["name"], "due": adjusted.isoformat(), "heatwave": True})
+        tasks_to_create = due_water_tasks(plants, today, weather)
 
         if not tasks_to_create:
             self._mark_ran("create_tasks")
