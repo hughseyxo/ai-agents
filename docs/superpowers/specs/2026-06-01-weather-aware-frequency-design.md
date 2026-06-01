@@ -116,6 +116,12 @@ Stop applying the transient adjustment; read effective `frequency_days` directly
   `is_heatwave_incoming` (still used for heatwave early-create), and `_build_reason`
   (reused for history reasons). Remove/deprecate `adjust_watering_date` if no caller
   remains.
+- `plant_weather_cache` (DB) is retained: `weather_update` writes `adjusted_date =
+  last_watered + effective frequency_days` and the weather `reason`. `get_plant_status`
+  and `_build_status_table` read this cache unchanged, so they show the folded date —
+  no edits needed in those consumers.
+- `update_plant` (concierge): its `frequency_days` path now also sets
+  `baseline_frequency_days`, else the hourly recompute would revert a manual change.
 
 ## Guardrails (summary)
 clamp 1–30 days · intelligence max ±2/run · all changes logged to Frequency History ·

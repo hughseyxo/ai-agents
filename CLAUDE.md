@@ -37,7 +37,8 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 │   ├── db.py                   # SQLite wrapper (AgentDB)
 │   ├── runner.py               # CLI: python3 -m agents <command>
 │   ├── weather.py              # Open-Meteo weather client (Leiden default, no API key)
-│   ├── plant_weather.py        # Weather-based watering adjustment logic (pure functions)
+│   ├── plant_weather.py        # Weather-based watering adjustment logic (pure functions): calculate_adjustment (indoor/outdoor + shade modifier), weather_adjusted_frequency (fold weather into frequency), apply_frequency_step (bounded ±2/run, clamp 1-30)
+│   ├── plant_profiles.py       # File-I/O helpers for docs/plants/<slug>.md (frequency-history logging)
 │   ├── daily_briefing.py       # Daily briefing agent (schedule: 04:05 UTC / 06:05 CEST, model: claude-sonnet-4-6)
 │   ├── news_briefing.py        # News briefing agent (schedule: 04:00 UTC / 06:00 CEST, model: claude-haiku-4-5, Claude primary). Steps: fetch_news → translate_dutch (NOS Binnenland articles) → news_briefing (send email). HTML/markdown pre-built in Python; LLM only sends email. Sources: BBC, RTE/TheJournal/Irish Times(Google News), DutchNews/NLTimes/NOS(Dutch→translated), Leiden/Mullingar(Google News), Verge/TC/HN/ARS/Register, Polygon, HN SRE.
 │   ├── security_audit.py       # Security audit agent — 18 checks: 12 system + 4 seedbox + 2 web (Cloudflare IP validation, Shodan InternetDB). Schedule: Sunday 06:00 UTC / 08:00 CEST. Seedbox configs live in ~/git/yopflix (private repo).
@@ -86,7 +87,8 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 │   ├── test_synthesize.py      # Failover + prompt adaptation + providers override tests
 │   ├── test_news_briefing.py   # RSS parsing, dedup, Dutch translation, HTML/markdown builder tests
 │   ├── test_weather.py         # Open-Meteo weather fetch tests
-│   ├── test_plant_weather.py   # Watering adjustment logic tests
+│   ├── test_plant_weather.py   # Watering adjustment logic tests (incl. shade modifier, weather_adjusted_frequency, apply_frequency_step)
+│   ├── test_plant_profiles.py  # Frequency-history table append tests
 │   ├── test_daily_briefing.py  # Daily briefing integration tests + Coming Up Todoist-prompt guard
 │   ├── test_agent_health.py    # Cron-interval parsing, staleness eval, alert dedup tests
 │   ├── test_security_audit.py  # Cloudflare IP + Shodan exposure tests
@@ -144,7 +146,7 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 
 # Plant Watering Tracker
 - Data lives in `data/agents.db` (SQLite state table); CLI tool is `plant.sh` (add/list/remove/--outdoor)
-- Plant data model: `{name, frequency_days, last_watered, location, sunlight, water_sensitivity}` — location is `"indoor"` or `"outdoor"`; water_sensitivity is `"high"/"medium"/"low"` (auto-researched via Antigravity at add time, defaults to `"medium"`)
+- Plant data model: `{name, baseline_frequency_days, frequency_days, last_watered, location, sunlight, water_sensitivity}` — `baseline_frequency_days` is the intrinsic cadence (changed by intelligence runs and the concierge `set_plant_frequency` tool); `frequency_days` is the **effective** value recomputed hourly = clamp(baseline + weather delta, 1, 30), folding indoor/outdoor + shade tolerance (so it's derived — don't hand-edit it). Migrated automatically (baseline defaults to frequency_days on first run). location is `"indoor"` or `"outdoor"`; water_sensitivity is `"high"/"medium"/"low"` (auto-researched via Antigravity at add time, defaults to `"medium"`)
 - **Master agent:** `PlantAgent` (hourly) owns the full plant lifecycle — weather cache refresh, Todoist sync, task creation, photo requests, status email, and intelligence runs. Replaces the old `PlantWeatherAgent`.
   - Weather cache written to `plant_weather_cache` table; `get_plant_status()` in the concierge bot reads from it
   - Indoor: ±1-2 days adjustment based on temp/humidity; Outdoor: ±1-3 days based on rain/heatwaves
