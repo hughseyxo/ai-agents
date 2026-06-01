@@ -16,6 +16,35 @@
 
 ## Intelligence Notes
 <!-- Appended by each intelligence run -->
+### 2026-06-01 (pruning)
+- prune dead or diseased branches (maintain tidy appearance and promote airflow)
+
+### 2026-06-01
+- Suffered severe underwatering stress (wilted/droopy leaves) prior to recent watering.
+- 7-day base interval is too long under outdoor full sun.
+- Profile recommends shortening the watering interval to 5-6 days, and pruning dead/diseased branches.
+
+### 2026-05-28 (pruning)
+- prune dead or diseased branches (maintain tidy appearance and promote airflow)
+
+### 2026-05-28
+- Currently on a 7-day base watering frequency in outdoor full sun.
+- Suffered clear underwatering stress (wilted and droopy leaves) prior to its recent watering, demonstrating that a 7-day interval is too long.
+- Watering interval should be shortened to 5–6 days to prevent recurring drought stress.
+
+### 2026-05-28 (pruning)
+- Prune dead or diseased branches (maintain tidy appearance and promote airflow)
+
+### 2026-05-28
+- Watered on 2026-05-28 on a 7-day interval.
+- Suffered clear underwatering stress (wilted/droopy leaves) on 2026-05-25, demonstrating that a 7-day interval is too long under outdoor full sun.
+- An active Todoist task is scheduled to reduce the base interval to 5–6 days.
+
+### 2026-05-28
+- Watered today (2026-05-28) on a 7-day interval.
+- Suffered clear underwatering stress (wilted and droopy leaves) on 2026-05-25, showing that a 7-day watering interval is insufficient under outdoor full sun.
+- Recommendation is to increase watering frequency (reduce interval to 5-6 days); a review task is active in Todoist to track this change.
+
 ### 2026-05-28
 - Outdoor full-sun plant on a 7-day cycle, watered 4 days ago.
 - Assessment on 2026-05-25 showed wilted and droopy leaves, indicating clear underwatering stress.
@@ -32,3 +61,18 @@
 - Despite orange flowers appearing healthy, foliage distress is a red flag
 - Current 7-day frequency insufficient for this plant's water needs; recommend increase to 5–6 days
 
+
+### 2026-05-28 — Stressed
+- Plant exhibits wilting and droopy leaves, indicating underwatering stress. - Flowers appear healthy, suggesting possible root issues or inconsistent watering. - Current 7-day frequency is insufficient under outdoor full sun conditions. Recommend reducing to 5–6 days to prevent recurring drought stress.
+[Validator: structured fields corrected for consistency with observations]
+| 2026-05-29 | ?→5 days | Applied via Telegram photo assessment |
+
+### 2026-05-29 — Stressed
+Plant exhibits wilting and droopy leaves, indicating underwatering stress. Flowers appear healthy, suggesting possible root issues or inconsistent watering. Current 7-day frequency is insufficient under outdoor full sun conditions. Recommend reducing to 5–6 days to prevent recurring drought stress.
+| 2026-05-29 | ?→5 days | Applied via Telegram photo assessment |
+
+### 2026-06-02 — Underwatered
+- Lantana shows clear underwatering stress despite recent watering. Outdoor full sun and 7-day watering interval are insufficient.
+- Reduce watering frequency to 5–6 days to prevent recurring drought stress.
+- Prune dead branches to promote airflow.
+[Validator: structured fields corrected for consistency with observations]
