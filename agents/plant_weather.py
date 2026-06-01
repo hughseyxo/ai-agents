@@ -178,3 +178,11 @@ def _build_reason(adj: int, plant: dict, weather: dict) -> str:
             return f"{days}d {direction} — hot dry conditions ({temp:.0f}°C, {humidity:.0f}% humidity)"
         else:
             return f"{days}d {direction} — cold humid conditions ({temp:.0f}°C, {humidity:.0f}% humidity)"
+
+
+def apply_frequency_step(current_baseline: int, target: int) -> int:
+    """Move baseline toward target by at most MAX_FREQUENCY_STEP, clamped 1-30."""
+    target = _clamp(int(target), MIN_FREQUENCY, MAX_FREQUENCY)
+    if target > current_baseline:
+        return min(target, current_baseline + MAX_FREQUENCY_STEP)
+    return max(target, current_baseline - MAX_FREQUENCY_STEP)

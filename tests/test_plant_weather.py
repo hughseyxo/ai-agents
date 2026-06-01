@@ -7,7 +7,7 @@ from datetime import date
 
 import pytest
 
-from agents.plant_weather import calculate_adjustment, adjust_watering_date, is_heatwave_incoming, weather_adjusted_frequency
+from agents.plant_weather import calculate_adjustment, adjust_watering_date, is_heatwave_incoming, weather_adjusted_frequency, apply_frequency_step
 
 
 # --- Weather data fixtures ---
@@ -358,3 +358,18 @@ class TestWeatherAdjustedFrequency:
 
     def test_baseline_missing_falls_back_to_frequency_days(self):
         assert weather_adjusted_frequency({"frequency_days": 10, "location": "indoor"}, None) == (10, "")
+
+
+class TestApplyFrequencyStep:
+    def test_limits_decrease(self):
+        assert apply_frequency_step(7, 3) == 5     # max -2 per call
+
+    def test_limits_increase(self):
+        assert apply_frequency_step(7, 12) == 9    # max +2 per call
+
+    def test_reaches_close_target(self):
+        assert apply_frequency_step(7, 6) == 6
+
+    def test_clamps_bounds(self):
+        assert apply_frequency_step(2, 0) == 1     # target clamped to 1
+        assert apply_frequency_step(29, 40) == 30  # target clamped to 30
