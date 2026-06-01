@@ -6,6 +6,36 @@ Pure functions — no side effects, no I/O. Fully testable.
 from datetime import date, timedelta
 
 MAX_ADJUSTMENT = 3
+MIN_FREQUENCY = 1
+MAX_FREQUENCY = 30
+MAX_FREQUENCY_STEP = 2
+
+
+def _clamp(value: int, lo: int, hi: int) -> int:
+    return max(lo, min(hi, value))
+
+
+def _sunlight_modifier(adj: int, plant: dict) -> int:
+    """Shade tolerance modulates a non-zero weather adjustment.
+
+    Full sun dries faster (amplify drying / dampen deferral); shade holds
+    moisture (dampen drying / amplify deferral). Partial shade / unknown: no change.
+    """
+    if adj == 0:
+        return 0
+    sun = (plant.get("sunlight") or "").strip().lower()
+    if adj < 0:  # drying — water sooner
+        if sun == "full sun":
+            return adj - 1
+        if sun == "shade":
+            return adj + 1
+        return adj
+    # adj > 0 — wetter, defer
+    if sun == "shade":
+        return adj + 1
+    if sun == "full sun":
+        return adj - 1
+    return adj
 
 
 def calculate_adjustment(plant: dict, weather: dict) -> int:
@@ -17,6 +47,7 @@ def calculate_adjustment(plant: dict, weather: dict) -> int:
     else:
         adj = _indoor_adjustment(weather)
 
+    adj = _sunlight_modifier(adj, plant)
     return max(-MAX_ADJUSTMENT, min(MAX_ADJUSTMENT, adj))
 
 

@@ -296,3 +296,37 @@ class TestIsHeatwaveIncoming:
     def test_empty_forecast_returns_false(self):
         weather = _weather(forecast=[])
         assert is_heatwave_incoming(weather) is False
+
+
+# ===================================================================
+# Sunlight modifier (shade tolerance)
+# ===================================================================
+
+class TestSunlightModifier:
+    HOT = {"current": {"temp_c": 28, "humidity_pct": 50},
+           "recent_precip_mm": 0.0,
+           "forecast": [{"temp_max_c": 33, "precip_mm": 0.0},
+                        {"temp_max_c": 34, "precip_mm": 0.0}]}
+    RAINY = {"current": {"temp_c": 15, "humidity_pct": 80},
+             "recent_precip_mm": 12.0,
+             "forecast": [{"temp_max_c": 16, "precip_mm": 3.0}]}
+    MILD = {"current": {"temp_c": 20, "humidity_pct": 55},
+            "recent_precip_mm": 0.0,
+            "forecast": [{"temp_max_c": 22, "precip_mm": 0.0}]}
+
+    def test_full_sun_amplifies_heat_drying(self):
+        assert calculate_adjustment({"location": "outdoor", "sunlight": "partial shade"}, self.HOT) == -2
+        assert calculate_adjustment({"location": "outdoor", "sunlight": "full sun"}, self.HOT) == -3
+        assert calculate_adjustment({"location": "outdoor", "sunlight": "shade"}, self.HOT) == -1
+
+    def test_shade_defers_more_in_rain_clamped(self):
+        assert calculate_adjustment({"location": "outdoor", "sunlight": "partial shade"}, self.RAINY) == 3
+        assert calculate_adjustment({"location": "outdoor", "sunlight": "shade"}, self.RAINY) == 3
+        assert calculate_adjustment({"location": "outdoor", "sunlight": "full sun"}, self.RAINY) == 2
+
+    def test_no_modifier_when_base_zero(self):
+        for sun in ("full sun", "shade", "partial shade"):
+            assert calculate_adjustment({"location": "outdoor", "sunlight": sun}, self.MILD) == 0
+
+    def test_unknown_sunlight_no_modifier(self):
+        assert calculate_adjustment({"location": "outdoor"}, self.HOT) == -2
