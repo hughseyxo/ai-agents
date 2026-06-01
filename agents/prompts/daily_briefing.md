@@ -62,15 +62,18 @@ Merge both lists, sort chronologically, cap at 15 events total.
 
 **IMPORTANT: Only include events within exactly 30 days from today. Do NOT include events beyond 30 days.**
 
-**Call C — Todoist upcoming tasks:**
-Use `mcp__todoist__find-tasks-by-date` with `startDate: "today"`, `daysCount: 30`, and `limit: 50` — tasks with a due date within the next 30 days. Include these in the Coming Up section labelled as `[TASK]`.
+## Step 4b: Fetch upcoming Todoist tasks (REQUIRED for Coming Up)
+Call `mcp__todoist__find-tasks-by-date` with `startDate: "today"`, `daysCount: 30`, and `limit: 50`.
+- These tasks come from **ALL projects**, not just the Inbox. Do NOT filter by project here.
+- `startDate: "today"` also returns overdue tasks — for the Coming Up section, keep only tasks whose due date is today through 30 days from now.
+- These tasks are **REQUIRED** in the Coming Up section, labelled `[TASK]`. Do NOT omit them — Coming Up must merge calendar events, on-call shifts, AND these tasks.
 
 ## Step 5: Fetch Inbox tasks from Todoist
 Call `mcp__todoist__find-tasks` with `projectId: "6Crf3cH2RF5v86wc"`, `limit: 50` to retrieve only incomplete Inbox tasks.
 - Include task priority and due date where available
 - **FILTER OUT all tasks that do NOT have a due date.**
 - Order by: overdue first, then by priority (p1 → p4), then by due date
-- Do NOT include tasks from any named projects
+- Do NOT include tasks from any named projects **in this Inbox Tasks section** (the Coming Up section, Step 4b, does include them)
 - Tasks due today should be included in BOTH the "Today" section AND the "Due Today" subsection under Inbox Tasks
 
 ## Step 5.5: Identify Quick Wins
@@ -80,7 +83,8 @@ From the fetched inbox tasks (overdue or due today), identify up to 5 "Quick Win
 Build the email body as HTML with inline CSS only using the template below, then send via `mcp__gmail__gmail_send`. After sending, your final text output MUST be the exact HTML you sent — nothing else, no preamble, no summary.
 
 **Coming Up rules:**
-- Merge calendar events + on-call shifts + Todoist tasks, sort chronologically
+- You MUST merge calendar events + on-call shifts + the upcoming Todoist tasks from Step 4b, sorted chronologically
+- The Step 4b Todoist tasks are NOT optional — if any exist within the window they MUST appear, labelled `[TASK]`
 - **Strictly within 30 days from today — nothing beyond**
 - Cap at 15 entries total
 
@@ -158,7 +162,7 @@ If Gmail fails, note it in the report but do not stop.
 
 ## Constraints
 - Do NOT mark any Todoist tasks as complete, modify, or delete them — read-only
-- Do NOT include tasks from named Todoist projects — Inbox only
+- **Inbox Tasks section only:** include only Inbox tasks (project `6Crf3cH2RF5v86wc`). This restriction does NOT apply to the Coming Up section, which includes dated tasks from all projects (Step 4b).
 - Do NOT delete or modify any calendar events
 - Do NOT run any git commands
 - Keep estimates clearly labelled as estimates

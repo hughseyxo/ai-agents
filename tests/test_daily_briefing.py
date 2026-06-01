@@ -68,3 +68,32 @@ class TestDailyBriefingPlan:
 
         assert "2026-05-28" in result
         assert "# Briefing Prompt" in result
+
+
+class TestComingUpTodoistPrompt:
+    """Guard against regressing the 'Coming Up' Todoist-task inclusion fix.
+
+    Future-dated Todoist tasks were flakily missing from the Coming Up section
+    because the fetch was buried and a blanket 'Inbox only' constraint dropped
+    them. These assertions lock in the corrected prompt instructions.
+    """
+
+    @staticmethod
+    def _prompt_text():
+        import agents.daily_briefing as mod
+
+        return (mod.REPO_ROOT / "agents" / "prompts" / "daily_briefing.md").read_text()
+
+    def test_fetches_upcoming_todoist_tasks_for_coming_up(self):
+        text = self._prompt_text()
+        assert "find-tasks-by-date" in text
+        assert "daysCount" in text and "30" in text
+        # The fetch must be tied to the Coming Up section.
+        assert "Coming Up" in text
+
+    def test_inbox_only_restriction_excludes_coming_up(self):
+        """The 'Inbox only' restriction must be explicitly scoped so it does
+        NOT strip dated tasks out of the Coming Up section."""
+        text = self._prompt_text().lower()
+        # Some phrasing must clarify the Inbox-only rule does not apply to Coming Up.
+        assert "does not apply to the coming up" in text or "not apply to coming up" in text
