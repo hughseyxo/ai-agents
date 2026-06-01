@@ -11,6 +11,7 @@ import requests
 
 from .base import BaseAgent, REPO_ROOT
 from .plant_weather import weather_adjusted_frequency, apply_frequency_step, is_heatwave_incoming
+from .plant_profiles import append_frequency_history
 from .weather import fetch_weather
 
 PERSONAL_PROJECT_ID = "6Crf3cH2RF5v86wc"
@@ -431,6 +432,35 @@ class PlantAgent(BaseAgent):
                     else:
                         content += f"\n## Intelligence Notes\n<!-- Appended by each intelligence run -->{entry}"
                     profile_path.write_text(content)
+
+        freq_m = re.search(r'\[FREQUENCY\](.*?)\[/FREQUENCY\]', output, re.DOTALL)
+        if freq_m:
+            changed = False
+            for line in freq_m.group(1).strip().splitlines():
+                line = line.strip()
+                if " — " not in line:
+                    continue
+                parts = [s.strip() for s in line.split(" — ")]
+                if len(parts) < 2:
+                    continue
+                name = parts[0]
+                try:
+                    target = int(parts[1])
+                except ValueError:
+                    continue
+                note = parts[2] if len(parts) > 2 else ""
+                plant = next((p for p in plants if p["name"].lower() == name.lower()), None)
+                if not plant:
+                    continue
+                old = plant.get("baseline_frequency_days", plant["frequency_days"])
+                new = apply_frequency_step(old, target)
+                if new != old:
+                    plant["baseline_frequency_days"] = new
+                    plant["frequency_days"], _ = weather_adjusted_frequency(plant, fetch_weather())
+                    append_frequency_history(plant["name"], old, new, f"intelligence: {note}".rstrip(": ").strip())
+                    changed = True
+            if changed:
+                self.db.set_state("daily-briefing", "plants", plants)
 
         needs_photo_m = re.search(r'\[NEEDS_PHOTO\](.*?)\[/NEEDS_PHOTO\]', output, re.DOTALL)
         if needs_photo_m:
