@@ -9,6 +9,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from unittest.mock import MagicMock, patch, mock_open
 
+import copy
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -21,6 +22,7 @@ from tools import (
     get_cron_schedule,
     get_agent_logs,
     water_plant,
+    water_plants,
     update_plant,
     remove_plant,
     save_recipe,
@@ -828,3 +830,69 @@ def test_add_plant_defaults_sensitivity_to_medium_on_research_failure(mocker):
         result = add_plant("Cactus", 14, "indoor")
     saved = mock_db.set_state.call_args[0][2]
     assert saved[0]["water_sensitivity"] == "medium"
+
+
+# ---------------------------------------------------------------------------
+# water_plants (bulk by location)
+# ---------------------------------------------------------------------------
+
+MIXED_PLANTS = [
+    {"name": "Gazania", "frequency_days": 3, "last_watered": "2026-01-01", "location": "outdoor"},
+    {"name": "Lavender", "frequency_days": 7, "last_watered": "2026-01-01", "location": "outdoor"},
+    {"name": "Monstera", "frequency_days": 10, "last_watered": "2026-01-01", "location": "indoor"},
+]
+
+
+def test_water_plants_outdoor_updates_all_outdoor():
+    mock_db = _make_mock_db(copy.deepcopy(MIXED_PLANTS))
+    with patch("tools.AgentDB", return_value=mock_db):
+        result = water_plants("outdoor")
+    saved = mock_db.set_state.call_args[0][2]
+    outdoor = [p for p in saved if p["location"] == "outdoor"]
+    assert all(p["last_watered"] == date.today().isoformat() for p in outdoor)
+    assert "Gazania" in result
+    assert "Lavender" in result
+
+
+def test_water_plants_outdoor_does_not_touch_indoor():
+    mock_db = _make_mock_db(copy.deepcopy(MIXED_PLANTS))
+    with patch("tools.AgentDB", return_value=mock_db):
+        water_plants("outdoor")
+    saved = mock_db.set_state.call_args[0][2]
+    indoor = next(p for p in saved if p["location"] == "indoor")
+    assert indoor["last_watered"] == "2026-01-01"
+
+
+def test_water_plants_indoor_updates_only_indoor():
+    mock_db = _make_mock_db(copy.deepcopy(MIXED_PLANTS))
+    with patch("tools.AgentDB", return_value=mock_db):
+        result = water_plants("indoor")
+    saved = mock_db.set_state.call_args[0][2]
+    indoor = [p for p in saved if p["location"] == "indoor"]
+    outdoor = [p for p in saved if p["location"] == "outdoor"]
+    assert all(p["last_watered"] == date.today().isoformat() for p in indoor)
+    assert all(p["last_watered"] == "2026-01-01" for p in outdoor)
+    assert "Monstera" in result
+
+
+def test_water_plants_no_match_returns_not_found():
+    plants = [{"name": "Monstera", "frequency_days": 10, "last_watered": "2026-01-01", "location": "indoor"}]
+    mock_db = _make_mock_db(plants)
+    with patch("tools.AgentDB", return_value=mock_db):
+        result = water_plants("outdoor")
+    assert "no outdoor plants" in result.lower()
+    mock_db.set_state.assert_not_called()
+
+
+def test_water_plants_empty_list_returns_not_found():
+    mock_db = _make_mock_db([])
+    with patch("tools.AgentDB", return_value=mock_db):
+        result = water_plants("outdoor")
+    assert "no outdoor plants" in result.lower()
+    mock_db.set_state.assert_not_called()
+
+
+def test_water_plants_db_error_returns_error():
+    with patch("tools.AgentDB", side_effect=Exception("db locked")):
+        result = water_plants("outdoor")
+    assert "failed" in result.lower() or "error" in result.lower()

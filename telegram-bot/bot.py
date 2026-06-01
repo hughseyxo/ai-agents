@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import io
 import json
@@ -18,20 +19,15 @@ from tools import (
     get_system_health,
     get_cron_schedule,
     get_agent_logs,
-    run_travel_agent,
     get_travel_report,
-    water_plant,
-    add_plant,
     update_plant,
-    remove_plant,
-    research_plant_watering,
-    research_plant_sunlight,
-    save_recipe,
     get_plant,
     get_all_plants,
     save_plant_assessment,
     note_plant_observation,
 )
+from tool_specs import openai_tools, func_map
+from claude_backend import ask_claude
 
 load_dotenv()
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -92,305 +88,9 @@ STATE_TOOL_FUNCTIONS = {
 }
 
 # All tools available to the LLM (state + action tools)
-TOOL_FUNCTIONS = {
-    **STATE_TOOL_FUNCTIONS,
-    "get_plant": get_plant,
-    "get_all_plants": get_all_plants,
-    "run_travel_agent": run_travel_agent,
-    "water_plant": water_plant,
-    "add_plant": add_plant,
-    "update_plant": update_plant,
-    "remove_plant": remove_plant,
-    "research_plant_watering": research_plant_watering,
-    "research_plant_sunlight": research_plant_sunlight,
-    "save_recipe": save_recipe,
-}
+TOOL_FUNCTIONS = func_map()
 
-TOOLS = [
-    {
-        "type": "function",
-        "function": {
-            "name": "get_agent_status",
-            "description": "Get the last run status of all server agents (daily-briefing, news-briefing, security-audit, travel-agent).",
-            "parameters": {"type": "object", "properties": {}, "required": []},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_plant_status",
-            "description": "Get the watering schedule for all tracked plants including next watering date and overdue flags.",
-            "parameters": {"type": "object", "properties": {}, "required": []},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_yopflix_status",
-            "description": "Get the yopflix/seedbox status: enabled services, running Docker containers, and disk usage.",
-            "parameters": {"type": "object", "properties": {}, "required": []},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_system_health",
-            "description": "Get server system health: CPU usage, RAM usage, and uptime.",
-            "parameters": {"type": "object", "properties": {}, "required": []},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_cron_schedule",
-            "description": "Get the cron schedule for all agents showing when they run (in CEST).",
-            "parameters": {"type": "object", "properties": {}, "required": []},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_agent_logs",
-            "description": "Get recent log output. Optionally filter by agent name.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "agent_name": {
-                        "type": "string",
-                        "description": "Agent name to filter by (e.g. 'daily-briefing'). Leave empty for all logs.",
-                    }
-                },
-                "required": [],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "run_travel_agent",
-            "description": (
-                "Launch the travel agent in the background to research or plan a trip. "
-                "Use mode='search' to find flights, hotels, and activities. "
-                "Use mode='plan' when the user already has flights and accommodation booked and wants a day-by-day itinerary."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "destination": {
-                        "type": "string",
-                        "description": "Destination city or country (e.g. 'Barcelona', 'Japan').",
-                    },
-                    "checkin": {
-                        "type": "string",
-                        "description": "Check-in / arrival date in YYYY-MM-DD format.",
-                    },
-                    "checkout": {
-                        "type": "string",
-                        "description": "Check-out / departure date in YYYY-MM-DD format.",
-                    },
-                    "mode": {
-                        "type": "string",
-                        "enum": ["search", "plan"],
-                        "description": "search=find flights+hotels, plan=itinerary from existing bookings. Default: search.",
-                    },
-                    "origin": {
-                        "type": "string",
-                        "description": "Departure city for search mode (e.g. 'Dublin', 'Amsterdam').",
-                    },
-                    "flights": {
-                        "type": "string",
-                        "description": "Plan mode only: existing flight details as free text (e.g. 'Ryanair FR1234 DUB->BCN 06:30, return 22:00').",
-                    },
-                    "hotel": {
-                        "type": "string",
-                        "description": "Plan mode only: existing hotel booking as free text (e.g. 'H10 Marina Barcelona, 7 nights').",
-                    },
-                },
-                "required": ["destination", "checkin", "checkout"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_travel_report",
-            "description": "Check whether the latest travel research report is ready and return its filename and size.",
-            "parameters": {"type": "object", "properties": {}, "required": []},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "water_plant",
-            "description": "Record that a plant was watered today. Use when the user says they watered a plant.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "plant_name": {
-                        "type": "string",
-                        "description": "Name of the plant (e.g. 'Monstera').",
-                    }
-                },
-                "required": ["plant_name"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "add_plant",
-            "description": "Add a new plant to the watering tracker. Use when the user wants to track a new plant.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "name": {
-                        "type": "string",
-                        "description": "Name of the plant (e.g. 'Monstera Deliciosa').",
-                    },
-                    "frequency_days": {
-                        "type": "integer",
-                        "description": "How often to water the plant in days (e.g. 7 for weekly).",
-                    },
-                    "location": {
-                        "type": "string",
-                        "enum": ["indoor", "outdoor"],
-                        "description": "Whether the plant is indoors or outdoors. Default: indoor.",
-                    },
-                    "sunlight": {
-                        "type": "string",
-                        "enum": ["full sun", "partial shade", "shade"],
-                        "description": "Sunlight requirements. Call research_plant_sunlight first if unsure.",
-                    },
-                },
-                "required": ["name", "frequency_days"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "update_plant",
-            "description": "Update a plant's location, watering frequency, or sunlight requirements. Use when the user says a plant is indoor/outdoor, wants to change watering frequency, or specify sunlight needs.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "plant_name": {
-                        "type": "string",
-                        "description": "Name of the plant to update (e.g. 'Gazania').",
-                    },
-                    "location": {
-                        "type": "string",
-                        "enum": ["indoor", "outdoor"],
-                        "description": "New location for the plant.",
-                    },
-                    "frequency_days": {
-                        "type": "integer",
-                        "description": "New watering frequency in days.",
-                    },
-                    "sunlight": {
-                        "type": "string",
-                        "enum": ["full sun", "partial shade", "shade"],
-                        "description": "New sunlight requirements for the plant.",
-                    },
-                },
-                "required": ["plant_name"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "research_plant_sunlight",
-            "description": "Look up sunlight requirements for a plant. Returns 'full sun', 'partial shade', or 'shade'. Call before add_plant or update_plant when sunlight is unknown.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "plant_name": {
-                        "type": "string",
-                        "description": "Name of the plant to research (e.g. 'Monstera Deliciosa').",
-                    }
-                },
-                "required": ["plant_name"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "research_plant_watering",
-            "description": "Look up the recommended watering frequency for a plant using web search. Call this before add_plant when the user hasn't specified how often to water.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "plant_name": {
-                        "type": "string",
-                        "description": "Name of the plant to research (e.g. 'Monstera Deliciosa').",
-                    }
-                },
-                "required": ["plant_name"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "save_recipe",
-            "description": "Save a recipe URL to Mealie. Use when the user sends a recipe link or asks to save a recipe.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "url": {
-                        "type": "string",
-                        "description": "The recipe URL.",
-                    }
-                },
-                "required": ["url"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_plant",
-            "description": "Look up a single plant by name (exact or substring match). Returns plant details or null if not found.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "plant_name": {
-                        "type": "string",
-                        "description": "Name of the plant to look up (e.g. 'Monstera').",
-                    }
-                },
-                "required": ["plant_name"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_all_plants",
-            "description": "Get the full list of all tracked plants with their details (name, location, sunlight, watering frequency, last watered, last assessment).",
-            "parameters": {"type": "object", "properties": {}, "required": []},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "remove_plant",
-            "description": "Remove a plant from the watering tracker. Use when the user says a plant has died or they no longer want to track it.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "plant_name": {
-                        "type": "string",
-                        "description": "Name of the plant to remove (e.g. 'Monstera').",
-                    }
-                },
-                "required": ["plant_name"],
-            },
-        },
-    },
-]
+TOOLS = openai_tools()
 
 
 def _call_antigravity_fallback(user_message: str, system_prompt: str) -> str:
@@ -720,6 +420,23 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         return
 
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+
+    # Primary backend: claude CLI (Claude-quality chat + native MCP tool use,
+    # multi-turn memory). Runs off the event loop since the subprocess blocks.
+    # Returns None on any failure → fall through to OpenRouter / Antigravity.
+    try:
+        reply = await asyncio.get_running_loop().run_in_executor(
+            None, ask_claude, update.effective_chat.id, update.message.text
+        )
+    except Exception as e:
+        logger.warning(f"claude backend errored, falling back: {e}")
+        reply = None
+    if reply:
+        for chunk in [reply[i:i + 4000] for i in range(0, len(reply), 4000)]:
+            await update.message.reply_text(chunk)
+        return
+
+    logger.info("claude backend unavailable, falling back to OpenRouter")
 
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},

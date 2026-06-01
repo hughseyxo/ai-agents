@@ -420,6 +420,25 @@ def water_plant(plant_name: str) -> str:
         return f"Failed to update plant: {e}"
 
 
+def water_plants(location: str) -> str:
+    try:
+        db = AgentDB(DB_PATH)
+        plants = db.get_state("daily-briefing", "plants") or []
+        targets = [p for p in plants if p.get("location") == location]
+        if not targets:
+            db.close()
+            return f"No {location} plants found."
+        today = date.today().isoformat()
+        for p in targets:
+            p["last_watered"] = today
+        db.set_state("daily-briefing", "plants", plants)
+        db.close()
+        names = ", ".join(p["name"] for p in targets)
+        return f"Marked {len(targets)} {location} plant{'s' if len(targets) != 1 else ''} as watered today: {names}."
+    except Exception as e:
+        return f"Failed to update plants: {e}"
+
+
 def remove_plant(plant_name: str) -> str:
     try:
         db = AgentDB(DB_PATH)

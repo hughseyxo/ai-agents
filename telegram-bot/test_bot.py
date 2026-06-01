@@ -42,8 +42,30 @@ async def test_unauthorized_user_is_ignored(mocker):
 
 
 @pytest.mark.asyncio
+async def test_claude_backend_reply_is_sent_directly(mocker):
+    """When the claude CLI backend returns a reply, it's sent and OpenRouter is skipped."""
+    mocker.patch("bot.ALLOWED_USER_ID", "1703830475")
+    mocker.patch("bot.ask_claude", return_value="Your plants are happy.")
+    update = MagicMock()
+    update.effective_user.id = 1703830475
+    update.message.text = "how are my plants?"
+    update.effective_chat.id = 123
+    update.message.reply_text = AsyncMock()
+    context = MagicMock()
+    context.bot.send_chat_action = AsyncMock()
+
+    mock_client = mocker.patch("bot.client")
+
+    await handle_message(update, context)
+
+    update.message.reply_text.assert_called_once_with("Your plants are happy.")
+    mock_client.chat.completions.create.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_authorized_user_gets_response(mocker):
     mocker.patch("bot.ALLOWED_USER_ID", "1703830475")
+    mocker.patch("bot.ask_claude", return_value=None)  # force OpenRouter fallback path
     update = MagicMock()
     update.effective_user.id = 1703830475
     update.message.text = "hello"
@@ -73,6 +95,7 @@ async def test_authorized_user_gets_response(mocker):
 async def test_tool_call_is_executed_and_result_sent_back(mocker):
     """LLM returns a tool_call → bot executes it → sends result back to LLM → replies."""
     mocker.patch("bot.ALLOWED_USER_ID", "1703830475")
+    mocker.patch("bot.ask_claude", return_value=None)  # force OpenRouter fallback path
     update = MagicMock()
     update.effective_user.id = 1703830475
     update.message.text = "how are the agents doing?"
@@ -113,6 +136,7 @@ async def test_tool_call_is_executed_and_result_sent_back(mocker):
 async def test_tool_loop_stops_after_max_iterations(mocker):
     """If LLM keeps requesting tool calls, loop breaks after 3 iterations."""
     mocker.patch("bot.ALLOWED_USER_ID", "1703830475")
+    mocker.patch("bot.ask_claude", return_value=None)  # force OpenRouter fallback path
     update = MagicMock()
     update.effective_user.id = 1703830475
     update.message.text = "status"
@@ -144,6 +168,7 @@ async def test_tool_loop_stops_after_max_iterations(mocker):
 @pytest.mark.asyncio
 async def test_openrouter_error_returns_error_message(mocker):
     mocker.patch("bot.ALLOWED_USER_ID", "1703830475")
+    mocker.patch("bot.ask_claude", return_value=None)  # force OpenRouter fallback path
     update = MagicMock()
     update.effective_user.id = 1703830475
     update.message.text = "hello"
@@ -171,6 +196,7 @@ async def test_all_openrouter_models_fail_triggers_antigravity(mocker):
     from openai import RateLimitError
 
     mocker.patch("bot.ALLOWED_USER_ID", "1703830475")
+    mocker.patch("bot.ask_claude", return_value=None)  # force OpenRouter→Antigravity path
     update = MagicMock()
     update.effective_user.id = 1703830475
     update.message.text = "how are the agents?"
@@ -202,6 +228,7 @@ async def test_antigravity_fallback_failure_sends_unavailable_message(mocker):
     from openai import RateLimitError
 
     mocker.patch("bot.ALLOWED_USER_ID", "1703830475")
+    mocker.patch("bot.ask_claude", return_value=None)  # force OpenRouter→Antigravity path
     update = MagicMock()
     update.effective_user.id = 1703830475
     update.message.text = "status?"
