@@ -6,6 +6,21 @@ Pure functions — no side effects, no I/O. Fully testable.
 from datetime import date, timedelta
 
 MAX_ADJUSTMENT = 3
+MIN_FREQUENCY = 1
+MAX_FREQUENCY = 30
+MAX_FREQUENCY_STEP = 2
+
+
+def _clamp(value: int, lo: int, hi: int) -> int:
+    return max(lo, min(hi, value))
+
+
+def apply_frequency_step(current_baseline: int, target: int) -> int:
+    """Move baseline toward target by at most MAX_FREQUENCY_STEP, clamped 1-30."""
+    target = _clamp(int(target), MIN_FREQUENCY, MAX_FREQUENCY)
+    if target > current_baseline:
+        return min(target, current_baseline + MAX_FREQUENCY_STEP)
+    return max(target, current_baseline - MAX_FREQUENCY_STEP)
 
 
 def calculate_adjustment(plant: dict, weather: dict) -> int:
