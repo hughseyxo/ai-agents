@@ -3,6 +3,7 @@
 ## Plant Info
 - Location: Outdoor | Sunlight: full sun
 - Water sensitivity: medium | Base frequency: 7 days
+- Pot: potted on its own — single gazania in the frame for photo recognition.
 
 ## Observed Behaviour
 <!-- Free text updated by intelligence run — notable patterns, visual cues -->

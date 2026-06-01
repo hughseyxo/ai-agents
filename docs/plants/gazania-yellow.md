@@ -3,6 +3,7 @@
 ## Plant Info
 - Location: Outdoor | Sunlight: full sun
 - Water sensitivity: medium | Base frequency: 7 days
+- Pot: shares a pot with the Marguerite daisies — for photo recognition, expect daisies in the same frame.
 
 ## Observed Behaviour
 <!-- Free text updated by intelligence run — notable patterns, visual cues -->
