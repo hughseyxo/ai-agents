@@ -41,3 +41,5 @@
 ### 2026-05-30
 Healthy with persistent flowering
 ### 2026-05-30 - Gazania is healthy with persistent flowering. - No visible signs of water stress or sun damage. - Lacks baseline health profile or historical assessments.
+### 2026-06-02 — Healthy
+Gazania Orange remains healthy 5 days after last watering (2026-05-28), on its 7-day full-sun outdoor cycle. Foliage dense, deep green, upright — no chlorosis, curl, or crisping; no heat/sun stress visible. Flowering active: one fully open orange bloom, several furled flowers (normal light-response closure, not wilt), and multiple buds developing — consistent with the persistent-flowering pattern logged 2026-05-30 and 2026-06-01. One spent flower drooping over the lower pot rim is normal senescence; deadhead to encourage further bloom. Soil surface dark/moist and surrounding pavement wet, indicating recent rain — held watering recommendation to 'delay'. No frequency change warranted: plant tracks comfortably on the 7-day baseline across all assessments to date with no recurring stress signal.

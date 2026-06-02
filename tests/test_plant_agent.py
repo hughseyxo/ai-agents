@@ -502,3 +502,72 @@ def test_intelligence_prompt_documents_frequency_marker():
     text = (mod.REPO_ROOT / "agents" / "prompts" / "plant_intelligence.md").read_text()
     assert "[FREQUENCY]" in text and "[/FREQUENCY]" in text
     assert "baseline" in text.lower()
+
+
+# ---------------------------------------------------------------------------
+# 6. _extract_json_array() — tolerant JSON parsing for LLM output
+# ---------------------------------------------------------------------------
+
+class TestExtractJsonArray:
+    def test_plain_array(self):
+        from agents.plant_agent import _extract_json_array
+        assert _extract_json_array('[{"name": "Fern"}]') == [{"name": "Fern"}]
+
+    def test_code_fenced(self):
+        from agents.plant_agent import _extract_json_array
+        raw = '```json\n[{"name": "Fern"}]\n```'
+        assert _extract_json_array(raw) == [{"name": "Fern"}]
+
+    def test_prose_wrapped(self):
+        from agents.plant_agent import _extract_json_array
+        raw = ('Here are the completed waterings:\n'
+               '[{"name": "Fern", "completed_date": "2026-05-30"}]\n'
+               'Let me know if you need anything else.')
+        assert _extract_json_array(raw) == [
+            {"name": "Fern", "completed_date": "2026-05-30"}]
+
+    def test_empty_array(self):
+        from agents.plant_agent import _extract_json_array
+        assert _extract_json_array('[]') == []
+
+    def test_unparseable_raises(self):
+        from agents.plant_agent import _extract_json_array
+        with pytest.raises(ValueError):
+            _extract_json_array('I could not find any completed tasks.')
+
+
+# ---------------------------------------------------------------------------
+# 7. _sync_watering() robustness
+# ---------------------------------------------------------------------------
+
+class TestSyncWatering:
+    def test_prose_wrapped_json_is_synced(self, agent):
+        plant = _make_plant(name="Fern", last_watered="2026-05-01")
+        agent.db.set_state("daily-briefing", "plants", [plant])
+        agent.context["plan"] = {"plants": [plant], "weather_cache": {}}
+        prose = ('Sure! Here you go:\n'
+                 '[{"name": "Fern", "completed_date": "2026-05-30"}]')
+        with patch.object(agent, "synthesize", return_value=prose):
+            result = agent._sync_watering()
+        assert result["synced"] == 1
+        plants = agent.db.get_state("daily-briefing", "plants")
+        assert plants[0]["last_watered"] == "2026-05-30"
+        assert agent.get_state("last_sync_watering")  # gate marked
+
+    def test_unparseable_output_marks_gate(self, agent):
+        plant = _make_plant(name="Fern")
+        agent.context["plan"] = {"plants": [plant], "weather_cache": {}}
+        with patch.object(agent, "synthesize", return_value="no tasks found"):
+            result = agent._sync_watering()
+        assert result.get("error") == "bad_json"
+        # marked despite parse failure → no hourly hammering
+        assert agent.get_state("last_sync_watering")
+
+    def test_llm_exception_does_not_mark_gate(self, agent):
+        plant = _make_plant(name="Fern")
+        agent.context["plan"] = {"plants": [plant], "weather_cache": {}}
+        with patch.object(agent, "synthesize", side_effect=RuntimeError("boom")):
+            result = agent._sync_watering()
+        assert "error" in result
+        # not marked → transient failure retried next run
+        assert not agent.get_state("last_sync_watering")

@@ -116,6 +116,35 @@ def _create_profile_doc(path: Path, plant: dict):
     path.write_text(content)
 
 
+def _extract_json_array(raw: str) -> list:
+    """Parse a JSON array from LLM output, tolerating code fences and surrounding prose.
+
+    Raises ValueError if no JSON array can be recovered.
+    """
+    if not raw:
+        raise ValueError("empty output")
+    text = raw.strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```[^\n]*\n?", "", text)
+        text = re.sub(r"\n?```$", "", text).strip()
+    try:
+        data = json.loads(text)
+        if isinstance(data, list):
+            return data
+    except json.JSONDecodeError:
+        pass
+    # Fallback: grab the first [...] block out of surrounding prose
+    m = re.search(r"\[.*\]", text, re.DOTALL)
+    if m:
+        try:
+            data = json.loads(m.group(0))
+            if isinstance(data, list):
+                return data
+        except json.JSONDecodeError:
+            pass
+    raise ValueError("no JSON array found in output")
+
+
 class PlantAgent(BaseAgent):
     name = "plant-agent"
     schedule = "0 * * * *"
@@ -176,17 +205,19 @@ class PlantAgent(BaseAgent):
         try:
             output = self.synthesize(_SYNC_PROMPT)
         except Exception as e:
+            # Transient LLM failure (timeout/error) — leave gate open so the next
+            # run retries rather than waiting a full 24h.
             print(f"[{self.name}] sync_watering LLM call failed: {e}", file=sys.stderr)
             return {"synced": 0, "error": str(e)}
 
-        raw = output.strip()
-        if raw.startswith("```"):
-            raw = re.sub(r"^```[^\n]*\n?", "", raw)
-            raw = re.sub(r"\n?```$", "", raw)
+        # The LLM responded; mark the gate now so an unparseable reply doesn't
+        # re-fire this step every hour for 24h.
+        self._mark_ran("sync_watering")
 
         try:
-            completions = json.loads(raw)
-        except json.JSONDecodeError:
+            completions = _extract_json_array(output)
+        except ValueError:
+            print(f"[{self.name}] sync_watering: no JSON array in LLM output", file=sys.stderr)
             return {"synced": 0, "error": "bad_json"}
 
         plants = self.db.get_state("daily-briefing", "plants") or []
@@ -209,7 +240,6 @@ class PlantAgent(BaseAgent):
         if updated:
             self.db.set_state("daily-briefing", "plants", plants)
 
-        self._mark_ran("sync_watering")
         return {"synced": synced}
 
     def _create_tasks(self):

@@ -59,3 +59,6 @@
 ### 2026-05-28 — Underwatered
 Wilted areas and discoloration indicate insufficient moisture — water immediately. Prune dead or wilted flowers to encourage new blooms and maintain shape.
 [Validator: structured fields corrected for consistency with observations]
+### 2026-06-03 — Concerning
+String lights may cast shadows affecting basket health; tangled vines show heterogeneous stress levels. Despite watering fresh on 2026-06-03, persistent wilted flowers and leaf asymmetry suggest either inconsistent water distribution or light limitation in outdoor partial shade. Prior assessments recommended pest checks and spent flower removal to balance resources. Immediate selective pruning of reddish-brown tissues and indirect pest inspection are advised to rebalance hydration focus without bypassing existing care tasks. ]
+[Validator: structured fields corrected for consistency with observations]

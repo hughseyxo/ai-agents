@@ -15,7 +15,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent))
 
 import claude_backend
-from claude_backend import ask_claude, CLAUDE_MODEL
+from claude_backend import ask_claude, assess_image, CLAUDE_MODEL, VISION_MODEL
 
 
 @pytest.fixture(autouse=True)
@@ -91,3 +91,50 @@ def test_failed_call_does_not_poison_session_cache():
     with patch("claude_backend.subprocess.run", return_value=_ok(session_id="fresh")) as run:
         ask_claude(42, "retry")
     assert "--resume" not in run.call_args.args[0]
+
+
+# ---------------------------------------------------------------------------
+# assess_image — one-shot plant image analysis (no session, no MCP)
+# ---------------------------------------------------------------------------
+
+def _vision_ok(result="Healthy.", **kw):
+    return MagicMock(returncode=0, stdout=json.dumps({"result": result}), stderr="")
+
+
+def test_assess_image_returns_result_text():
+    with patch("claude_backend.subprocess.run", return_value=_vision_ok("Leaves look healthy.")):
+        reply = assess_image("/tmp/plant.jpg", "system", "this is a monstera")
+    assert reply == "Leaves look healthy."
+
+
+def test_assess_image_command_uses_read_tool_and_vision_model():
+    with patch("claude_backend.subprocess.run", return_value=_vision_ok()) as run:
+        assess_image("/tmp/plant.jpg", "system", "ctx")
+    cmd = run.call_args.args[0]
+    assert "--allowedTools" in cmd and "Read" in cmd
+    assert VISION_MODEL in cmd
+    assert "--add-dir" in cmd and "/tmp" in cmd
+    # Stateless: no MCP / resume
+    assert "--mcp-config" not in cmd
+    assert "--resume" not in cmd
+
+
+def test_assess_image_prompt_includes_image_path():
+    with patch("claude_backend.subprocess.run", return_value=_vision_ok()) as run:
+        assess_image("/tmp/plant.jpg", "system", "ctx")
+    assert "/tmp/plant.jpg" in run.call_args.kwargs["input"]
+
+
+def test_assess_image_returns_none_on_nonzero_exit():
+    with patch("claude_backend.subprocess.run", return_value=MagicMock(returncode=1, stdout="", stderr="boom")):
+        assert assess_image("/tmp/plant.jpg", "s", "c") is None
+
+
+def test_assess_image_returns_none_on_timeout():
+    with patch("claude_backend.subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="claude", timeout=120)):
+        assert assess_image("/tmp/plant.jpg", "s", "c") is None
+
+
+def test_assess_image_returns_none_on_bad_json():
+    with patch("claude_backend.subprocess.run", return_value=MagicMock(returncode=0, stdout="not json", stderr="")):
+        assert assess_image("/tmp/plant.jpg", "s", "c") is None

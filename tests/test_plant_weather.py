@@ -120,6 +120,18 @@ class TestOutdoorAdjustment:
             _weather(forecast=forecast))
         assert adj >= 1
 
+    def test_imminent_forecast_rain_defers(self):
+        # Dry today, but heavy rain forecast tomorrow → still defer watering
+        forecast = [
+            {"date": "2026-05-15", "temp_max_c": 20, "precip_mm": 0},
+            {"date": "2026-05-16", "temp_max_c": 20, "precip_mm": 14},
+            {"date": "2026-05-17", "temp_max_c": 20, "precip_mm": 0},
+        ]
+        adj = calculate_adjustment(
+            _plant(location="outdoor"),
+            _weather(recent_precip_mm=1, forecast=forecast))
+        assert adj >= 1
+
     def test_combined_rain_defers_up_to_3(self):
         # Recent + forecast rain >10mm → +2 to +3 days
         forecast = [

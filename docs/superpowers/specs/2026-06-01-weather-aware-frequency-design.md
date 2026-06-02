@@ -152,3 +152,21 @@ baseline preserved for reversibility · weather failure → no delta.
 - **LLM drift** in `[FREQUENCY]` values — mitigated by clamp + ±2 step + logging.
 - **Baseline migration** must run before first recompute to avoid clobbering a
   hand-set frequency — handled idempotently in the load/recompute path.
+
+## Addendum (2026-06-01, post-live-test)
+
+Two fixes surfaced by the first full live run:
+
+1. **Outdoor forecast look-ahead.** `_outdoor_adjustment` previously weighed only
+   `recent_precip_mm` + *today's* forecast rain (`forecast[0]`), so heavy rain forecast
+   for *tomorrow* never deferred outdoor watering. Now uses
+   `forecast_rain_soon = sum(forecast[:2])` (today + tomorrow). `_build_reason` reports the
+   same window. Indoor logic unchanged.
+
+2. **`sync_watering` JSON robustness.** Antigravity sometimes wraps the completions array
+   in prose, which failed `json.loads` (`bad_json`) and — because the gate was only marked
+   on the happy path — left `last_sync_watering` unset, re-firing the step every hour.
+   Added module-level `_extract_json_array()` (strips code fences, then falls back to the
+   first `[...]` block) and moved `_mark_ran("sync_watering")` to fire as soon as the LLM
+   responds. A genuine LLM exception still leaves the gate open (transient → retry next run);
+   an unparseable-but-present reply now marks the gate (bounded, no hourly hammering).

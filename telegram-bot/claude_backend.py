@@ -17,6 +17,7 @@ CONCIERGE_MD = Path(__file__).parent / "CONCIERGE.md"
 MCP_CONFIG = "telegram-bot/concierge_mcp.json"  # relative to REPO_ROOT (cwd)
 
 CLAUDE_MODEL = "claude-sonnet-4-6"
+VISION_MODEL = "claude-opus-4-8"  # plant image analysis — accuracy over speed
 TIMEOUT_SECONDS = 120
 
 # Per-chat conversation continuity: {chat_id: session_id}. In-memory only —
@@ -46,16 +47,16 @@ def _build_command(chat_id: int) -> list[str]:
     return cmd
 
 
-def ask_claude(chat_id: int, user_message: str) -> str | None:
-    """Send a message to the claude CLI. Returns the reply, or None on failure."""
-    cmd = _build_command(chat_id)
+def _run_claude(cmd: list[str], input_text: str, timeout: int = TIMEOUT_SECONDS) -> dict | None:
+    """Run a `claude -p --output-format json` command. Returns the parsed JSON
+    dict, or None on rc≠0 / timeout / not-runnable / unparseable output."""
     try:
         result = subprocess.run(
-            cmd, input=user_message, capture_output=True, text=True,
-            cwd=str(REPO_ROOT), timeout=TIMEOUT_SECONDS,
+            cmd, input=input_text, capture_output=True, text=True,
+            cwd=str(REPO_ROOT), timeout=timeout,
         )
     except subprocess.TimeoutExpired:
-        logger.warning("claude CLI timed out after %ss", TIMEOUT_SECONDS)
+        logger.warning("claude CLI timed out after %ss", timeout)
         return None
     except OSError as e:
         logger.warning("claude CLI not runnable: %s", e)
@@ -66,13 +67,45 @@ def ask_claude(chat_id: int, user_message: str) -> str | None:
         return None
 
     try:
-        data = json.loads(result.stdout)
-        reply = data["result"]
-    except (json.JSONDecodeError, KeyError, TypeError) as e:
+        return json.loads(result.stdout)
+    except (json.JSONDecodeError, TypeError) as e:
         logger.warning("claude CLI returned unparseable output: %s", e)
+        return None
+
+
+def ask_claude(chat_id: int, user_message: str) -> str | None:
+    """Send a message to the claude CLI. Returns the reply, or None on failure."""
+    data = _run_claude(_build_command(chat_id), user_message)
+    if data is None:
+        return None
+    reply = data.get("result")
+    if reply is None:
+        logger.warning("claude CLI output missing 'result'")
         return None
 
     session_id = data.get("session_id")
     if session_id:
         _SESSIONS[chat_id] = session_id
     return reply
+
+
+def assess_image(image_path: str, system_prompt: str, user_text: str,
+                 model: str = VISION_MODEL) -> str | None:
+    """One-shot plant image analysis via the claude CLI's Read tool (Pro
+    subscription, no API billing). Stateless — no MCP, no session resume.
+    Returns the reply text, or None on any failure."""
+    img_dir = str(Path(image_path).parent)
+    cmd = [
+        "claude", "-p",
+        "--dangerously-skip-permissions",
+        "--output-format", "json",
+        "--model", model,
+        "--append-system-prompt", system_prompt,
+        "--add-dir", img_dir,
+        "--allowedTools", "Read",
+    ]
+    prompt = f"Read the image at {image_path} and respond.\n\n{user_text}"
+    data = _run_claude(cmd, prompt)
+    if data is None:
+        return None
+    return data.get("result")

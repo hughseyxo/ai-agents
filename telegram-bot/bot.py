@@ -1,11 +1,12 @@
 import asyncio
-import base64
 import io
 import json
 import logging
 import os
 import re
 import subprocess
+import tempfile
+from contextlib import contextmanager
 from pathlib import Path
 from dotenv import load_dotenv
 from openai import OpenAI, APIError
@@ -27,7 +28,7 @@ from tools import (
     note_plant_observation,
 )
 from tool_specs import openai_tools, func_map
-from claude_backend import ask_claude
+from claude_backend import ask_claude, assess_image
 
 load_dotenv()
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -53,11 +54,6 @@ FREE_MODELS = [
     "openai/gpt-oss-120b:free",
     "nvidia/nemotron-3-super-120b-a12b:free",
     "minimax/minimax-m2.5:free",
-]
-
-VISION_MODELS = [
-    "nvidia/nemotron-nano-12b-v2-vl:free",
-    "meta-llama/llama-3.2-11b-vision-instruct",
 ]
 
 PLANT_HEALTH_SYSTEM = (
@@ -195,48 +191,20 @@ def _load_species_context(plant_name: str) -> str:
         return ""
 
 
-_VALIDATOR_PROMPT_PATH = REPO_ROOT / "agents" / "prompts" / "plant_assessment_validator.md"
-
-
-def _validate_plant_assessment(parsed: dict, plant: dict) -> tuple[dict, bool]:
-    """Validate vision model JSON via agy/claude subprocess (text-only, no tool access).
-    Returns (result, was_corrected)."""
-    try:
-        template = _VALIDATOR_PROMPT_PATH.read_text()
-    except Exception:
-        return parsed, False
-
-    species_context = _load_species_context(plant["name"])
-    prompt = (template
-              .replace("{{plant_name}}", plant["name"])
-              .replace("{{species_reference}}", species_context or "No reference available.")
-              .replace("{{assessment_json}}", json.dumps(parsed, indent=2)))
-
-    # Safe invocation: prompt via stdin, no --dangerously-skip-permissions.
-    # Without that flag any tool-use attempt needs a terminal to prompt — there is none
-    # in a subprocess, so agy/claude produce text-only output.
-    for cmd in [
-        ["agy", "-y", "-o", "text"],
-        ["claude", "--print", "--output-format", "text"],
-    ]:
-        try:
-            result = subprocess.run(cmd, input=prompt, capture_output=True, text=True,
-                                    cwd=str(REPO_ROOT), timeout=60)
-            if result.returncode != 0 or not result.stdout.strip():
-                continue
-            response = result.stdout.strip()
-            if response.upper() == "VALID":
-                return parsed, False
-            text = re.sub(r"^```[a-z]*\n?", "", response)
-            text = re.sub(r"\n?```$", "", text.strip())
-            corrected = json.loads(text)
-            return corrected, True
-        except Exception:
-            continue
-    return parsed, False
-
-
 _GENERIC_ASSESSMENT_CAPTIONS = {"assess", "check", "identify"}
+
+
+@contextmanager
+def _temp_image(image_bytes: bytes):
+    """Write image bytes into a private temp dir, yield the file path, clean up after.
+
+    Isolated in its own directory so `assess_image`'s `--add-dir` exposes only this
+    one image to the Read-enabled subprocess, not the whole system temp dir.
+    """
+    with tempfile.TemporaryDirectory(prefix="plant-") as d:
+        path = os.path.join(d, "image.jpg")
+        Path(path).write_bytes(image_bytes)
+        yield path
 
 
 def _build_identification_context(plants: list) -> str:
@@ -270,39 +238,36 @@ def _build_common_name_lookup(plants: list) -> dict:
     return lookup
 
 
+_IDENTIFICATION_SYSTEM = (
+    "You are a plant identification expert. You will be shown a photo and a list of "
+    "known plants. Reply with ONLY the formal plant name from the list (copied exactly "
+    "as written, before any parentheses), or NONE if you cannot identify it confidently."
+)
+
+
 def _identify_plant_from_image(image_bytes: bytes, plants: list) -> dict | None:
-    """Ask vision model which known plant is in the image. Returns plant dict or None."""
+    """Ask the claude CLI which known plant is in the image. Returns plant dict or None."""
     plant_context = _build_identification_context(plants)
     common_name_lookup = _build_common_name_lookup(plants)
-    prompt = (
+    user_text = (
         "Which plant from the following list is shown in the photo?\n"
         "Visual indicators and common names are provided to help you match what you see.\n\n"
         f"{plant_context}\n\n"
-        "Reply with ONLY the formal plant name from the list (copy it exactly as written "
-        "before any parentheses), or NONE if you cannot identify it with confidence."
+        "Reply with ONLY the formal plant name from the list, or NONE."
     )
-    b64 = base64.b64encode(image_bytes).decode()
-    messages = [{"role": "user", "content": [
-        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
-        {"type": "text", "text": prompt},
-    ]}]
-    for model in VISION_MODELS:
-        try:
-            response = client.chat.completions.create(model=model, messages=messages)
-            answer = (response.choices[0].message.content or "").strip().strip(".,!?\"'")
-            if answer.upper() == "NONE":
-                return None
-            al = answer.lower()
-            match = (
-                next((p for p in plants if p["name"].lower() == al), None)
-                or next((p for p in plants if p["name"].lower() in al or al in p["name"].lower()), None)
-                or common_name_lookup.get(al)
-            )
-            if match:
-                return match
-        except Exception:
-            continue
-    return None
+    with _temp_image(image_bytes) as path:
+        answer = assess_image(path, _IDENTIFICATION_SYSTEM, user_text)
+    if not answer:
+        return None
+    answer = answer.strip().strip(".,!?\"'")
+    if answer.upper() == "NONE":
+        return None
+    al = answer.lower()
+    return (
+        next((p for p in plants if p["name"].lower() == al), None)
+        or next((p for p in plants if p["name"].lower() in al or al in p["name"].lower()), None)
+        or common_name_lookup.get(al)
+    )
 
 
 _WATERING_LABELS = {"immediate": "💧 Water now", "on_schedule": "✅ On schedule", "delay": "⏳ Delay watering"}
@@ -355,24 +320,8 @@ def _analyze_plant_image(image_bytes: bytes, plant: dict) -> tuple[str, dict | N
         f"Base watering frequency: every {plant.get('frequency_days', '?')} days."
         f"{profile_context}"
     )
-    b64 = base64.b64encode(image_bytes).decode()
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": [
-            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
-            {"type": "text", "text": user_text},
-        ]},
-    ]
-
-    raw_response = None
-    for model in VISION_MODELS:
-        try:
-            response = client.chat.completions.create(model=model, messages=messages)
-            raw_response = response.choices[0].message.content or ""
-            break
-        except Exception as e:
-            logger.warning(f"Vision model {model} failed: {e}")
-            continue
+    with _temp_image(image_bytes) as path:
+        raw_response = assess_image(path, system_prompt, user_text)
 
     if not raw_response:
         return "Plant assessment unavailable right now. Try again later.", None
@@ -390,12 +339,6 @@ def _analyze_plant_image(image_bytes: bytes, plant: dict) -> tuple[str, dict | N
             if m:
                 text = m.group(0)
         parsed = json.loads(text)
-        # Validate consistency with a text LLM (catches vision model contradictions)
-        parsed, was_corrected = _validate_plant_assessment(parsed, plant)
-        if was_corrected:
-            existing_notes = parsed.get("profile_notes", "")
-            parsed["profile_notes"] = existing_notes + "\n[Validator: structured fields corrected for consistency with observations]"
-            logger.info(f"[{plant['name']}] Assessment corrected by validation LLM")
         display = _build_assessment_display(parsed, plant)
         return display, parsed
     except (json.JSONDecodeError, ValueError, KeyError):

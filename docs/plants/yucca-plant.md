@@ -45,3 +45,9 @@ No visual signs of stress or damage. Feels healthy, as evidenced by green leaves
 [Validator: structured fields corrected for consistency with observations]
 No visible signs of stress or damage. Feels healthy, as evidenced by green leaves and a consistent growth pattern. Was watered seven days ago. Overwatering is the main signal needed here, whilst you heading for a watering timetable, which would have been over any case.
 [Validator: structured fields corrected for consistency with observations]
+### 2026-06-01 — Healthy
+The Yucca Plant appears healthy with green leaves and a consistent growth pattern, but its bottom leaves are pale. Overwatering must be monitored before the next watering task on 2026-06-04 to confirm soil moisture levels at the root level. 
+
+### Frequency History |
+Date | Change | Reason |
+---|---|---|

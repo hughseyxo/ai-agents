@@ -2,7 +2,7 @@ import json
 import subprocess
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch, call
-from bot import start, handle_message, _call_antigravity_fallback, _analyze_plant_image, handle_photo, _identify_plant_from_image, _build_identification_context, _build_common_name_lookup, _validate_plant_assessment
+from bot import start, handle_message, _call_antigravity_fallback, _analyze_plant_image, handle_photo, _identify_plant_from_image, _build_identification_context, _build_common_name_lookup
 
 
 # ---------------------------------------------------------------------------
@@ -272,60 +272,13 @@ def test_call_antigravity_fallback_builds_prompt_with_server_state(mocker):
 
 
 # ---------------------------------------------------------------------------
-# _validate_plant_assessment
-# ---------------------------------------------------------------------------
-
-POLKA_DOT = {"name": "Polka Dot Plant", "location": "indoor", "last_watered": "2026-05-27", "frequency_days": 4}
-CONTRADICTORY_ASSESSMENT = {
-    "status": "Concerning",
-    "summary": "Drooping and dry soil suggest underwatering.",
-    "observations": ["dry soil", "drooping leaves"],
-    "watering_recommendation": "delay",
-    "frequency_suggestion": None,
-    "profile_notes": "### 2026-05-28 — Concerning\nDrooping leaves observed.",
-}
-
-
-def test_validate_assessment_returns_original_when_valid(mocker):
-    mock_result = MagicMock(returncode=0, stdout="VALID")
-    mocker.patch.object(subprocess, "run", return_value=mock_result)
-    mocker.patch("bot._load_species_context", return_value="")
-
-    result, was_corrected = _validate_plant_assessment(CONTRADICTORY_ASSESSMENT, POLKA_DOT)
-    assert was_corrected is False
-    assert result == CONTRADICTORY_ASSESSMENT
-
-
-def test_validate_assessment_corrects_contradiction(mocker):
-    corrected = {**CONTRADICTORY_ASSESSMENT, "watering_recommendation": "immediate"}
-    mock_result = MagicMock(returncode=0, stdout=json.dumps(corrected))
-    mocker.patch.object(subprocess, "run", return_value=mock_result)
-    mocker.patch("bot._load_species_context", return_value="")
-
-    result, was_corrected = _validate_plant_assessment(CONTRADICTORY_ASSESSMENT, POLKA_DOT)
-    assert was_corrected is True
-    assert result["watering_recommendation"] == "immediate"
-
-
-def test_validate_assessment_falls_back_on_failure(mocker):
-    mocker.patch.object(subprocess, "run", side_effect=Exception("timeout"))
-    mocker.patch("bot._load_species_context", return_value="")
-
-    result, was_corrected = _validate_plant_assessment(CONTRADICTORY_ASSESSMENT, POLKA_DOT)
-    assert was_corrected is False
-    assert result == CONTRADICTORY_ASSESSMENT
-
-
-# ---------------------------------------------------------------------------
 # _identify_plant_from_image helpers
 # ---------------------------------------------------------------------------
 
 def test_identify_plant_partial_name_match(mocker):
     """Model returns 'Monstera' — should match 'Monstera Deliciosa'."""
     plants = [{"name": "Monstera Deliciosa", "location": "indoor", "last_watered": "2026-05-20", "frequency_days": 10}]
-    mock_response = MagicMock()
-    mock_response.choices = [MagicMock(message=MagicMock(content="Monstera"))]
-    mocker.patch("bot.client").chat.completions.create.return_value = mock_response
+    mocker.patch("bot.assess_image", return_value="Monstera")
     mocker.patch("bot._build_identification_context", return_value="- Monstera Deliciosa: glossy leaves")
     mocker.patch("bot._build_common_name_lookup", return_value={})
 
@@ -338,15 +291,23 @@ def test_identify_plant_common_name_match(mocker):
     """Model returns 'snake plant' — should match 'Dracaena Trifasciata'."""
     dracaena = {"name": "Dracaena Trifasciata", "location": "indoor", "last_watered": "2026-05-20", "frequency_days": 14}
     plants = [dracaena]
-    mock_response = MagicMock()
-    mock_response.choices = [MagicMock(message=MagicMock(content="snake plant"))]
-    mocker.patch("bot.client").chat.completions.create.return_value = mock_response
+    mocker.patch("bot.assess_image", return_value="snake plant")
     mocker.patch("bot._build_identification_context", return_value="- Dracaena Trifasciata (also: snake plant): sword-like leaves")
     mocker.patch("bot._build_common_name_lookup", return_value={"snake plant": dracaena, "mother-in-law's tongue": dracaena})
 
     result = _identify_plant_from_image(b"img", plants)
     assert result is not None
     assert result["name"] == "Dracaena Trifasciata"
+
+
+def test_identify_plant_returns_none_when_cli_fails(mocker):
+    """assess_image returns None (CLI failure) → identification returns None."""
+    plants = [{"name": "Monstera Deliciosa", "location": "indoor", "last_watered": "2026-05-20", "frequency_days": 10}]
+    mocker.patch("bot.assess_image", return_value=None)
+    mocker.patch("bot._build_identification_context", return_value="- Monstera Deliciosa: glossy leaves")
+    mocker.patch("bot._build_common_name_lookup", return_value={})
+
+    assert _identify_plant_from_image(b"img", plants) is None
 
 
 def test_build_common_name_lookup_parses_aliases(mocker):
@@ -376,55 +337,53 @@ FAKE_PLANT = {
 FAKE_IMAGE = b"fakejpegbytes"
 
 
-def test_analyze_plant_image_returns_assessment_on_first_model(mocker):
-    mock_response = MagicMock()
-    mock_response.choices = [MagicMock(message=MagicMock(content="Leaves look healthy."))]
-    mocker.patch("bot.client").chat.completions.create.return_value = mock_response
+def test_analyze_plant_image_returns_assessment_text(mocker):
+    """Non-JSON reply falls through to plain-text display."""
+    mocker.patch("bot.assess_image", return_value="Leaves look healthy.")
 
-    result, _ = _analyze_plant_image(FAKE_IMAGE, FAKE_PLANT)
+    result, parsed = _analyze_plant_image(FAKE_IMAGE, FAKE_PLANT)
 
     assert "healthy" in result.lower()
+    assert parsed is None
 
 
-def test_analyze_plant_image_tries_second_model_on_failure(mocker):
-    mock_client = mocker.patch("bot.client")
-    good_response = MagicMock()
-    good_response.choices = [MagicMock(message=MagicMock(content="Plant is fine."))]
-    mock_client.chat.completions.create.side_effect = [
-        Exception("model unavailable"),
-        good_response,
-    ]
+def test_analyze_plant_image_parses_json_assessment(mocker):
+    """Structured JSON reply is parsed into a dict and a formatted display."""
+    assessment = {
+        "status": "Healthy",
+        "summary": "Vibrant and turgid.",
+        "observations": ["glossy leaves"],
+        "watering_recommendation": "on_schedule",
+        "frequency_suggestion": None,
+        "profile_notes": "### 2026-06-02 — Healthy\nLooks great.",
+    }
+    mocker.patch("bot.assess_image", return_value=json.dumps(assessment))
 
-    result, _ = _analyze_plant_image(FAKE_IMAGE, FAKE_PLANT)
+    result, parsed = _analyze_plant_image(FAKE_IMAGE, FAKE_PLANT)
 
-    assert "fine" in result.lower()
-    assert mock_client.chat.completions.create.call_count == 2
+    assert parsed == assessment
+    assert "Healthy" in result
+    assert "Vibrant" in result
 
 
-def test_analyze_plant_image_returns_unavailable_when_all_vision_models_fail(mocker):
-    mock_client = mocker.patch("bot.client")
-    mock_client.chat.completions.create.side_effect = Exception("all fail")
+def test_analyze_plant_image_returns_unavailable_when_cli_fails(mocker):
+    mocker.patch("bot.assess_image", return_value=None)
 
-    result, _ = _analyze_plant_image(FAKE_IMAGE, FAKE_PLANT)
+    result, parsed = _analyze_plant_image(FAKE_IMAGE, FAKE_PLANT)
 
     assert "unavailable" in result.lower()
-
-
+    assert parsed is None
 
 
 def test_analyze_plant_image_includes_plant_context_in_prompt(mocker):
-    mock_client = mocker.patch("bot.client")
-    mock_response = MagicMock()
-    mock_response.choices = [MagicMock(message=MagicMock(content="Looks good."))]
-    mock_client.chat.completions.create.return_value = mock_response
+    spy = mocker.patch("bot.assess_image", return_value="Looks good.")
 
     _analyze_plant_image(FAKE_IMAGE, FAKE_PLANT)
 
-    call_kwargs = mock_client.chat.completions.create.call_args
-    messages = call_kwargs[1].get("messages") or call_kwargs[0][1]
-    user_content = str(messages)
-    assert "Monstera" in user_content
-    assert "indoor" in user_content
+    # assess_image(path, system_prompt, user_text)
+    user_text = spy.call_args.args[2]
+    assert "Monstera" in user_text
+    assert "indoor" in user_text
 
 
 # ---------------------------------------------------------------------------

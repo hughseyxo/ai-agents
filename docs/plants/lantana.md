@@ -76,3 +76,4 @@ Plant exhibits wilting and droopy leaves, indicating underwatering stress. Flowe
 - Reduce watering frequency to 5–6 days to prevent recurring drought stress.
 - Prune dead branches to promote airflow.
 [Validator: structured fields corrected for consistency with observations]
+| 2026-06-01 | ?→5 days | Applied via Telegram photo assessment |

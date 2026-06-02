@@ -25,6 +25,8 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 # General Rules
 - Ask clarifying questions before starting a complex task
 - Show plan and steps before executing
+- **Planning workflow (Claude/eagna):** always brainstorm before planning — run `superpowers:brainstorming` to converge on a design (one question at a time, propose approaches, get approval), then `superpowers:writing-plans` for the implementation plan. Don't jump straight to code on non-trivial work.
+- **Implement with ECC tools where applicable:** prefer the ECC plugin's specialists over ad-hoc work — TDD via `superpowers:test-driven-development`; per-language review via `ecc:python-review` (and `ecc:<lang>-review`/`-build` for other stacks) on the diff before declaring done; ECC build resolvers for build/type failures. These augment (don't replace) the project rules above.
 - **Always write a design doc** to `docs/` for any non-trivial feature or change before or after implementation. Include: problem, design decisions, architecture, data model, and file list. This is mandatory — it ensures context survives across sessions and LLM switches.
 - Keep reports and summaries concise — bullet points over paragraphs
 - Save all output files to the `output/` folder
@@ -37,7 +39,7 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 │   ├── db.py                   # SQLite wrapper (AgentDB)
 │   ├── runner.py               # CLI: python3 -m agents <command>
 │   ├── weather.py              # Open-Meteo weather client (Leiden default, no API key)
-│   ├── plant_weather.py        # Weather-based watering adjustment logic (pure functions): calculate_adjustment (indoor/outdoor + shade modifier), weather_adjusted_frequency (fold weather into frequency), apply_frequency_step (bounded ±2/run, clamp 1-30)
+│   ├── plant_weather.py        # Weather-based watering adjustment logic (pure functions): calculate_adjustment (indoor/outdoor + shade modifier; outdoor folds recent + next-2-day forecast rain), weather_adjusted_frequency (fold weather into frequency), apply_frequency_step (bounded ±2/run, clamp 1-30)
 │   ├── plant_profiles.py       # File-I/O helpers for docs/plants/<slug>.md (frequency-history logging)
 │   ├── daily_briefing.py       # Daily briefing agent (schedule: 04:05 UTC / 06:05 CEST, model: claude-sonnet-4-6)
 │   ├── news_briefing.py        # News briefing agent (schedule: 04:00 UTC / 06:00 CEST, model: claude-haiku-4-5, Claude primary). Steps: fetch_news → translate_dutch (NOS Binnenland articles) → news_briefing (send email). HTML/markdown pre-built in Python; LLM only sends email. Sources: BBC, RTE/TheJournal/Irish Times(Google News), DutchNews/NLTimes/NOS(Dutch→translated), Leiden/Mullingar(Google News), Verge/TC/HN/ARS/Register, Polygon, HN SRE.
@@ -61,7 +63,7 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 │       └── plant_photo_assessment.md # Photo assessment prompt (used by Telegram bot save_plant_assessment)
 ├── telegram-bot/       # Server concierge Telegram bot (claude CLI primary, OpenRouter fallback)
 │   ├── bot.py                  # Bot: polling, auth gate, claude-CLI primary path, OpenRouter+Antigravity fallback, photo assessment
-│   ├── claude_backend.py       # ask_claude(): runs `claude -p` (Sonnet) with concierge MCP tools + per-chat --resume memory. Returns None on failure → caller falls back.
+│   ├── claude_backend.py       # ask_claude(): runs `claude -p` (Sonnet) with concierge MCP tools + per-chat --resume memory. assess_image(): one-shot plant photo analysis via `claude -p` (Opus 4.8) + Read tool, stateless. Both via _run_claude() helper; return None on failure → caller falls back.
 │   ├── tool_specs.py           # CANONICAL tool defs (SPECS). openai_tools() for OpenRouter path, mcp_tools() for MCP server, func_map() for dispatch. Add/change tools HERE.
 │   ├── concierge_mcp.json      # MCP config used by claude_backend — loads ONLY concierge_server (--strict-mcp-config)
 │   ├── tools.py                # Tool function implementations (DB/subprocess/file I/O); schemas live in tool_specs.py
@@ -96,6 +98,7 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 ├── docs/               # Design docs (mandatory for non-trivial changes)
 │   ├── llm-failover.md         # Claude→Antigravity failover design doc
 │   ├── weather-aware-plant-watering.md  # Weather-based watering adjustments
+│   ├── plant-image-analysis-claude-cli.md  # Plant photo analysis via claude CLI (Opus 4.8), replaces free vision models
 │   ├── mealsave-tiktok-and-telegram.md  # TikTok OCR + Telegram bot design
 │   ├── hermes-evaluation.md    # Summary of failed CLI-proxy/local-inference efforts
 │   ├── openrouter-telegram-bot.md # OpenRouter bot architecture (superseded by concierge)
@@ -164,7 +167,8 @@ Configured for both Claude (`.mcp.json`) and Antigravity (`mcp_config.json`):
 # Server Concierge Telegram Bot
 - **Role:** Natural-language interface to query/control server state. Ask about agent runs, plant watering, yopflix/seedbox, system health, cron schedules, logs; water plants, add/remove/update plants, run travel agent, save recipes.
 - **Backend (primary):** `claude` CLI in print mode (`claude_backend.py`, model `claude-sonnet-4-6`) on the Pro subscription — no API billing. Native tool use via the `concierge` MCP server (`mcp__concierge__*`, `--strict-mcp-config` so ONLY concierge tools, no Todoist/Gmail/Calendar). Multi-turn memory via per-chat `--resume` (in-memory; cleared on restart). Runs off the event loop via `run_in_executor`.
-- **Backend (fallback):** if the claude CLI fails (rc≠0/timeout/bad JSON → `ask_claude` returns None), falls through to the existing OpenRouter free-model tool-use loop → Antigravity CLI. Photo/vision path (`handle_photo`) stays on OpenRouter vision models.
+- **Backend (fallback):** if the claude CLI fails (rc≠0/timeout/bad JSON → `ask_claude` returns None), falls through to the existing OpenRouter free-model tool-use loop → Antigravity CLI.
+- **Photo/vision path:** plant image analysis (`handle_photo` → `_identify_plant_from_image`, `_analyze_plant_image`) runs on the `claude` CLI via `claude_backend.assess_image()` — **Opus 4.8** (`VISION_MODEL`) reading the image with the `Read` tool on the Pro subscription (no API billing). No fallback: a CLI failure returns "assessment unavailable". The old free OpenRouter `VISION_MODELS` and the second-pass `_validate_plant_assessment` cross-check were removed (Opus is consistent enough to need neither).
 - **Tools:** defined once in `tool_specs.py` (canonical SPECS) — feeds both the MCP server and the OpenRouter path. `tools.py` holds the implementations.
 - **Auth:** `TELEGRAM_USER_ID` env var — all other users silently ignored
 - **Service:** `concierge-bot.service` (systemd user service, `~/.config/systemd/user/`)

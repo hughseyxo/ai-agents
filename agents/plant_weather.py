@@ -78,8 +78,10 @@ def _outdoor_adjustment(weather: dict) -> int:
     forecast = weather["forecast"]
     temp = weather["current"]["temp_c"]
 
-    forecast_rain_day1 = forecast[0]["precip_mm"] if forecast else 0
-    total_rain = recent_rain + forecast_rain_day1
+    # Look at near-term forecast (today + tomorrow), not just today — imminent
+    # heavy rain should defer outdoor watering even if today is dry.
+    forecast_rain_soon = sum(f["precip_mm"] for f in forecast[:2]) if forecast else 0
+    total_rain = recent_rain + forecast_rain_soon
 
     # Rain adjustments (positive = defer watering)
     rain_adj = 0
@@ -89,7 +91,7 @@ def _outdoor_adjustment(weather: dict) -> int:
         rain_adj = 2
     elif recent_rain > 5:
         rain_adj = 2
-    elif forecast_rain_day1 > 5:
+    elif forecast_rain_soon > 5:
         rain_adj = 1
 
     # If there's meaningful rain, don't also adjust for heat
@@ -156,7 +158,7 @@ def _build_reason(adj: int, plant: dict, weather: dict) -> str:
 
     if location == "outdoor":
         recent_rain = weather["recent_precip_mm"]
-        forecast_rain = weather["forecast"][0]["precip_mm"] if weather["forecast"] else 0
+        forecast_rain = sum(f["precip_mm"] for f in weather["forecast"][:2]) if weather["forecast"] else 0
 
         if adj > 0:
             parts = []
