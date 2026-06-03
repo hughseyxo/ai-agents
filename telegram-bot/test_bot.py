@@ -1,8 +1,7 @@
 import json
-import subprocess
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch, call
-from bot import start, handle_message, _call_antigravity_fallback, _analyze_plant_image, handle_photo, _identify_plant_from_image, _build_identification_context, _build_common_name_lookup
+from bot import start, handle_message, _analyze_plant_image, handle_photo, _identify_plant_from_image, _build_identification_context, _build_common_name_lookup
 
 
 # ---------------------------------------------------------------------------
@@ -42,10 +41,11 @@ async def test_unauthorized_user_is_ignored(mocker):
 
 
 @pytest.mark.asyncio
-async def test_claude_backend_reply_is_sent_directly(mocker):
-    """When the claude CLI backend returns a reply, it's sent and OpenRouter is skipped."""
+async def test_antigravity_backend_reply_is_sent_directly(mocker):
+    """When the Antigravity backend returns a reply, it's sent and Claude is skipped."""
     mocker.patch("bot.ALLOWED_USER_ID", "1703830475")
-    mocker.patch("bot.ask_claude", return_value="Your plants are happy.")
+    mocker.patch("bot.ask_antigravity", return_value="Your plants are happy.")
+    mock_claude = mocker.patch("bot.ask_claude")
     update = MagicMock()
     update.effective_user.id = 1703830475
     update.message.text = "how are my plants?"
@@ -54,18 +54,18 @@ async def test_claude_backend_reply_is_sent_directly(mocker):
     context = MagicMock()
     context.bot.send_chat_action = AsyncMock()
 
-    mock_client = mocker.patch("bot.client")
-
     await handle_message(update, context)
 
     update.message.reply_text.assert_called_once_with("Your plants are happy.")
-    mock_client.chat.completions.create.assert_not_called()
+    mock_claude.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_authorized_user_gets_response(mocker):
+async def test_antigravity_none_falls_back_to_claude(mocker):
+    """Antigravity returns None → Claude is called and its reply is sent."""
     mocker.patch("bot.ALLOWED_USER_ID", "1703830475")
-    mocker.patch("bot.ask_claude", return_value=None)  # force OpenRouter fallback path
+    mocker.patch("bot.ask_antigravity", return_value=None)
+    mock_claude = mocker.patch("bot.ask_claude", return_value="Hi from Claude.")
     update = MagicMock()
     update.effective_user.id = 1703830475
     update.message.text = "hello"
@@ -74,161 +74,18 @@ async def test_authorized_user_gets_response(mocker):
     context = MagicMock()
     context.bot.send_chat_action = AsyncMock()
 
-    mock_client = mocker.patch("bot.client")
-    mock_response = MagicMock()
-    mock_response.choices = [MagicMock(
-        finish_reason="stop",
-        message=MagicMock(content="Hi there!", tool_calls=None)
-    )]
-    mock_client.chat.completions.create.return_value = mock_response
-
     await handle_message(update, context)
 
-    update.message.reply_text.assert_called_once_with("Hi there!")
-
-
-# ---------------------------------------------------------------------------
-# Tool-use loop
-# ---------------------------------------------------------------------------
-
-@pytest.mark.asyncio
-async def test_tool_call_is_executed_and_result_sent_back(mocker):
-    """LLM returns a tool_call → bot executes it → sends result back to LLM → replies."""
-    mocker.patch("bot.ALLOWED_USER_ID", "1703830475")
-    mocker.patch("bot.ask_claude", return_value=None)  # force OpenRouter fallback path
-    update = MagicMock()
-    update.effective_user.id = 1703830475
-    update.message.text = "how are the agents doing?"
-    update.effective_chat.id = 123
-    update.message.reply_text = AsyncMock()
-    context = MagicMock()
-    context.bot.send_chat_action = AsyncMock()
-
-    mock_tool_call = MagicMock()
-    mock_tool_call.id = "call_abc"
-    mock_tool_call.function.name = "get_agent_status"
-    mock_tool_call.function.arguments = "{}"
-
-    first_response = MagicMock()
-    first_response.choices = [MagicMock(
-        finish_reason="tool_calls",
-        message=MagicMock(tool_calls=[mock_tool_call], content=None)
-    )]
-
-    second_response = MagicMock()
-    second_response.choices = [MagicMock(
-        finish_reason="stop",
-        message=MagicMock(content="Agents look healthy.", tool_calls=None)
-    )]
-
-    mock_client = mocker.patch("bot.client")
-    mock_client.chat.completions.create.side_effect = [first_response, second_response]
-
-    mocker.patch("bot.TOOL_FUNCTIONS", {"get_agent_status": lambda: "daily-briefing: success"})
-
-    await handle_message(update, context)
-
-    assert mock_client.chat.completions.create.call_count == 2
-    update.message.reply_text.assert_called_once_with("Agents look healthy.")
+    mock_claude.assert_called_once()
+    update.message.reply_text.assert_called_once_with("Hi from Claude.")
 
 
 @pytest.mark.asyncio
-async def test_tool_loop_stops_after_max_iterations(mocker):
-    """If LLM keeps requesting tool calls, loop breaks after 3 iterations."""
+async def test_both_backends_none_sends_unavailable_message(mocker):
+    """Both Antigravity and Claude return None → user gets unavailable message."""
     mocker.patch("bot.ALLOWED_USER_ID", "1703830475")
-    mocker.patch("bot.ask_claude", return_value=None)  # force OpenRouter fallback path
-    update = MagicMock()
-    update.effective_user.id = 1703830475
-    update.message.text = "status"
-    update.effective_chat.id = 123
-    update.message.reply_text = AsyncMock()
-    context = MagicMock()
-    context.bot.send_chat_action = AsyncMock()
-
-    mock_tool_call = MagicMock()
-    mock_tool_call.id = "call_x"
-    mock_tool_call.function.name = "get_agent_status"
-    mock_tool_call.function.arguments = "{}"
-
-    tool_response = MagicMock()
-    tool_response.choices = [MagicMock(
-        finish_reason="tool_calls",
-        message=MagicMock(tool_calls=[mock_tool_call], content=None)
-    )]
-
-    mock_client = mocker.patch("bot.client")
-    mock_client.chat.completions.create.return_value = tool_response
-    mocker.patch("bot.TOOL_FUNCTIONS", {"get_agent_status": lambda: "ok"})
-
-    await handle_message(update, context)
-
-    assert mock_client.chat.completions.create.call_count <= 5
-
-
-@pytest.mark.asyncio
-async def test_openrouter_error_returns_error_message(mocker):
-    mocker.patch("bot.ALLOWED_USER_ID", "1703830475")
-    mocker.patch("bot.ask_claude", return_value=None)  # force OpenRouter fallback path
-    update = MagicMock()
-    update.effective_user.id = 1703830475
-    update.message.text = "hello"
-    update.effective_chat.id = 123
-    update.message.reply_text = AsyncMock()
-    context = MagicMock()
-    context.bot.send_chat_action = AsyncMock()
-
-    mock_client = mocker.patch("bot.client")
-    mock_client.chat.completions.create.side_effect = Exception("API Error")
-
-    await handle_message(update, context)
-
-    update.message.reply_text.assert_called_once()
-    assert "error" in update.message.reply_text.call_args[0][0].lower()
-
-
-# ---------------------------------------------------------------------------
-# Antigravity CLI fallback
-# ---------------------------------------------------------------------------
-
-@pytest.mark.asyncio
-async def test_all_openrouter_models_fail_triggers_antigravity(mocker):
-    """When all OpenRouter models raise APIError, Antigravity CLI is called."""
-    from openai import RateLimitError
-
-    mocker.patch("bot.ALLOWED_USER_ID", "1703830475")
-    mocker.patch("bot.ask_claude", return_value=None)  # force OpenRouter→Antigravity path
-    update = MagicMock()
-    update.effective_user.id = 1703830475
-    update.message.text = "how are the agents?"
-    update.effective_chat.id = 123
-    update.message.reply_text = AsyncMock()
-    context = MagicMock()
-    context.bot.send_chat_action = AsyncMock()
-
-    mock_client = mocker.patch("bot.client")
-    mock_client.chat.completions.create.side_effect = RateLimitError(
-        message="rate limited", response=MagicMock(status_code=429, headers={}), body={}
-    )
-
-    mocker.patch("bot.TOOL_FUNCTIONS", {"get_agent_status": lambda: "all good"})
-    mock_run = mocker.patch("bot.subprocess.run")
-    mock_run.return_value = MagicMock(returncode=0, stdout="Agents all good.\n")
-
-    await handle_message(update, context)
-
-    mock_run.assert_called()
-    agy_calls = [c for c in mock_run.call_args_list if "agy" in c[0][0][0]]
-    assert len(agy_calls) == 1
-    update.message.reply_text.assert_called_once_with("Agents all good.")
-
-
-@pytest.mark.asyncio
-async def test_antigravity_fallback_failure_sends_unavailable_message(mocker):
-    """If Antigravity CLI also fails, user gets a clear unavailable message."""
-    from openai import RateLimitError
-
-    mocker.patch("bot.ALLOWED_USER_ID", "1703830475")
-    mocker.patch("bot.ask_claude", return_value=None)  # force OpenRouter→Antigravity path
+    mocker.patch("bot.ask_antigravity", return_value=None)
+    mocker.patch("bot.ask_claude", return_value=None)
     update = MagicMock()
     update.effective_user.id = 1703830475
     update.message.text = "status?"
@@ -237,38 +94,30 @@ async def test_antigravity_fallback_failure_sends_unavailable_message(mocker):
     context = MagicMock()
     context.bot.send_chat_action = AsyncMock()
 
-    mock_client = mocker.patch("bot.client")
-    mock_client.chat.completions.create.side_effect = RateLimitError(
-        message="rate limited", response=MagicMock(status_code=429, headers={}), body={}
-    )
-
-    mocker.patch("bot.TOOL_FUNCTIONS", {"get_agent_status": lambda: "all good"})
-    mock_run = mocker.patch("bot.subprocess.run")
-    mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="error")
-
     await handle_message(update, context)
 
     update.message.reply_text.assert_called_once()
     assert "unavailable" in update.message.reply_text.call_args[0][0].lower()
 
 
-def test_call_antigravity_fallback_builds_prompt_with_server_state(mocker):
-    """_call_antigravity_fallback includes tool results in the prompt passed to antigravity."""
-    mocker.patch("bot.STATE_TOOL_FUNCTIONS", {
-        "get_agent_status": lambda: "daily-briefing: success",
-        "get_system_health": lambda: "CPU: 5%",
-    })
+@pytest.mark.asyncio
+async def test_antigravity_exception_falls_back_to_claude(mocker):
+    """An exception in the Antigravity backend is logged and Claude takes over."""
+    mocker.patch("bot.ALLOWED_USER_ID", "1703830475")
+    mocker.patch("bot.ask_antigravity", side_effect=RuntimeError("boom"))
+    mock_claude = mocker.patch("bot.ask_claude", return_value="Claude saves the day.")
+    update = MagicMock()
+    update.effective_user.id = 1703830475
+    update.message.text = "hello"
+    update.effective_chat.id = 123
+    update.message.reply_text = AsyncMock()
+    context = MagicMock()
+    context.bot.send_chat_action = AsyncMock()
 
-    mock_run = mocker.patch("bot.subprocess.run")
-    mock_run.return_value = MagicMock(returncode=0, stdout="All good.\n")
+    await handle_message(update, context)
 
-    result = _call_antigravity_fallback("how is everything?", "You are a concierge.")
-
-    assert result == "All good."
-    prompt_passed = mock_run.call_args.kwargs["input"]
-    assert "daily-briefing: success" in prompt_passed
-    assert "CPU: 5%" in prompt_passed
-    assert "how is everything?" in prompt_passed
+    mock_claude.assert_called_once()
+    update.message.reply_text.assert_called_once_with("Claude saves the day.")
 
 
 # ---------------------------------------------------------------------------

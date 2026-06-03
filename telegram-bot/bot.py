@@ -4,57 +4,31 @@ import json
 import logging
 import os
 import re
-import subprocess
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
 from dotenv import load_dotenv
-from openai import OpenAI, APIError
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ApplicationBuilder, CallbackQueryHandler, CommandHandler, MessageHandler, filters, ContextTypes
 
 from tools import (
-    get_agent_status,
-    get_plant_status,
-    get_yopflix_status,
-    get_system_health,
-    get_cron_schedule,
-    get_agent_logs,
-    get_travel_report,
     update_plant,
     get_plant,
     get_all_plants,
     save_plant_assessment,
     note_plant_observation,
 )
-from tool_specs import openai_tools, func_map
 from claude_backend import ask_claude, assess_image
+from antigravity_backend import ask_antigravity, _run_agy
 
 load_dotenv()
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-OPENROUTER_KEY = os.getenv("OPENROUTER_API_KEY")
 ALLOWED_USER_ID = os.getenv("TELEGRAM_USER_ID", "")
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
 logger = logging.getLogger(__name__)
-
-client = OpenAI(
-    base_url="https://openrouter.ai/api/v1",
-    api_key=OPENROUTER_KEY,
-    default_headers={
-        "HTTP-Referer": "https://github.com/hughseyxo/ai-agents",
-        "X-Title": "Server Concierge",
-    },
-)
-
-FREE_MODELS = [
-    "openai/gpt-oss-20b:free",
-    "openai/gpt-oss-120b:free",
-    "nvidia/nemotron-3-super-120b-a12b:free",
-    "minimax/minimax-m2.5:free",
-]
 
 PLANT_HEALTH_SYSTEM = (
     "You are a plant health expert. Assess the plant in the photo. "
@@ -72,51 +46,6 @@ PLANT_ASSESSMENT_DIR = Path(__file__).parent.parent / "docs" / "plants"
 _ASSESSMENT_PROMPT_PATH = Path(__file__).parent.parent / "agents" / "prompts" / "plant_photo_assessment.md"
 PLANT_ASSESSMENT_SYSTEM = _ASSESSMENT_PROMPT_PATH.read_text() if _ASSESSMENT_PROMPT_PATH.exists() else PLANT_HEALTH_SYSTEM
 
-# State-reading tools — called in Antigravity fallback to build context snapshot
-STATE_TOOL_FUNCTIONS = {
-    "get_agent_status": get_agent_status,
-    "get_plant_status": get_plant_status,
-    "get_yopflix_status": get_yopflix_status,
-    "get_system_health": get_system_health,
-    "get_cron_schedule": get_cron_schedule,
-    "get_agent_logs": lambda agent_name="": get_agent_logs(agent_name),
-    "get_travel_report": get_travel_report,
-}
-
-# All tools available to the LLM (state + action tools)
-TOOL_FUNCTIONS = func_map()
-
-TOOLS = openai_tools()
-
-
-def _call_antigravity_fallback(user_message: str, system_prompt: str) -> str:
-    """Execute state-reading tools, inject results, call Antigravity CLI as a flat prompt."""
-    state_parts = []
-    for name, fn in STATE_TOOL_FUNCTIONS.items():
-        try:
-            result = fn()
-        except Exception as e:
-            result = f"unavailable: {e}"
-        state_parts.append(f"### {name}\n{result}")
-
-    state = "\n\n".join(state_parts)
-    prompt = (
-        f"{system_prompt}\n\n"
-        f"## Current Server State\n\n{state}\n\n"
-        f"## User Question\n\n{user_message}"
-    )
-
-    res = subprocess.run(
-        ["agy", "-y", "-o", "text"],
-        input=prompt,
-        capture_output=True, text=True, timeout=60,
-        cwd=str(Path(__file__).parent),
-    )
-    if res.returncode == 0 and res.stdout.strip():
-        return res.stdout.strip()
-    raise RuntimeError(f"Antigravity CLI failed (rc={res.returncode}): {res.stderr[:200]}")
-
-
 def _resolve_plant_name(caption: str, plants: list[dict]) -> dict | None:
     """Use a text LLM to semantically match a user's description to a known plant.
 
@@ -129,21 +58,22 @@ def _resolve_plant_name(caption: str, plants: list[dict]) -> dict | None:
         "Which plant are they referring to? Reply with the exact name from the list, "
         "or NONE if no match is likely. Reply with only the plant name or NONE."
     )
-    for model in FREE_MODELS:
-        try:
-            response = client.chat.completions.create(
-                model=model,
-                messages=[{"role": "user", "content": prompt}],
+    answer = _run_agy(prompt)
+    if answer:
+        answer = answer.strip()
+        if answer.upper() != "NONE":
+            al = answer.lower()
+            match = (
+                next((p for p in plants if p["name"].lower() == al), None)
+                or next((p for p in plants if p["name"].lower() in al or al in p["name"].lower()), None)
             )
-            answer = (response.choices[0].message.content or "").strip()
-            if answer.upper() == "NONE":
-                return None
-            match = next((p for p in plants if p["name"].lower() == answer.lower()), None)
             if match:
                 return match
-        except Exception:
-            continue
-    return None
+    # Last-resort substring match against the raw caption. (handle_photo already
+    # tries get_plant() — itself substring-based — before calling this, so in
+    # practice this only fires for non-photo callers.)
+    cl = caption.lower()
+    return next((p for p in plants if p["name"].lower() in cl or cl in p["name"].lower()), None)
 
 
 _SPECIES_REFERENCE_PATH = Path(__file__).parent.parent / "docs" / "plants" / "species_reference.md"
@@ -364,81 +294,40 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
 
-    # Primary backend: claude CLI (Claude-quality chat + native MCP tool use,
-    # multi-turn memory). Runs off the event loop since the subprocess blocks.
-    # Returns None on any failure → fall through to OpenRouter / Antigravity.
+    loop = asyncio.get_running_loop()
+
+    async def _chunk_reply(text: str) -> None:
+        for chunk in [text[i:i + 4000] for i in range(0, len(text), 4000)]:
+            await update.message.reply_text(chunk)
+
+    # Primary backend: Antigravity CLI. Runs off the event loop since the
+    # subprocess blocks. Returns None on any failure → fall through to Claude.
     try:
-        reply = await asyncio.get_running_loop().run_in_executor(
+        reply = await loop.run_in_executor(
+            None, ask_antigravity, update.effective_chat.id, update.message.text
+        )
+    except Exception as e:
+        logger.warning(f"antigravity backend errored, falling back: {e}")
+        reply = None
+    if reply:
+        await _chunk_reply(reply)
+        return
+
+    logger.info("antigravity backend unavailable, falling back to Claude")
+
+    # Secondary backend: claude CLI.
+    try:
+        reply = await loop.run_in_executor(
             None, ask_claude, update.effective_chat.id, update.message.text
         )
     except Exception as e:
-        logger.warning(f"claude backend errored, falling back: {e}")
+        logger.warning(f"claude backend errored: {e}")
         reply = None
     if reply:
-        for chunk in [reply[i:i + 4000] for i in range(0, len(reply), 4000)]:
-            await update.message.reply_text(chunk)
+        await _chunk_reply(reply)
         return
 
-    logger.info("claude backend unavailable, falling back to OpenRouter")
-
-    messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": update.message.text},
-    ]
-
-    for model in FREE_MODELS:
-        try:
-            loop_messages = list(messages)
-            for _ in range(5):
-                await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
-                response = client.chat.completions.create(
-                    model=model,
-                    messages=loop_messages,
-                    tools=TOOLS,
-                    tool_choice="auto",
-                )
-                choice = response.choices[0]
-
-                if choice.finish_reason == "tool_calls" and choice.message.tool_calls:
-                    loop_messages.append(choice.message)
-                    for tc in choice.message.tool_calls:
-                        fn = TOOL_FUNCTIONS.get(tc.function.name)
-                        if fn:
-                            try:
-                                args = json.loads(tc.function.arguments or "{}")
-                                result = fn(**args)
-                            except Exception as e:
-                                result = f"Tool error: {e}"
-                        else:
-                            result = f"Unknown tool: {tc.function.name}"
-                        loop_messages.append({
-                            "role": "tool",
-                            "tool_call_id": tc.id,
-                            "content": str(result),
-                        })
-                else:
-                    await update.message.reply_text(choice.message.content or "(no response)")
-                    return
-
-            await update.message.reply_text("Sorry, this request needs too many steps. Try asking something more specific.")
-            return
-
-        except APIError as e:
-            logger.warning(f"Model {model} failed ({e.status_code}), trying next")
-            continue
-        except Exception as e:
-            logger.error(f"Unexpected error: {e}")
-            await update.message.reply_text("Sorry, unexpected error. Please try again.")
-            return
-
-    # All OpenRouter models exhausted — fall back to Antigravity CLI
-    logger.warning("All OpenRouter models failed, falling back to Antigravity CLI")
-    try:
-        reply = _call_antigravity_fallback(update.message.text, SYSTEM_PROMPT)
-        await update.message.reply_text(reply)
-    except Exception as e:
-        logger.error(f"Antigravity fallback failed: {e}")
-        await update.message.reply_text("All AI backends unavailable. Please try again later.")
+    await update.message.reply_text("All AI backends unavailable. Please try again later.")
 
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -576,8 +465,8 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
 
 def main() -> None:
-    if not TELEGRAM_TOKEN or not OPENROUTER_KEY:
-        logger.error("Missing TELEGRAM_BOT_TOKEN or OPENROUTER_API_KEY.")
+    if not TELEGRAM_TOKEN:
+        logger.error("Missing TELEGRAM_BOT_TOKEN.")
         return
 
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()

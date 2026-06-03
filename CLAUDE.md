@@ -61,10 +61,11 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 │       ├── plant_status_email.md    # Plant status table email (used by send_status_email step)
 │       ├── plant_intelligence.md    # Intelligence analysis prompt (used by intelligence_run step)
 │       └── plant_photo_assessment.md # Photo assessment prompt (used by Telegram bot save_plant_assessment)
-├── telegram-bot/       # Server concierge Telegram bot (claude CLI primary, OpenRouter fallback)
-│   ├── bot.py                  # Bot: polling, auth gate, claude-CLI primary path, OpenRouter+Antigravity fallback, photo assessment
-│   ├── claude_backend.py       # ask_claude(): runs `claude -p` (Sonnet) with concierge MCP tools + per-chat --resume memory. assess_image(): one-shot plant photo analysis via `claude -p` (Opus 4.8) + Read tool, stateless. Both via _run_claude() helper; return None on failure → caller falls back.
-│   ├── tool_specs.py           # CANONICAL tool defs (SPECS). openai_tools() for OpenRouter path, mcp_tools() for MCP server, func_map() for dispatch. Add/change tools HERE.
+├── telegram-bot/       # Server concierge Telegram bot (Antigravity/agy CLI primary, claude CLI secondary)
+│   ├── bot.py                  # Bot: polling, auth gate, agy-CLI primary path, claude-CLI fallback, photo assessment
+│   ├── antigravity_backend.py  # ask_antigravity(): pipes prompt via stdin to `agy --dangerously-skip-permissions` with concierge MCP (global agy config). Stateless (no session resume). _run_agy() helper; returns None on failure → caller falls back to claude.
+│   ├── claude_backend.py       # ask_claude(): runs `claude -p` (Sonnet) with concierge MCP tools + per-chat --resume memory (SECONDARY fallback). assess_image(): one-shot plant photo analysis via `claude -p` (Opus 4.8) + Read tool, stateless. Both via _run_claude() helper; return None on failure → caller falls back.
+│   ├── tool_specs.py           # CANONICAL tool defs (SPECS). mcp_tools() for the concierge MCP server, func_map() for dispatch. Add/change tools HERE.
 │   ├── concierge_mcp.json      # MCP config used by claude_backend — loads ONLY concierge_server (--strict-mcp-config)
 │   ├── tools.py                # Tool function implementations (DB/subprocess/file I/O); schemas live in tool_specs.py
 │   ├── concierge-bot.service   # systemd user service (symlinked to ~/.config/systemd/user/)
@@ -72,7 +73,8 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 │   ├── test_tools.py           # Tool function unit tests (mocked deps)
 │   ├── test_tool_specs.py      # Canonical-spec consistency tests
 │   ├── test_claude_backend.py  # ask_claude tests (mocked subprocess: parsing, session resume, fallback)
-│   ├── .env                    # Private API keys (gitignored): TELEGRAM_BOT_TOKEN, OPENROUTER_API_KEY, TELEGRAM_USER_ID
+│   ├── test_antigravity_backend.py  # ask_antigravity tests (mocked subprocess: stdin invocation, failure → None)
+│   ├── .env                    # Private keys (gitignored): TELEGRAM_BOT_TOKEN, TELEGRAM_USER_ID
 │   └── .env.example            # Template for setup
 ├── data/               # SQLite database (gitignored)
 ├── output/             # Finished deliverables (reports, drafts, analysis)
@@ -166,11 +168,11 @@ Configured for both Claude (`.mcp.json`) and Antigravity (`mcp_config.json`):
 
 # Server Concierge Telegram Bot
 - **Role:** Natural-language interface to query/control server state. Ask about agent runs, plant watering, yopflix/seedbox, system health, cron schedules, logs; water plants, add/remove/update plants, run travel agent, save recipes.
-- **Backend (primary):** `claude` CLI in print mode (`claude_backend.py`, model `claude-sonnet-4-6`) on the Pro subscription — no API billing. Native tool use via the `concierge` MCP server (`mcp__concierge__*`, `--strict-mcp-config` so ONLY concierge tools, no Todoist/Gmail/Calendar). Multi-turn memory via per-chat `--resume` (in-memory; cleared on restart). Runs off the event loop via `run_in_executor`.
-- **Backend (fallback):** if the claude CLI fails (rc≠0/timeout/bad JSON → `ask_claude` returns None), falls through to the existing OpenRouter free-model tool-use loop → Antigravity CLI.
+- **Backend (primary):** **Antigravity** `agy` CLI (`antigravity_backend.py`, `ask_antigravity`) — spares Claude usage per project rule. Prompt piped via **stdin** to `agy --dangerously-skip-permissions` (NOT `-p`); system prompt prepended to the prompt text (no `--append-system-prompt`). Native tool use via the `concierge` MCP server loaded from agy's **global** config `~/.gemini/antigravity-cli/mcp_config.json` (symlink → `~/.gemini/config/mcp_config.json`) — no per-call MCP isolation. **Stateless** (no JSON output / session id, so no `--resume`; `--continue` unsafe since cron agents share agy history). Runs off the event loop via `run_in_executor`.
+- **Backend (secondary/fallback):** if `agy` fails (rc≠0/timeout/empty → `ask_antigravity` returns None), falls through to the `claude` CLI (`claude_backend.py`, Sonnet, `--strict-mcp-config` concierge-only) which also carries per-chat `--resume` multi-turn memory. The OpenRouter free-model loop has been **removed entirely**.
 - **Photo/vision path:** plant image analysis (`handle_photo` → `_identify_plant_from_image`, `_analyze_plant_image`) runs on the `claude` CLI via `claude_backend.assess_image()` — **Opus 4.8** (`VISION_MODEL`) reading the image with the `Read` tool on the Pro subscription (no API billing). No fallback: a CLI failure returns "assessment unavailable". The old free OpenRouter `VISION_MODELS` and the second-pass `_validate_plant_assessment` cross-check were removed (Opus is consistent enough to need neither).
-- **Tools:** defined once in `tool_specs.py` (canonical SPECS) — feeds both the MCP server and the OpenRouter path. `tools.py` holds the implementations.
+- **Tools:** defined once in `tool_specs.py` (canonical SPECS) — feed the concierge MCP server; tools execute inside `mcp-servers/concierge_server.py` (not dispatched by `bot.py`). `tools.py` holds the implementations.
 - **Auth:** `TELEGRAM_USER_ID` env var — all other users silently ignored
 - **Service:** `concierge-bot.service` (systemd user service, `~/.config/systemd/user/`)
-- **Latency:** each claude-backed reply spawns the CLI + MCP server (~2–6s); "typing" indicator covers it.
-- **Design docs:** `docs/superpowers/specs/2026-05-17-server-concierge-bot-design.md` (original), `docs/superpowers/specs/2026-05-31-concierge-claude-backend-design.md` (claude backend)
+- **Latency:** each reply spawns the CLI + MCP server (~2–6s); "typing" indicator covers it.
+- **Design docs:** `docs/superpowers/specs/2026-05-17-server-concierge-bot-design.md` (original), `docs/superpowers/specs/2026-05-31-concierge-claude-backend-design.md` (claude backend), `docs/concierge-antigravity-primary.md` (Antigravity-primary backend chain)

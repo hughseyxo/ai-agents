@@ -22,3 +22,6 @@ __pycache__/
 skills/mealsave/pot-provider/
 skills/vidqueue/.venv/
 mcp-servers/.env.bridge
+
+# Antigravity CLI per-repo conversation cache
+cache/
