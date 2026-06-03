@@ -8,6 +8,7 @@ import base64
 import json
 import os
 import sys
+import tempfile
 import time
 import urllib.request
 import urllib.parse
@@ -25,9 +26,21 @@ def load_tokens():
 
 
 def save_tokens(tokens):
-    with open(TOKEN_FILE, "w") as f:
-        json.dump(tokens, f, indent=2)
-    os.chmod(TOKEN_FILE, 0o600)
+    # Atomic write: a crash or a racing MCP server must never leave a
+    # truncated / half-written token file (see tests/test_token_save_atomic.py).
+    directory = os.path.dirname(TOKEN_FILE) or "."
+    fd, tmp = tempfile.mkstemp(dir=directory, prefix=".google_tokens.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(tokens, f, indent=2)
+        os.chmod(tmp, 0o600)
+        os.replace(tmp, TOKEN_FILE)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
 
 
 def get_access_token():
