@@ -27,6 +27,7 @@ from tools import (
     save_recipe,
     get_plant,
     get_all_plants,
+    save_plant_assessment,
 )
 
 _EMPTY = {"type": "object", "properties": {}, "required": []}
@@ -258,6 +259,19 @@ SPECS = [
             "required": ["plant_name"],
         },
         "func": remove_plant,
+    },
+    {
+        "name": "save_plant_assessment",
+        "description": "Save a health assessment summary for a plant. Use after a photo assessment or observation to record the plant's current status.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "plant_name": {"type": "string", "description": "Name of the plant (e.g. 'Monstera')."},
+                "summary": {"type": "string", "description": "Brief health assessment summary (1-3 sentences)."},
+            },
+            "required": ["plant_name", "summary"],
+        },
+        "func": save_plant_assessment,
     },
 ]
 

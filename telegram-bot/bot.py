@@ -11,12 +11,14 @@ from dotenv import load_dotenv
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ApplicationBuilder, CallbackQueryHandler, CommandHandler, MessageHandler, filters, ContextTypes
 
+import sys
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from agents.plant_profiles import write_health_assessment
 from tools import (
     update_plant,
     get_plant,
     get_all_plants,
     save_plant_assessment,
-    note_plant_observation,
 )
 from claude_backend import ask_claude, assess_image
 from antigravity_backend import ask_antigravity, _run_agy
@@ -375,10 +377,10 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     display_text, parsed = _analyze_plant_image(image_bytes, plant)
 
     if parsed:
-        # Save structured notes to plant profile doc
+        # Save structured notes to plant profile doc (## Health Assessments section)
         profile_notes = parsed.get("profile_notes", "")
         if profile_notes:
-            note_plant_observation(plant["name"], profile_notes)
+            write_health_assessment(plant["name"], profile_notes)
 
         # Save assessment summary to DB state (existing behaviour)
         save_plant_assessment(plant["name"], parsed.get("summary", display_text))
@@ -411,10 +413,11 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                     reply_markup=keyboard,
                 )
     else:
-        # Fallback: plain text behaviour
-        save_result = save_plant_assessment(plant["name"], display_text)
-        if "saved" not in save_result.lower():
-            logger.warning(f"Failed to save plant assessment: {save_result}")
+        # Fallback: plain text behaviour — but don't persist error strings as valid assessments
+        if not display_text.startswith("Plant assessment unavailable"):
+            save_result = save_plant_assessment(plant["name"], display_text)
+            if "saved" not in save_result.lower():
+                logger.warning(f"Failed to save plant assessment: {save_result}")
         header = f"**{plant['name']}**\n\n"
         full_text = header + display_text
         for chunk in [full_text[i:i+4000] for i in range(0, len(full_text), 4000)]:

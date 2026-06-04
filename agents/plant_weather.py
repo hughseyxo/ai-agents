@@ -87,8 +87,6 @@ def _outdoor_adjustment(weather: dict) -> int:
     rain_adj = 0
     if total_rain > 10:
         rain_adj = 3
-    elif recent_rain > 10:
-        rain_adj = 2
     elif recent_rain > 5:
         rain_adj = 2
     elif forecast_rain_soon > 5:

@@ -1,5 +1,6 @@
 """Tests for agents.plant_agent — gate logic, short-circuit, rate limiting, output parsing."""
 
+import json
 import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -78,8 +79,8 @@ class TestCreateTasksShortCircuit:
         agent.context["plan"] = {"plants": plants, "weather_cache": {}}
 
     def test_returns_skipped_when_no_plants_due(self, agent):
-        # Plant watered today, due in 7 days — not due
-        plant = _make_plant(last_watered="2026-05-28", frequency_days=7)
+        # Plant watered recently, not yet due
+        plant = _make_plant(last_watered="2026-12-01", frequency_days=7)
         self._setup_context(agent, [plant])
 
         with patch.object(agent, "synthesize") as mock_synth, \
@@ -91,7 +92,7 @@ class TestCreateTasksShortCircuit:
         mock_synth.assert_not_called()
 
     def test_does_not_call_synthesize_on_short_circuit(self, agent):
-        plant = _make_plant(last_watered="2026-05-28", frequency_days=7)
+        plant = _make_plant(last_watered="2026-12-01", frequency_days=7)
         self._setup_context(agent, [plant])
 
         synthesize_spy = MagicMock()
@@ -289,7 +290,12 @@ class TestApplyIntelligenceOutput:
         self._make_profile(profile_path, plant)
         assert "## Intelligence Notes" in profile_path.read_text()
 
-        output = "[PROFILE:Peace Lily]Leaves look healthy, no yellowing.[/PROFILE]"
+        output = json.dumps({
+            "plants": [{"name": "Peace Lily", "status": "Healthy",
+                        "notes": ["Leaves look healthy, no yellowing."],
+                        "needs_photo": False, "frequency_change": None}],
+            "pruning": [], "tasks_created": [], "email_sent": False,
+        })
 
         with patch("agents.plant_agent.REPO_ROOT", tmp_path):
             agent._apply_intelligence_output(output, [plant])
@@ -305,7 +311,12 @@ class TestApplyIntelligenceOutput:
         profile_path = plants_dir / "spider-plant.md"
         assert not profile_path.exists()
 
-        output = "[PROFILE:Spider Plant]First observation: trailing stems.[/PROFILE]"
+        output = json.dumps({
+            "plants": [{"name": "Spider Plant", "status": "Healthy",
+                        "notes": ["First observation: trailing stems."],
+                        "needs_photo": False, "frequency_change": None}],
+            "pruning": [], "tasks_created": [], "email_sent": False,
+        })
 
         with patch("agents.plant_agent.REPO_ROOT", tmp_path):
             agent._apply_intelligence_output(output, [plant])
@@ -318,12 +329,15 @@ class TestApplyIntelligenceOutput:
         plants_dir = tmp_path / "docs" / "plants"
         plants_dir.mkdir(parents=True)
 
-        # No matching plant in the list
-        output = "[PROFILE:Ghost Plant]Some notes.[/PROFILE]"
+        output = json.dumps({
+            "plants": [{"name": "Ghost Plant", "status": "Healthy",
+                        "notes": ["Some notes."], "needs_photo": False, "frequency_change": None}],
+            "pruning": [], "tasks_created": [], "email_sent": False,
+        })
         profile_path = plants_dir / "ghost-plant.md"
 
         with patch("agents.plant_agent.REPO_ROOT", tmp_path):
-            agent._apply_intelligence_output(output, [])
+            agent._apply_intelligence_output(output, [])  # empty plant list
 
         # No doc created if plant not in list
         assert not profile_path.exists()
@@ -334,61 +348,68 @@ class TestApplyIntelligenceOutput:
 
         plant = _make_plant(name="Orchid", needs_photo=False)
 
-        output = "[NEEDS_PHOTO]Orchid[/NEEDS_PHOTO]"
+        output = json.dumps({
+            "plants": [{"name": "Orchid", "status": "Concerning",
+                        "notes": [], "needs_photo": True, "frequency_change": None}],
+            "pruning": [], "tasks_created": [], "email_sent": False,
+        })
 
         with patch("agents.plant_agent.REPO_ROOT", tmp_path):
             agent._apply_intelligence_output(output, [plant])
 
-        # Check that DB was updated with needs_photo=True
         plants_in_db = agent.db.get_state("daily-briefing", "plants")
         assert plants_in_db is not None
         orchid = next(p for p in plants_in_db if p["name"] == "Orchid")
         assert orchid["needs_photo"] is True
 
-    def test_needs_photo_clears_flag_for_unlisted_plants(self, agent, tmp_path):
+    def test_needs_photo_explicit_false_clears_flag(self, agent, tmp_path):
+        """Plant with needs_photo=True gets cleared when JSON explicitly sets it False."""
         plants_dir = tmp_path / "docs" / "plants"
         plants_dir.mkdir(parents=True)
 
-        # Plant had needs_photo=True but is NOT in [NEEDS_PHOTO] block
         plant = _make_plant(name="Cactus", needs_photo=True)
 
-        output = "[NEEDS_PHOTO][/NEEDS_PHOTO]"  # Empty — nobody flagged
+        output = json.dumps({
+            "plants": [{"name": "Cactus", "status": "Healthy",
+                        "notes": [], "needs_photo": False, "frequency_change": None}],
+            "pruning": [], "tasks_created": [], "email_sent": False,
+        })
 
         with patch("agents.plant_agent.REPO_ROOT", tmp_path):
             agent._apply_intelligence_output(output, [plant])
 
         plants_in_db = agent.db.get_state("daily-briefing", "plants")
-        assert plants_in_db is not None
         cactus = next(p for p in plants_in_db if p["name"] == "Cactus")
         assert cactus["needs_photo"] is False
 
-    def test_empty_needs_photo_block_is_handled_gracefully(self, agent, tmp_path):
-        plants_dir = tmp_path / "docs" / "plants"
-        plants_dir.mkdir(parents=True)
-
-        plant = _make_plant(name="Fern", needs_photo=False)
-        output = "[NEEDS_PHOTO]   [/NEEDS_PHOTO]"
-
-        # Should not raise
-        with patch("agents.plant_agent.REPO_ROOT", tmp_path):
-            agent._apply_intelligence_output(output, [plant])
-
-    def test_no_needs_photo_block_leaves_db_unchanged(self, agent, tmp_path):
+    def test_unlisted_plant_flag_unchanged(self, agent, tmp_path):
+        """Plant not mentioned in JSON output keeps its existing needs_photo flag."""
         plants_dir = tmp_path / "docs" / "plants"
         plants_dir.mkdir(parents=True)
 
         plant = _make_plant(name="Fern", needs_photo=True)
-        # Pre-seed DB state
         agent.db.set_state("daily-briefing", "plants", [plant])
 
-        output = "Just a profile block, nothing else."
+        output = json.dumps({
+            "plants": [],  # Fern not mentioned
+            "pruning": [], "tasks_created": [], "email_sent": False,
+        })
 
         with patch("agents.plant_agent.REPO_ROOT", tmp_path):
             agent._apply_intelligence_output(output, [plant])
 
-        # DB state should be unchanged since no NEEDS_PHOTO block was present
         plants_in_db = agent.db.get_state("daily-briefing", "plants")
         assert plants_in_db[0]["needs_photo"] is True
+
+    def test_invalid_json_logs_and_skips(self, agent, tmp_path, capsys):
+        plants_dir = tmp_path / "docs" / "plants"
+        plants_dir.mkdir(parents=True)
+
+        with patch("agents.plant_agent.REPO_ROOT", tmp_path):
+            agent._apply_intelligence_output("not valid json", [])
+
+        captured = capsys.readouterr()
+        assert "parse failed" in captured.err
 
     def test_multiple_profile_blocks_all_applied(self, agent, tmp_path):
         plants_dir = tmp_path / "docs" / "plants"
@@ -399,10 +420,15 @@ class TestApplyIntelligenceOutput:
         for plant in [fern, cactus]:
             self._make_profile(plants_dir / f"{plant['name'].lower()}.md", plant)
 
-        output = (
-            "[PROFILE:Fern]Fern looks lush.[/PROFILE]\n"
-            "[PROFILE:Cactus]Cactus is thriving.[/PROFILE]"
-        )
+        output = json.dumps({
+            "plants": [
+                {"name": "Fern", "status": "Healthy", "notes": ["Fern looks lush."],
+                 "needs_photo": False, "frequency_change": None},
+                {"name": "Cactus", "status": "Healthy", "notes": ["Cactus is thriving."],
+                 "needs_photo": False, "frequency_change": None},
+            ],
+            "pruning": [], "tasks_created": [], "email_sent": False,
+        })
 
         with patch("agents.plant_agent.REPO_ROOT", tmp_path):
             agent._apply_intelligence_output(output, [fern, cactus])
@@ -491,7 +517,13 @@ class TestIntelligenceFrequency:
         plants = [{"name": "Lantana", "frequency_days": 7, "baseline_frequency_days": 7,
                    "location": "outdoor", "last_watered": "2026-05-31"}]
         a.context = {"plan": {"plants": plants}}
-        a._apply_intelligence_output("[FREQUENCY]\nLantana — 3 — wilting\n[/FREQUENCY]", plants)
+        output = json.dumps({
+            "plants": [{"name": "Lantana", "status": "Stressed", "notes": ["wilting"],
+                        "needs_photo": False,
+                        "frequency_change": {"days": 3, "reason": "wilting"}}],
+            "pruning": [], "tasks_created": [], "email_sent": False,
+        })
+        a._apply_intelligence_output(output, plants)
         assert plants[0]["baseline_frequency_days"] == 5   # 7 -> 5 (step -2)
         assert plants[0]["frequency_days"] == 5            # no weather -> baseline
         assert "7→5 days" in (tmp_path / "lantana.md").read_text()
@@ -500,7 +532,7 @@ class TestIntelligenceFrequency:
 def test_intelligence_prompt_documents_frequency_marker():
     import agents.plant_agent as mod
     text = (mod.REPO_ROOT / "agents" / "prompts" / "plant_intelligence.md").read_text()
-    assert "[FREQUENCY]" in text and "[/FREQUENCY]" in text
+    assert "frequency_change" in text
     assert "baseline" in text.lower()
 
 

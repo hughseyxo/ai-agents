@@ -18,7 +18,7 @@ from agents.plant_weather import weather_adjusted_frequency, MIN_FREQUENCY, MAX_
 from agents.weather import fetch_weather
 from agents.plant_profiles import append_frequency_history
 
-AGENTS = ["daily-briefing", "news-briefing", "security-audit", "travel-agent"]
+AGENTS = ["daily-briefing", "news-briefing", "security-audit", "travel-agent", "librarian", "plant-agent", "agent-health"]
 DB_PATH = Path(__file__).parent.parent / "data" / "agents.db"
 LOG_PATH = str(Path(__file__).parent.parent / "output" / "cron.log")
 YOPFLIX_CONFIG = str(Path.home() / "git" / "yopflix" / "seedbox" / "config.yaml")
@@ -361,6 +361,7 @@ def add_plant(name: str, frequency_days: int, location: str = "indoor", sunlight
         plants.append({
             "name": name,
             "frequency_days": frequency_days,
+            "baseline_frequency_days": frequency_days,
             "last_watered": date.today().isoformat(),
             "location": location,
             "sunlight": sunlight,

@@ -10,8 +10,9 @@ from pathlib import Path
 import requests
 
 from .base import BaseAgent, REPO_ROOT
+from .plant_model import PlantIntelligenceResult
 from .plant_weather import weather_adjusted_frequency, apply_frequency_step, is_heatwave_incoming
-from .plant_profiles import append_frequency_history
+from .plant_profiles import append_frequency_history, write_health_assessment, write_profile_atomic
 from .weather import fetch_weather
 
 PERSONAL_PROJECT_ID = "6Crf3cH2RF5v86wc"
@@ -113,7 +114,7 @@ def _create_profile_doc(path: Path, plant: dict):
 <!-- Appended by each intelligence run -->
 """
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content)
+    write_profile_atomic(path, content)
 
 
 def _extract_json_array(raw: str) -> list:
@@ -181,6 +182,7 @@ class PlantAgent(BaseAgent):
 
     def _weather_update(self):
         weather = fetch_weather()
+        self.context["weather"] = weather  # reused by _create_tasks and _intelligence_run
         plants = self.context["plan"]["plants"]
         changed = False
         for plant in plants:
@@ -249,7 +251,7 @@ class PlantAgent(BaseAgent):
         plants = self.context["plan"]["plants"]
         weather_cache = self.context["plan"]["weather_cache"]
         today = datetime.now(timezone.utc).date()
-        weather = fetch_weather()
+        weather = self.context.get("weather") or fetch_weather()
 
         tasks_to_create = due_water_tasks(plants, today, weather)
 
@@ -368,7 +370,7 @@ class PlantAgent(BaseAgent):
         return {"sent": True, "plants": len(plants)}
 
     def _intelligence_run(self):
-        if not self._gate("intelligence_run", 72):
+        if not self._gate("intelligence_run", 24):
             return {"skipped": True}
 
         plants = self.context["plan"]["plants"]
@@ -407,8 +409,8 @@ class PlantAgent(BaseAgent):
         try:
             output = self.synthesize(prompt)
         except Exception as e:
+            # Don't mark the gate — let it retry on the next hourly run
             print(f"[{self.name}] Intelligence run LLM failed: {e}", file=sys.stderr)
-            self._mark_ran("intelligence_run")
             return {"skipped": True, "error": str(e)}
         self._apply_intelligence_output(output, plants)
         self._mark_ran("intelligence_run")
@@ -417,94 +419,83 @@ class PlantAgent(BaseAgent):
     def _apply_intelligence_output(self, output: str, plants: list):
         PLANTS_DIR = REPO_ROOT / "docs" / "plants"
         today = datetime.now(timezone.utc).date().isoformat()
+        weather = self.context.get("weather")
 
-        for m in re.finditer(r'\[PROFILE:([^\]]+)\](.*?)\[/PROFILE\]', output, re.DOTALL):
-            plant_name = m.group(1).strip()
-            notes = m.group(2).strip()
-            if not notes:
-                continue
-            slug = plant_name.lower().replace(" ", "-").replace("/", "-")
-            profile_path = PLANTS_DIR / f"{slug}.md"
-            if not profile_path.exists():
-                plant = next((p for p in plants if p["name"].lower() == plant_name.lower()), None)
-                if plant:
-                    _create_profile_doc(profile_path, plant)
-            if profile_path.exists():
-                content = profile_path.read_text()
-                entry = f"\n### {today}\n{notes}\n"
-                if "## Intelligence Notes" in content:
-                    content = content.replace(
-                        "<!-- Appended by each intelligence run -->",
-                        f"<!-- Appended by each intelligence run -->{entry}"
-                    )
-                else:
-                    content += f"\n## Intelligence Notes\n<!-- Appended by each intelligence run -->{entry}"
-                profile_path.write_text(content)
+        try:
+            result = PlantIntelligenceResult.from_llm_output(output)
+        except Exception as e:
+            print(f"[{self.name}] Intelligence output parse failed: {e}", file=sys.stderr)
+            print(f"[{self.name}] Raw output (first 500 chars): {output[:500]}", file=sys.stderr)
+            return
 
-        pruning_m = re.search(r'\[PRUNING\](.*?)\[/PRUNING\]', output, re.DOTALL)
-        if pruning_m:
-            for line in pruning_m.group(1).strip().splitlines():
-                line = line.strip()
-                if not line or " — " not in line:
-                    continue
-                plant_name, action = line.split(" — ", 1)
-                plant_name = plant_name.strip()
+        freq_changed = False
+        needs_photo_changed = False
+
+        for entry in result.plants:
+            plant_name = entry.name
+            plant = next((p for p in plants if p["name"].lower() == plant_name.lower()), None)
+
+            # Append intelligence notes to profile
+            if entry.notes:
                 slug = plant_name.lower().replace(" ", "-").replace("/", "-")
                 profile_path = PLANTS_DIR / f"{slug}.md"
+                if not profile_path.exists() and plant:
+                    _create_profile_doc(profile_path, plant)
                 if profile_path.exists():
+                    notes_text = "\n".join(f"- {n}" for n in entry.notes)
+                    note_entry = f"\n### {today}\n{notes_text}\n"
                     content = profile_path.read_text()
-                    entry = f"\n### {today} (pruning)\n- {action.strip()}\n"
                     if "## Intelligence Notes" in content:
                         content = content.replace(
                             "<!-- Appended by each intelligence run -->",
-                            f"<!-- Appended by each intelligence run -->{entry}"
+                            f"<!-- Appended by each intelligence run -->{note_entry}",
                         )
                     else:
-                        content += f"\n## Intelligence Notes\n<!-- Appended by each intelligence run -->{entry}"
-                    profile_path.write_text(content)
+                        content += f"\n## Intelligence Notes\n<!-- Appended by each intelligence run -->{note_entry}"
+                    write_profile_atomic(profile_path, content)
 
-        freq_m = re.search(r'\[FREQUENCY\](.*?)\[/FREQUENCY\]', output, re.DOTALL)
-        if freq_m:
-            changed = False
-            for line in freq_m.group(1).strip().splitlines():
-                line = line.strip()
-                if " — " not in line:
-                    continue
-                parts = [s.strip() for s in line.split(" — ")]
-                if len(parts) < 2:
-                    continue
-                name = parts[0]
-                try:
-                    target = int(parts[1])
-                except ValueError:
-                    continue
-                note = parts[2] if len(parts) > 2 else ""
-                plant = next((p for p in plants if p["name"].lower() == name.lower()), None)
-                if not plant:
-                    continue
+            # Apply frequency change
+            if entry.frequency_change and plant:
+                target = entry.frequency_change.days
+                reason = entry.frequency_change.reason
                 old = plant.get("baseline_frequency_days", plant["frequency_days"])
                 new = apply_frequency_step(old, target)
                 if new != old:
                     plant["baseline_frequency_days"] = new
-                    plant["frequency_days"], _ = weather_adjusted_frequency(plant, fetch_weather())
-                    append_frequency_history(plant["name"], old, new, f"intelligence: {note}".rstrip(": ").strip())
-                    changed = True
-            if changed:
-                self.db.set_state("daily-briefing", "plants", plants)
+                    plant["frequency_days"], _ = weather_adjusted_frequency(plant, weather)
+                    ok = append_frequency_history(
+                        plant["name"], old, new, f"intelligence: {reason}".rstrip(": ").strip()
+                    )
+                    if not ok:
+                        print(f"[{self.name}] append_frequency_history skipped — no profile for {plant['name']}", file=sys.stderr)
+                    freq_changed = True
 
-        needs_photo_m = re.search(r'\[NEEDS_PHOTO\](.*?)\[/NEEDS_PHOTO\]', output, re.DOTALL)
-        if needs_photo_m:
-            flagged_raw = needs_photo_m.group(1).strip()
-            flagged = {n.strip().lower() for n in flagged_raw.split(",") if n.strip()}
-            updated = []
-            changed = False
-            for plant in plants:
-                new_flag = plant["name"].lower() in flagged
-                if new_flag != plant.get("needs_photo", False):
-                    changed = True
-                updated.append({**plant, "needs_photo": new_flag})
-            if changed:
-                self.db.set_state("daily-briefing", "plants", updated)
+            # Update needs_photo flag
+            if plant and entry.needs_photo != plant.get("needs_photo", False):
+                plant["needs_photo"] = entry.needs_photo
+                needs_photo_changed = True
+
+        if freq_changed or needs_photo_changed:
+            self.db.set_state("daily-briefing", "plants", plants)
+
+        # Append pruning notes
+        for pruning in result.pruning:
+            slug = pruning.name.lower().replace(" ", "-").replace("/", "-")
+            profile_path = PLANTS_DIR / f"{slug}.md"
+            if profile_path.exists():
+                action_text = pruning.action
+                if pruning.reason:
+                    action_text += f" ({pruning.reason})"
+                pruning_entry = f"\n### {today} (pruning)\n- {action_text}\n"
+                content = profile_path.read_text()
+                if "## Intelligence Notes" in content:
+                    content = content.replace(
+                        "<!-- Appended by each intelligence run -->",
+                        f"<!-- Appended by each intelligence run -->{pruning_entry}",
+                    )
+                else:
+                    content += f"\n## Intelligence Notes\n<!-- Appended by each intelligence run -->{pruning_entry}"
+                write_profile_atomic(profile_path, content)
 
     def report(self) -> str:
         weather = self.context.get("weather_update", {})
