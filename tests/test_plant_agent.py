@@ -468,11 +468,12 @@ class TestWeatherRecompute:
         self._agent(plants, self.HOT, monkeypatch, tmp_path)._weather_update()
         assert plants[0]["frequency_days"] == 4   # 7-3
 
-    def test_weather_failure_resets_to_baseline(self, monkeypatch, tmp_path):
+    def test_weather_failure_preserves_adjusted_frequency(self, monkeypatch, tmp_path):
+        # fetch_weather() returning None must NOT revert frequency_days to baseline
         plants = [{"name": "X", "frequency_days": 4, "baseline_frequency_days": 7,
                    "location": "outdoor", "last_watered": "2026-05-31"}]
         self._agent(plants, None, monkeypatch, tmp_path)._weather_update()
-        assert plants[0]["frequency_days"] == 7
+        assert plants[0]["frequency_days"] == 4
 
 
 # ---------------------------------------------------------------------------

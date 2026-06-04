@@ -185,10 +185,17 @@ class PlantAgent(BaseAgent):
         self.context["weather"] = weather  # reused by _create_tasks and _intelligence_run
         plants = self.context["plan"]["plants"]
         changed = False
+        # Baseline migration is weather-independent — always run
         for plant in plants:
             if "baseline_frequency_days" not in plant:
                 plant["baseline_frequency_days"] = plant["frequency_days"]
                 changed = True
+        if weather is None:
+            print(f"[{self.name}] Weather fetch failed — keeping existing frequency adjustments", file=sys.stderr)
+            if changed:
+                self.db.set_state("daily-briefing", "plants", plants)
+            return {"updated": 0, "skipped": "weather_unavailable"}
+        for plant in plants:
             new_freq, reason = weather_adjusted_frequency(plant, weather)
             if new_freq != plant.get("frequency_days"):
                 plant["frequency_days"] = new_freq
