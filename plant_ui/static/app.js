@@ -412,8 +412,7 @@ function plantApp() {
 
     renderMarkdown(markdownStr) {
       if (!markdownStr) return '';
-      // Parse markdown to HTML using marked.js
-      return window.marked.parse(markdownStr);
+      return window.DOMPurify.sanitize(window.marked.parse(markdownStr));
     }
   };
 }

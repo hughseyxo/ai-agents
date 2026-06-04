@@ -11,7 +11,6 @@ from typing import Optional, Literal
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Depends, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, FileResponse
 from pydantic import BaseModel, Field
 
@@ -34,14 +33,6 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("plant_ui")
 
 app = FastAPI(title="Plant AI PWA")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 # Constants
 PERSONAL_PROJECT_ID = "6Crf3cH2RF5v86wc"
