@@ -113,6 +113,17 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 │       │   └── 2026-05-17-server-concierge-bot-design.md  # Concierge bot spec
 │       └── plans/
 │           └── 2026-05-17-laptop-server-bridge.md  # Laptop↔server bridge implementation plan
+├── plant_ui/           # FloraPulse Progressive Web App (PWA) served over Tailscale (port 8765)
+│   ├── server.py              # FastAPI app — REST API + static file serving
+│   ├── requirements.txt       # fastapi, uvicorn, python-multipart, aiofiles, python-dotenv, httpx, pillow
+│   ├── plant_ui.service       # systemd user service template
+│   ├── static/
+│   │   ├── manifest.json      # PWA manifest
+│   │   ├── sw.js              # PWA service worker
+│   │   ├── app.js             # Alpine.js logic
+│   │   └── style.css          # Vanilla CSS mobile-first stylesheet
+│   └── templates/
+│       └── index.html         # Alpine.js SPA page shell
 ├── free_time_bot.py    # Telegram bot: free-time task advisor (systemd service)
 ├── mealsave-bot.service # Telegram bot: recipe saver (systemd service)
 ├── plant.sh            # CLI tool: manage plant watering tracker (add/list/remove)
@@ -176,3 +187,11 @@ Configured for both Claude (`.mcp.json`) and Antigravity (`mcp_config.json`):
 - **Service:** `concierge-bot.service` (systemd user service, `~/.config/systemd/user/`)
 - **Latency:** each reply spawns the CLI + MCP server (~2–6s); "typing" indicator covers it.
 - **Design docs:** `docs/superpowers/specs/2026-05-17-server-concierge-bot-design.md` (original), `docs/superpowers/specs/2026-05-31-concierge-claude-backend-design.md` (claude backend), `docs/concierge-antigravity-primary.md` (Antigravity-primary backend chain)
+
+# FloraPulse Plant PWA
+- **Role:** Mobile-first Progressive Web App (PWA) dashboard, plant management (CRUD), photo uploads, and Claude Opus diagnostics.
+- **Port:** 8765, bound to `0.0.0.0` (Tailscale: `100.96.86.73:8765`).
+- **Service:** `plant_ui.service` (systemd user service, `~/.config/systemd/user/`)
+- **Frontend:** Single Page Application (SPA) loading Alpine.js and Marked.js from CDN, custom vanilla CSS styling, service worker cached assets for offline capabilities.
+- **Verification:** API tests live in `tests/test_plant_ui_api.py`. Runs via `.venv/bin/pytest tests/test_plant_ui_api.py`.
+

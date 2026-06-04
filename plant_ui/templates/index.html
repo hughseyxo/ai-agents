@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#1b4332">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" href="/static/icon-192.png">
+  <link rel="manifest" href="/static/manifest.json">
+  <title>Plant AI Dashboard</title>
+  
+  <!-- Fonts & Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+  
+  <!-- Markdown parser -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <!-- Alpine.js -->
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body x-data="plantApp()" x-init="init()" class="bg-gradient text-white min-h-screen">
+
+  <!-- Safe Area Wrapper -->
+  <div class="safe-area-top"></div>
+
+  <!-- Header -->
+  <header class="glass-header sticky-header">
+    <div class="header-container container">
+      <div class="logo-area" @click="setView('dashboard')">
+        <span class="logo-icon">🌿</span>
+        <div>
+          <h1>FloraPulse</h1>
+          <span class="sub-logo">Idempotent Plant Intelligence</span>
+        </div>
+      </div>
+      <div class="status-indicators">
+        <!-- Weather Status Badge -->
+        <div class="indicator-badge" @click="showWeatherModal = true">
+          <span class="badge-icon">⛅</span>
+          <span class="badge-text" x-text="weatherCount > 0 ? `${weatherCount} active` : 'normal'"></span>
+        </div>
+        <!-- Health Monitor Badge -->
+        <div class="indicator-badge" @click="showStatusModal = true">
+          <span class="badge-icon">⚙️</span>
+          <span class="badge-text">system</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Area -->
+  <main class="container main-content">
+    
+    <!-- View: Dashboard (Home) -->
+    <div x-show="currentView === 'dashboard'" x-transition:enter="transition-fade-in" class="view-pane">
+      
+      <!-- Filter and Stats Bar -->
+      <section class="control-bar glass-panel">
+        <div class="filter-toggles">
+          <button @click="setFilter('all')" :class="activeFilter === 'all' ? 'btn-toggle active' : 'btn-toggle'">All</button>
+          <button @click="setFilter('indoor')" :class="activeFilter === 'indoor' ? 'btn-toggle active' : 'btn-toggle'">🏠 Indoor</button>
+          <button @click="setFilter('outdoor')" :class="activeFilter === 'outdoor' ? 'btn-toggle active' : 'btn-toggle'">☀️ Outdoor</button>
+        </div>
+        <div class="stats-summary">
+          <div class="stat-item">
+            <span class="stat-value text-danger" x-text="stats.overdue">0</span>
+            <span class="stat-label">Overdue</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value text-success" x-text="stats.healthy">0</span>
+            <span class="stat-label">Healthy</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Plant Cards Grid -->
+      <section class="plant-grid-section">
+        <div x-show="filteredPlants().length === 0" class="empty-state glass-panel">
+          <div class="empty-icon">🪴</div>
+          <h3>No plants found</h3>
+          <p>Add your first plant to begin tracking.</p>
+          <button class="btn btn-primary" @click="openAddForm()">Add Plant</button>
+        </div>
+
+        <div class="plant-grid" x-show="filteredPlants().length > 0">
+          <template x-for="plant in filteredPlants()" :key="plant.name">
+            <div class="plant-card glass-panel" :class="plant.overdue_days > 0 ? 'border-overdue' : ''">
+              <div class="card-header" @click="viewPlantDetail(plant.name)">
+                <div class="plant-name-block">
+                  <h2 x-text="plant.name" class="plant-name"></h2>
+                  <div class="badges-row">
+                    <span :class="'badge badge-' + plant.location" x-text="plant.location === 'indoor' ? '🏠 Indoor' : '☀️ Outdoor'"></span>
+                    <span :class="'badge status-' + plant.status_label.toLowerCase()" x-text="plant.status_label"></span>
+                    
+                    <!-- Weather adjustment badge -->
+                    <template x-if="plant.frequency_days !== plant.baseline_frequency_days">
+                      <span class="badge badge-weather-adjust" :title="'Baseline: ' + plant.baseline_frequency_days + 'd, Current: ' + plant.frequency_days + 'd'">
+                        <span x-text="plant.frequency_days < plant.baseline_frequency_days ? '🌧️ ↑ ' : '🔥 ↓ '"></span>
+                        <span x-text="plant.frequency_days + 'd'"></span>
+                      </span>
+                    </template>
+                  </div>
+                </div>
+                <div class="card-chevron">→</div>
+              </div>
+
+              <div class="card-body">
+                <div class="watering-info" @click="viewPlantDetail(plant.name)">
+                  <div class="info-row">
+                    <span class="info-label">Last Watered</span>
+                    <span class="info-val" x-text="formatDate(plant.last_watered)"></span>
+                  </div>
+                  <div class="info-row">
+                    <span class="info-label">Next Due</span>
+                    <span class="info-val" :class="plant.overdue_days > 0 ? 'text-danger font-bold' : ''">
+                      <span x-text="formatDate(plant.next_due_date)"></span>
+                      <template x-if="plant.overdue_days > 0">
+                        <span x-text="` (${plant.overdue_days}d overdue)`"></span>
+                      </template>
+                    </span>
+                  </div>
+                </div>
+                
+                <div class="card-actions">
+                  <button class="btn btn-water" 
+                          :class="plant.loading ? 'loading' : ''"
+                          @click="waterPlant(plant.name)"
+                          :disabled="plant.loading">
+                    <span x-show="!plant.loading">💧 Water</span>
+                    <span x-show="plant.loading" class="spinner"></span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </template>
+        </div>
+      </section>
+    </div>
+
+    <!-- View: Plant Detail -->
+    <div x-show="currentView === 'detail'" x-transition:enter="transition-fade-in" class="view-pane" x-data="{ activeTab: 'info' }">
+      <div x-show="activePlant" class="detail-container">
+        
+        <!-- Detail Header -->
+        <section class="detail-header glass-panel">
+          <button class="btn btn-back" @click="setView('dashboard')">← Back to Dashboard</button>
+          
+          <div class="detail-title-block">
+            <h1 x-text="activePlant?.plant?.name"></h1>
+            <div class="badges-row">
+              <span :class="'badge badge-' + activePlant?.plant?.location" x-text="activePlant?.plant?.location === 'indoor' ? '🏠 Indoor' : '☀️ Outdoor'"></span>
+              <span :class="'badge status-' + (activePlant?.plant?.last_assessment?.status || 'unknown').toLowerCase()" x-text="activePlant?.plant?.last_assessment?.status || 'Unknown'"></span>
+              <template x-if="activePlant?.plant?.needs_photo">
+                <span class="badge badge-warning animate-pulse">📸 Photo Needed</span>
+              </template>
+            </div>
+          </div>
+
+          <div class="header-action-row">
+            <button class="btn btn-primary btn-water-large" :class="activePlantLoading ? 'loading' : ''" @click="waterActivePlant()" :disabled="activePlantLoading">
+              <span x-show="!activePlantLoading">💧 Mark Watered Today</span>
+              <span x-show="activePlantLoading" class="spinner"></span>
+            </button>
+            <button class="btn btn-secondary" @click="openPhotoUpload()"><span class="btn-icon">📸</span> Diagnose Health</button>
+            <button class="btn btn-outline" @click="openEditForm(activePlant?.plant)"><span class="btn-icon">✏️</span> Edit</button>
+            <button class="btn btn-danger" @click="deletePlant(activePlant?.plant?.name)"><span class="btn-icon">🗑️</span> Delete</button>
+          </div>
+        </section>
+
+        <!-- Detail Tabs -->
+        <div class="detail-tabs">
+          <button @click="activeTab = 'info'" :class="activeTab === 'info' ? 'tab-btn active' : 'tab-btn'">Data & Diagnostics</button>
+          <button @click="activeTab = 'profile'" :class="activeTab === 'profile' ? 'tab-btn active' : 'tab-btn'">Knowledge Profile</button>
+        </div>
+
+        <!-- Tab Content: Info -->
+        <div x-show="activeTab === 'info'" class="tab-pane">
+          <div class="detail-grid">
+            
+            <!-- Metadata Panel -->
+            <div class="glass-panel info-box">
+              <h3>Watering Configuration</h3>
+              <div class="meta-list">
+                <div class="meta-item">
+                  <span class="meta-label">Intrinsic Cadence</span>
+                  <span class="meta-val" x-text="`${activePlant?.plant?.baseline_frequency_days} days`"></span>
+                </div>
+                <div class="meta-item">
+                  <span class="meta-label">Effective Frequency</span>
+                  <span class="meta-val" x-text="`${activePlant?.plant?.frequency_days} days`"></span>
+                </div>
+                <div class="meta-item">
+                  <span class="meta-label">Sunlight Needs</span>
+                  <span class="meta-val" x-text="activePlant?.plant?.sunlight || 'Not specified'"></span>
+                </div>
+                <div class="meta-item">
+                  <span class="meta-label">Water Sensitivity</span>
+                  <span class="meta-val capitalize" x-text="activePlant?.plant?.water_sensitivity || 'medium'"></span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Health Assessment Panel -->
+            <div class="glass-panel info-box">
+              <h3>Last Vision Assessment</h3>
+              <div class="assessment-content">
+                <template x-if="activePlant?.plant?.last_assessment">
+                  <div>
+                    <div class="assessment-meta">
+                      <span class="assessment-date" x-text="formatDate(activePlant?.plant?.last_assessment?.date)"></span>
+                      <span :class="'badge status-' + activePlant?.plant?.last_assessment?.status.toLowerCase()" x-text="activePlant?.plant?.last_assessment?.status"></span>
+                    </div>
+                    <p class="assessment-summary" x-text="activePlant?.plant?.last_assessment?.summary"></p>
+                  </div>
+                </template>
+                <template x-if="!activePlant?.plant?.last_assessment">
+                  <div class="no-assessment">
+                    <p>No vision health assessment has been saved yet.</p>
+                    <button class="btn btn-secondary btn-sm" @click="openPhotoUpload()">Analyze Now</button>
+                  </div>
+                </template>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Tab Content: Profile Markdown -->
+        <div x-show="activeTab === 'profile'" class="tab-pane">
+          <div class="glass-panel profile-markdown-panel">
+            <template x-if="activePlant?.markdown">
+              <div class="markdown-body" x-html="renderMarkdown(activePlant.markdown)"></div>
+            </template>
+            <template x-if="!activePlant?.markdown">
+              <div class="markdown-body">
+                <p>No profile document found. Creating a plant automatically initializes its profile.</p>
+              </div>
+            </template>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- View: Add / Edit Form -->
+    <div x-show="currentView === 'form'" x-transition:enter="transition-fade-in" class="view-pane">
+      <section class="form-container glass-panel">
+        <h2 x-text="formMode === 'add' ? 'Add New Plant' : 'Edit Plant Details'"></h2>
+        
+        <form @submit.prevent="saveForm()">
+          <div class="form-group">
+            <label for="plant-name">Plant Name</label>
+            <input type="text" id="plant-name" x-model="formData.name" placeholder="e.g. Fiddle Leaf Fig" required :disabled="formMode === 'edit'">
+            <span class="help-text" x-show="formMode === 'edit'">Name cannot be modified after creation.</span>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="plant-freq">Baseline Frequency (days)</label>
+              <input type="number" id="plant-freq" x-model.number="formData.frequency_days" min="1" max="30" required>
+            </div>
+            <div class="form-group">
+              <label for="plant-location">Location</label>
+              <select id="plant-location" x-model="formData.location">
+                <option value="indoor">🏠 Indoor</option>
+                <option value="outdoor">☀️ Outdoor</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="plant-sunlight">Sunlight Needs</label>
+              <select id="plant-sunlight" x-model="formData.sunlight">
+                <option value="shade">Shade</option>
+                <option value="partial shade">Partial Shade</option>
+                <option value="full sun">Full Sun</option>
+                <option value="unknown">Unknown / Mixed</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="plant-sensitivity">Water Sensitivity</label>
+              <select id="plant-sensitivity" x-model="formData.water_sensitivity">
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" :class="formSubmitting ? 'loading' : ''" :disabled="formSubmitting">
+              <span x-show="!formSubmitting">Save Plant</span>
+              <span x-show="formSubmitting" class="spinner"></span>
+            </button>
+            <button type="button" class="btn btn-outline" @click="cancelForm()">Cancel</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <!-- View: Photo Upload & Diagnosis -->
+    <div x-show="currentView === 'photo'" x-transition:enter="transition-fade-in" class="view-pane">
+      <section class="photo-container glass-panel">
+        <button class="btn btn-back" @click="viewPlantDetail(activePlant?.plant?.name)">← Back to Detail</button>
+        
+        <h2>Health Assessment for <span x-text="activePlant?.plant?.name"></span></h2>
+        <p class="photo-desc">Upload a photo of the plant. A high-accuracy Claude Opus model will analyze its leaves, soil, and overall visual state to deliver customized health diagnostics.</p>
+
+        <div class="file-uploader" :class="photoSelected ? 'has-file' : ''">
+          <input type="file" id="plant-photo-input" accept="image/*" capture="environment" @change="handlePhotoSelect" class="file-input">
+          
+          <div class="upload-prompt" x-show="!photoSelected">
+            <span class="upload-icon">📸</span>
+            <p>Tap to take a photo or select from gallery</p>
+          </div>
+
+          <div class="upload-preview-container" x-show="photoSelected">
+            <img id="photo-preview" src="" alt="Selected image preview" class="upload-preview">
+            <button class="btn btn-danger btn-sm remove-photo" @click="clearPhoto()">Remove</button>
+          </div>
+        </div>
+
+        <div class="photo-actions" x-show="photoSelected">
+          <button class="btn btn-primary btn-block" :class="photoUploading ? 'loading' : ''" @click="submitPhoto()" :disabled="photoUploading">
+            <span x-show="!photoUploading">🔍 Run Claude Diagnostic</span>
+            <span x-show="photoUploading" class="spinner-container">
+              <span class="spinner"></span>
+              <span class="spinner-text">Claude is analyzing your plant (approx 10-20s)...</span>
+            </span>
+          </button>
+        </div>
+
+        <!-- Diagnostic Response Panel -->
+        <div x-show="diagnosticResult" class="diagnostic-result-panel" x-transition:enter="transition-fade-in">
+          <h3>Assessment Report</h3>
+          
+          <!-- Structured Output Display -->
+          <div class="glass-panel result-details">
+            <div class="result-markdown markdown-body" x-html="renderMarkdown(diagnosticResult.display_text)"></div>
+            
+            <!-- Frequency suggestion block -->
+            <template x-if="diagnosticResult.frequency_suggestion">
+              <div class="frequency-proposal-box">
+                <p>💡 <strong>Frequency Suggestion:</strong> Adjust watering cadence to <strong><span x-text="diagnosticResult.frequency_suggestion.days"></span> days</strong>.</p>
+                <p class="proposal-reason" x-text="diagnosticResult.frequency_suggestion.reason"></p>
+                
+                <div class="proposal-actions">
+                  <button class="btn btn-success btn-sm" @click="applySuggestedFrequency(diagnosticResult.frequency_suggestion.days, diagnosticResult.frequency_suggestion.reason)">✓ Apply Change</button>
+                  <button class="btn btn-outline btn-sm" @click="dismissSuggestedFrequency()">✗ Dismiss</button>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+      </section>
+    </div>
+
+  </main>
+
+  <!-- Floating Action Buttons -->
+  <div class="fab-group" x-show="currentView === 'dashboard'">
+    <button class="fab btn-water-all" @click="waterAll('indoor')" title="Water all indoor plants">🏠 Water All Indoor</button>
+    <button class="fab btn-water-all" @click="waterAll('outdoor')" title="Water all outdoor plants">☀️ Water All Outdoor</button>
+    <button class="fab fab-add" @click="openAddForm()" title="Add a plant">+</button>
+  </div>
+
+  <!-- Modal: Weather adjusted details -->
+  <div class="modal-overlay" x-show="showWeatherModal" @click.self="showWeatherModal = false" x-transition>
+    <div class="modal glass-panel">
+      <div class="modal-header">
+        <h3>Active Weather Adjustments</h3>
+        <button class="modal-close" @click="showWeatherModal = false">×</button>
+      </div>
+      <div class="modal-body">
+        <template x-if="weatherData.length === 0">
+          <p>No weather adjustments are currently active.</p>
+        </template>
+        <template x-if="weatherData.length > 0">
+          <div class="weather-table-container">
+            <table class="weather-table">
+              <thead>
+                <tr>
+                  <th>Plant</th>
+                  <th>Adjusted Date</th>
+                  <th>Reason</th>
+                </tr>
+              </thead>
+              <tbody>
+                <template x-for="item in weatherData" :key="item.plant_name">
+                  <tr>
+                    <td class="font-bold" x-text="item.plant_name"></td>
+                    <td x-text="formatDate(item.adjusted_date)"></td>
+                    <td class="text-sm italic" x-text="item.adjustment_reason"></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </template>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Agent Status details -->
+  <div class="modal-overlay" x-show="showStatusModal" @click.self="showStatusModal = false" x-transition>
+    <div class="modal glass-panel">
+      <div class="modal-header">
+        <h3>Background Agent Health</h3>
+        <button class="modal-close" @click="showStatusModal = false">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="status-list">
+          <div class="status-item">
+            <span class="status-name">Sync Watering Gate (24h)</span>
+            <span class="status-val" x-text="formatDateTime(agentStatus.sync_watering)"></span>
+          </div>
+          <div class="status-item">
+            <span class="status-name">Create Tasks Gate (12h)</span>
+            <span class="status-val" x-text="formatDateTime(agentStatus.create_tasks)"></span>
+          </div>
+          <div class="status-item">
+            <span class="status-name">Photo Requests Gate (24h)</span>
+            <span class="status-val" x-text="formatDateTime(agentStatus.photo_requests)"></span>
+          </div>
+          <div class="status-item">
+            <span class="status-name">Status Email Gate (24h)</span>
+            <span class="status-val" x-text="formatDateTime(agentStatus.send_status_email)"></span>
+          </div>
+          <div class="status-item">
+            <span class="status-name">Intelligence Run Gate (24h)</span>
+            <span class="status-val" x-text="formatDateTime(agentStatus.intelligence_run)"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Safe Area Bottom -->
+  <div class="safe-area-bottom"></div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

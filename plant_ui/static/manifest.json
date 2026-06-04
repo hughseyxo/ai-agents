@@ -1,0 +1,21 @@
+{
+  "name": "FloraPulse Plant Intelligence",
+  "short_name": "FloraPulse",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0a110d",
+  "theme_color": "#1b4332",
+  "icons": [
+    {
+      "src": "/static/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/static/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

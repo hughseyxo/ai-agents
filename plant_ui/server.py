@@ -1,0 +1,554 @@
+import sys
+import os
+import re
+import json
+import logging
+import tempfile
+import httpx
+from datetime import date, datetime, timedelta
+from pathlib import Path
+from typing import Optional, Literal
+
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Depends, BackgroundTasks
+from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse, FileResponse
+from pydantic import BaseModel, Field
+
+# Ensure project directories are in path
+REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_ROOT))
+sys.path.insert(0, str(REPO_ROOT / "telegram-bot"))
+
+from agents.plant_model import PlantStore, Plant, AssessmentRecord
+from agents.db import AgentDB
+from agents.plant_profiles import (
+    write_health_assessment,
+    append_frequency_history,
+    profile_path,
+    write_profile_atomic
+)
+from claude_backend import assess_image
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("plant_ui")
+
+app = FastAPI(title="Plant AI PWA")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Constants
+PERSONAL_PROJECT_ID = "6Crf3cH2RF5v86wc"
+PLANT_ASSESSMENT_SYSTEM_PATH = REPO_ROOT / "agents" / "prompts" / "plant_photo_assessment.md"
+SPECIES_REFERENCE_PATH = REPO_ROOT / "docs" / "plants" / "species_reference.md"
+PLANT_HEALTH_SYSTEM = (
+    "You are a plant health expert. Assess the plant in the photo. "
+    "Give specific observations about its health and concise actionable advice. "
+    "Keep your response to 3-5 sentences."
+)
+
+# Pydantic models for API
+class PlantCreate(BaseModel):
+    name: str
+    frequency_days: int
+    location: Literal["indoor", "outdoor"] = "indoor"
+    sunlight: str = ""
+    water_sensitivity: Literal["high", "medium", "low"] = "medium"
+
+class PlantUpdate(BaseModel):
+    name: Optional[str] = None
+    frequency_days: Optional[int] = None
+    baseline_frequency_days: Optional[int] = None
+    last_watered: Optional[date] = None
+    location: Optional[Literal["indoor", "outdoor"]] = None
+    sunlight: Optional[str] = None
+    water_sensitivity: Optional[Literal["high", "medium", "low"]] = None
+    needs_photo: Optional[bool] = None
+
+class WaterAllRequest(BaseModel):
+    location: Literal["indoor", "outdoor"]
+
+# Helper functions
+def get_store() -> PlantStore:
+    store = PlantStore()
+    try:
+        yield store
+    finally:
+        store.close()
+
+def get_db() -> AgentDB:
+    db = AgentDB()
+    try:
+        yield db
+    finally:
+        db.close()
+
+def create_profile_doc(name: str, location: str, sunlight: str, sensitivity: str, frequency: int):
+    path = profile_path(name)
+    if path.exists():
+        return
+    content = f"""# {name}
+
+## Plant Info
+- Location: {location.capitalize()} | Sunlight: {sunlight}
+- Water sensitivity: {sensitivity} | Base frequency: {frequency} days
+
+## Observed Behaviour
+<!-- Free text updated by intelligence run — notable patterns, visual cues -->
+
+## Health Assessments
+<!-- Photo assessments appended here -->
+
+## Frequency History
+| Date | Change | Reason |
+|---|---|---|
+
+## Intelligence Notes
+<!-- Appended by each intelligence run -->
+"""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    write_profile_atomic(path, content)
+
+async def complete_todoist_task_for_plant(plant_name: str):
+    token = os.getenv("TODOIST_API_TOKEN")
+    if not token:
+        logger.info("TODOIST_API_TOKEN not set, skipping Todoist task completion.")
+        return False
+    
+    task_content = f"Water {plant_name}"
+    headers = {"Authorization": f"Bearer {token}"}
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                "https://api.todoist.com/rest/v2/tasks",
+                params={"project_id": PERSONAL_PROJECT_ID},
+                headers=headers,
+                timeout=10.0
+            )
+            if response.status_code == 200:
+                tasks = response.json()
+                for task in tasks:
+                    if task.get("content", "").strip().lower() == task_content.lower():
+                        task_id = task.get("id")
+                        close_resp = await client.post(
+                            f"https://api.todoist.com/rest/v2/tasks/{task_id}/close",
+                            headers=headers,
+                            timeout=10.0
+                        )
+                        if close_resp.status_code == 204:
+                            logger.info(f"Closed Todoist task for {plant_name}: {task_id}")
+                            return True
+            else:
+                logger.warning(f"Todoist API tasks retrieval failed: {response.status_code}")
+    except Exception as e:
+        logger.error(f"Error completing Todoist task for {plant_name}: {e}")
+    return False
+
+def _load_species_context(plant_name: str) -> str:
+    try:
+        if not SPECIES_REFERENCE_PATH.exists():
+            return ""
+        text = SPECIES_REFERENCE_PATH.read_text()
+        heading = f"## {plant_name}"
+        start = text.find(heading)
+        if start == -1:
+            return ""
+        next_heading = text.find("\n## ", start + len(heading))
+        section = text[start:next_heading].strip() if next_heading != -1 else text[start:].strip()
+        return section
+    except Exception:
+        return ""
+
+def _build_assessment_display(parsed: dict, plant_name: str) -> str:
+    status = parsed.get("status", "Assessment")
+    summary = parsed.get("summary", "")
+    obs = parsed.get("observations", [])
+    rec = parsed.get("watering_recommendation", "")
+    freq = parsed.get("frequency_suggestion")
+    
+    emoji = {"Healthy": "🟢", "Stressed": "🟡", "Concerning": "🟠", "Underwatered": "🔵", "Overwatered": "🔴"}.get(status, "⚪")
+    lines = [f"{emoji} *{plant_name}* — {status}", "", summary]
+    if obs:
+        lines += ["", "*Observations:*"] + [f"• {o}" for o in obs]
+    if rec:
+        labels = {"immediate": "💧 Water now", "on_schedule": "✅ On schedule", "delay": "⏳ Delay watering"}
+        lines += ["", labels.get(rec, f"Watering: {rec}")]
+    if freq and isinstance(freq, dict):
+        lines += [f"📅 Suggested frequency: every {freq.get('days')} days"]
+    return "\n".join(lines)
+
+def _extract_assessment_from_text(raw: str) -> dict | None:
+    status_m = re.search(r'\*{0,2}[Ss]tatus\*{0,2}\s*[:\-]\s*([A-Za-z]+)', raw)
+    summary_m = re.search(r'\*{0,2}[Ss]ummary\*{0,2}\s*[:\-]\s*(.+?)(?=\n\*{0,2}[A-Z]|\Z)', raw, re.DOTALL)
+    watering_m = re.search(r'\*{0,2}[Ww]atering[^:\n]*\*{0,2}\s*[:\-]\s*([A-Za-z _]+)', raw)
+    obs_m = re.search(r'\*{0,2}[Oo]bservations?\*{0,2}\s*[:\-]\s*(.+?)(?=\n\*{0,2}[A-Z]|\Z)', raw, re.DOTALL)
+
+    status = status_m.group(1).strip() if status_m else "Assessment"
+    summary = summary_m.group(1).strip().rstrip("*").strip() if summary_m else raw[:300].strip()
+    
+    rec_raw = watering_m.group(1).strip().lower() if watering_m else ""
+    rec = None
+    for k, v in {"immediate": "immediate", "now": "immediate", "water now": "immediate",
+                 "on schedule": "on_schedule", "on_schedule": "on_schedule", "schedule": "on_schedule",
+                 "delay": "delay", "delay watering": "delay"}.items():
+        if k in rec_raw:
+            rec = v
+            break
+            
+    obs_text = obs_m.group(1).strip() if obs_m else ""
+    obs = [l.lstrip("•*- ").strip() for l in obs_text.splitlines() if l.strip()] if obs_text else []
+
+    if not (status_m or summary_m):
+        return None
+    return {"status": status, "summary": summary, "observations": obs,
+            "watering_recommendation": rec, "frequency_suggestion": None, "profile_notes": ""}
+
+# API Endpoints
+@app.get("/api/plants")
+def get_plants(store: PlantStore = Depends(get_store)):
+    plants = store.get_plants()
+    today = date.today()
+    result = []
+    for p in plants:
+        next_due = p.last_watered + timedelta(days=p.frequency_days)
+        overdue = max(0, (today - next_due).days)
+        status_label = p.last_assessment.status if p.last_assessment else "Unknown"
+        
+        p_dict = p.model_dump()
+        p_dict.update({
+            "next_due_date": next_due.isoformat(),
+            "overdue_days": overdue,
+            "status_label": status_label
+        })
+        result.append(p_dict)
+    
+    # Sort: overdue -> due today -> upcoming
+    result.sort(key=lambda x: (x["overdue_days"] == 0, x["next_due_date"], x["name"]))
+    return result
+
+@app.get("/api/plants/{name}")
+def get_plant_detail(name: str, store: PlantStore = Depends(get_store)):
+    plant = store.get_plant(name)
+    if not plant:
+        raise HTTPException(status_code=404, detail=f"Plant '{name}' not found")
+    
+    path = profile_path(plant.name)
+    markdown_content = ""
+    if path.exists():
+        markdown_content = path.read_text()
+        
+    return {
+        "plant": plant,
+        "markdown": markdown_content
+    }
+
+@app.post("/api/plants")
+def add_plant(data: PlantCreate, store: PlantStore = Depends(get_store)):
+    plants = store.get_plants()
+    if any(p.name.lower() == data.name.lower().strip() for p in plants):
+        raise HTTPException(status_code=400, detail=f"Plant '{data.name}' already exists")
+    
+    new_plant = Plant(
+        name=data.name.strip(),
+        frequency_days=data.frequency_days,
+        baseline_frequency_days=data.frequency_days,
+        last_watered=date.today(),
+        location=data.location,
+        sunlight=data.sunlight,
+        water_sensitivity=data.water_sensitivity,
+        needs_photo=False
+    )
+    
+    plants.append(new_plant)
+    store.save_plants(plants)
+    
+    # Create profile markdown
+    create_profile_doc(
+        name=new_plant.name,
+        location=new_plant.location,
+        sunlight=new_plant.sunlight,
+        sensitivity=new_plant.water_sensitivity,
+        frequency=new_plant.frequency_days
+    )
+    
+    return {"status": "success", "plant": new_plant}
+
+@app.patch("/api/plants/{name}")
+def update_plant_fields(name: str, data: PlantUpdate, store: PlantStore = Depends(get_store)):
+    plants = store.get_plants()
+    match_idx = -1
+    for i, p in enumerate(plants):
+        if p.name.lower() == name.lower().strip():
+            match_idx = i
+            break
+            
+    if match_idx == -1:
+        raise HTTPException(status_code=404, detail=f"Plant '{name}' not found")
+    
+    old_plant = plants[match_idx]
+    old_name = old_plant.name
+    
+    # Check if name is being changed and is already taken
+    if data.name and data.name.strip().lower() != old_name.lower():
+        new_name_clean = data.name.strip()
+        if any(p.name.lower() == new_name_clean.lower() for p in plants if p.name.lower() != old_name.lower()):
+            raise HTTPException(status_code=400, detail=f"Plant '{new_name_clean}' already exists")
+            
+        # Rename markdown profile
+        old_profile = profile_path(old_name)
+        new_profile = profile_path(new_name_clean)
+        if old_profile.exists():
+            old_profile.rename(new_profile)
+    
+    # Log frequency changes in history
+    freq_changed = False
+    old_freq = old_plant.baseline_frequency_days
+    new_freq = data.baseline_frequency_days if data.baseline_frequency_days is not None else (data.frequency_days if data.frequency_days is not None else None)
+    
+    # Update plant fields
+    updated_dict = old_plant.model_dump()
+    for field, val in data.model_dump(exclude_unset=True).items():
+        if field == "name":
+            updated_dict[field] = val.strip()
+        else:
+            updated_dict[field] = val
+
+    # If baseline frequency is updated, clamp and sync with effective frequency if needed
+    if data.baseline_frequency_days is not None:
+        updated_dict["baseline_frequency_days"] = max(1, min(30, data.baseline_frequency_days))
+        # Keep frequency_days in sync if no active weather adjustment
+        if data.frequency_days is None:
+            updated_dict["frequency_days"] = updated_dict["baseline_frequency_days"]
+            
+    updated_plant = Plant(**updated_dict)
+    plants[match_idx] = updated_plant
+    store.save_plants(plants)
+    
+    # Record frequency change in history if baseline changed
+    if new_freq is not None and new_freq != old_freq:
+        append_frequency_history(updated_plant.name, old_freq, new_freq, "Updated in UI")
+        
+    return {"status": "success", "plant": updated_plant}
+
+@app.delete("/api/plants/{name}")
+def delete_plant(name: str, background_tasks: BackgroundTasks, store: PlantStore = Depends(get_store)):
+    plants = store.get_plants()
+    match_idx = -1
+    for i, p in enumerate(plants):
+        if p.name.lower() == name.lower().strip():
+            match_idx = i
+            break
+            
+    if match_idx == -1:
+        raise HTTPException(status_code=404, detail=f"Plant '{name}' not found")
+        
+    plant = plants.pop(match_idx)
+    store.save_plants(plants)
+    
+    # Delete profile document if exists
+    p_path = profile_path(plant.name)
+    if p_path.exists():
+        try:
+            p_path.unlink()
+        except Exception as e:
+            logger.error(f"Failed to delete profile doc for {plant.name}: {e}")
+            
+    # Try to close any open Todoist task
+    background_tasks.add_task(complete_todoist_task_for_plant, plant.name)
+    
+    return {"status": "success", "message": f"Plant '{plant.name}' removed"}
+
+@app.post("/api/plants/{name}/water")
+def water_plant(name: str, background_tasks: BackgroundTasks, store: PlantStore = Depends(get_store)):
+    plant = store.get_plant(name)
+    if not plant:
+        raise HTTPException(status_code=404, detail=f"Plant '{name}' not found")
+        
+    plant.last_watered = date.today()
+    store.update_plant(plant)
+    
+    # Complete Todoist task
+    background_tasks.add_task(complete_todoist_task_for_plant, plant.name)
+    
+    return {"status": "success", "plant": plant}
+
+@app.post("/api/plants/water-all")
+def water_all_plants(data: WaterAllRequest, background_tasks: BackgroundTasks, store: PlantStore = Depends(get_store)):
+    plants = store.get_plants()
+    updated_count = 0
+    today = date.today()
+    
+    for p in plants:
+        if p.location == data.location:
+            p.last_watered = today
+            updated_count += 1
+            background_tasks.add_task(complete_todoist_task_for_plant, p.name)
+            
+    if updated_count > 0:
+        store.save_plants(plants)
+            
+    return {"status": "success", "waterED_count": updated_count}
+
+@app.get("/api/weather")
+def get_weather(db: AgentDB = Depends(get_db)):
+    return db.get_plant_weather_cache()
+
+@app.get("/api/status")
+def get_agent_status(db: AgentDB = Depends(get_db)):
+    return {
+        "sync_watering": db.get_state("plant-agent", "last_sync_watering"),
+        "create_tasks": db.get_state("plant-agent", "last_create_tasks"),
+        "photo_requests": db.get_state("plant-agent", "last_photo_requests"),
+        "send_status_email": db.get_state("plant-agent", "last_send_status_email"),
+        "intelligence_run": db.get_state("plant-agent", "last_intelligence_run"),
+    }
+
+@app.post("/api/plants/{name}/photo")
+async def upload_photo(name: str, file: UploadFile = File(...), store: PlantStore = Depends(get_store)):
+    plant = store.get_plant(name)
+    if not plant:
+        raise HTTPException(status_code=404, detail=f"Plant '{name}' not found")
+        
+    contents = await file.read()
+    
+    # Replicate _analyze_plant_image logic
+    last_watered = plant.last_watered.isoformat()
+    try:
+        days_since = (date.today() - plant.last_watered).days
+        days_str = f"{days_since} days ago"
+    except Exception:
+        days_str = "unknown"
+        
+    slug = plant.name.lower().replace(" ", "-").replace("/", "-")
+    p_path = profile_path(plant.name)
+    profile_context = ""
+    if p_path.exists():
+        profile_context = f"\n\nPlant profile history:\n{p_path.read_text()}"
+        
+    species_context = _load_species_context(plant.name)
+    
+    # Read/fallback system prompt
+    system_prompt = PLANT_HEALTH_SYSTEM
+    if PLANT_ASSESSMENT_SYSTEM_PATH.exists():
+        system_prompt = PLANT_ASSESSMENT_SYSTEM_PATH.read_text()
+        
+    if species_context:
+        system_prompt += f"\n\n## Species Reference\n{species_context}"
+        
+    user_text = (
+        f"This is a {plant.name} ({plant.location}). "
+        f"Last watered {last_watered} ({days_str})."
+        f"Base watering frequency: every {plant.frequency_days} days."
+        f"{profile_context}"
+    )
+    
+    # Save upload to temp file and call assess_image
+    with tempfile.TemporaryDirectory(prefix="plant_ui-") as tmpdir:
+        tmp_img = Path(tmpdir) / "image.jpg"
+        tmp_img.write_bytes(contents)
+        
+        # Run assess_image from claude_backend in executor since it's blocking
+        import asyncio
+        loop = asyncio.get_running_loop()
+        try:
+            raw_response = await loop.run_in_executor(
+                None, assess_image, str(tmp_img), system_prompt, user_text
+            )
+        except Exception as e:
+            logger.error(f"Image assessment failed: {e}")
+            raw_response = None
+            
+    if not raw_response:
+        raise HTTPException(status_code=500, detail="Plant assessment is unavailable right now. Try again later.")
+        
+    parsed = None
+    display_text = ""
+    
+    # Try parsing response
+    try:
+        text = raw_response.strip()
+        if text.startswith("```"):
+            text = re.sub(r"^```[a-z]*\n?", "", text)
+            text = re.sub(r"\n?```$", "", text.strip())
+        if not text.startswith("{"):
+            m = re.search(r'\{.*\}', text, re.DOTALL)
+            if m:
+                text = m.group(0)
+        parsed = json.loads(text)
+        display_text = _build_assessment_display(parsed, plant.name)
+    except Exception:
+        # Try salvaging
+        parsed = _extract_assessment_from_text(raw_response)
+        if parsed:
+            display_text = _build_assessment_display(parsed, plant.name)
+        else:
+            display_text = f"*{plant.name}*\n\n{raw_response}"
+            
+    if parsed:
+        # Save structured notes to plant profile doc (## Health Assessments section)
+        profile_notes = parsed.get("profile_notes", "")
+        if profile_notes:
+            write_health_assessment(plant.name, profile_notes)
+            
+        # Save assessment summary to DB
+        summary_to_save = parsed.get("summary", display_text)
+        status_to_save = parsed.get("status", "Assessment")
+        plant.last_assessment = AssessmentRecord(
+            date=date.today(),
+            summary=summary_to_save,
+            status=status_to_save
+        )
+        # Clear needs_photo flag if assessed
+        plant.needs_photo = False
+        store.update_plant(plant)
+        
+        # Suggest frequency change if any
+        freq_suggestion = parsed.get("frequency_suggestion")
+        return {
+            "status": "success",
+            "display_text": display_text,
+            "parsed": parsed,
+            "frequency_suggestion": freq_suggestion
+        }
+    else:
+        # Text only fallback
+        if not display_text.startswith("Plant assessment unavailable"):
+            plant.last_assessment = AssessmentRecord(
+                date=date.today(),
+                summary=display_text,
+                status="Assessment"
+            )
+            plant.needs_photo = False
+            store.update_plant(plant)
+            
+        return {
+            "status": "success",
+            "display_text": display_text,
+            "parsed": None,
+            "frequency_suggestion": None
+        }
+
+# Serve Frontend SPA
+@app.get("/", response_class=HTMLResponse)
+def serve_index():
+    index_path = REPO_ROOT / "plant_ui" / "templates" / "index.html"
+    if not index_path.exists():
+        raise HTTPException(status_code=404, detail="index.html template not found")
+    return index_path.read_text()
+
+@app.get("/sw.js", response_class=FileResponse)
+def serve_sw():
+    sw_path = REPO_ROOT / "plant_ui" / "static" / "sw.js"
+    if not sw_path.exists():
+        raise HTTPException(status_code=404, detail="Service worker not found")
+    return FileResponse(sw_path, media_type="application/javascript")
+
+# Mount static folder
+app.mount("/static", StaticFiles(directory=str(REPO_ROOT / "plant_ui" / "static")), name="static")

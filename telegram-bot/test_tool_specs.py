@@ -19,7 +19,7 @@ EXPECTED_TOOLS = {
     "run_travel_agent", "get_travel_report", "water_plants", "water_plant",
     "add_plant", "update_plant", "set_plant_frequency", "research_plant_sunlight",
     "research_plant_watering", "save_recipe", "get_plant", "get_all_plants",
-    "remove_plant",
+    "remove_plant", "save_plant_assessment",
 }
 
 
