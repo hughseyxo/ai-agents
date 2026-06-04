@@ -313,7 +313,7 @@
         <p class="photo-desc">Upload a photo of the plant. A high-accuracy Claude Opus model will analyze its leaves, soil, and overall visual state to deliver customized health diagnostics.</p>
 
         <div class="file-uploader" :class="photoSelected ? 'has-file' : ''">
-          <input type="file" id="plant-photo-input" accept="image/*" capture="environment" @change="handlePhotoSelect" class="file-input">
+          <input type="file" id="plant-photo-input" accept="image/*" @change="handlePhotoSelect" class="file-input">
           
           <div class="upload-prompt" x-show="!photoSelected">
             <span class="upload-icon">📸</span>
