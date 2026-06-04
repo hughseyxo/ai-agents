@@ -17,6 +17,13 @@
 
 ## Intelligence Notes
 <!-- Appended by each intelligence run -->
+### 2026-06-04 (pruning)
+- Deadhead spent drooping flower (encourage further blooming)
+
+### 2026-06-04
+- Thriving with healthy foliage and active buds, but has a spent flower drooping over the pot rim.
+- A task to deadhead the spent flower has been created to promote new growth.
+
 ### 2026-06-01
 - Healthy with bright open flowers and upright foliage.
 - Lacks a baseline health profile or historical assessments.

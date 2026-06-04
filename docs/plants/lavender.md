@@ -13,9 +13,14 @@
 ## Frequency History
 | Date | Change | Reason |
 |---|---|---|
+| 2026-06-04 | 14→12 days | intelligence: wilting and grey foliage under outdoor heat stress |
 
 ## Intelligence Notes
 <!-- Appended by each intelligence run -->
+### 2026-06-04
+- Exhibiting wilting and grey foliage indicating heat stress under outdoor full sun.
+- Reducing the baseline frequency from 14 to 12 days to move closer to a summer 7-day schedule, and pruning top growth post-bloom.
+
 ### 2026-06-01 (pruning)
 - prune top growth after flowering (promote bushier growth and improve air circulation)
 

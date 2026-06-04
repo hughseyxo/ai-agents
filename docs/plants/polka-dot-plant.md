@@ -13,9 +13,14 @@
 ## Frequency History
 | Date | Change | Reason |
 |---|---|---|
+| 2026-06-04 | 4→6 days | intelligence: persistent yellowing indicating potential overwatering |
 
 ## Intelligence Notes
 <!-- Appended by each intelligence run -->
+### 2026-06-04
+- Mixed signs of recovery with persistent yellowing (overwatering indicator) and drooping (underwatering indicator).
+- Extending the baseline watering frequency from 4 to 6 days to allow soil drying and monitor recovery.
+
 ### 2026-06-01
 - Overdue for watering (last watered 5 days ago on a 4-day interval).
 - Mixed recovery showing lingering yellowing and drooping leaves.

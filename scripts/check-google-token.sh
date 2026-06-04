@@ -42,9 +42,9 @@ if [[ "$HTTP_CODE" != "200" ]]; then
     exit 1
 fi
 
-# Update token file with fresh access token
+# Update token file with fresh access token (atomic write — see mcp-servers/gmail_server.py)
 echo "$BODY" | python3 -c "
-import json, sys, time, os
+import json, sys, time, os, tempfile
 token_file = '$TOKEN_FILE'
 with open(token_file) as f:
     tokens = json.load(f)
@@ -52,9 +52,19 @@ resp = json.load(sys.stdin)
 tokens['access_token'] = resp['access_token']
 tokens['expires_in'] = resp.get('expires_in', 3600)
 tokens['obtained_at'] = time.time()
-with open(token_file, 'w') as f:
-    json.dump(tokens, f, indent=2)
-os.chmod(token_file, 0o600)
+directory = os.path.dirname(os.path.abspath(token_file))
+fd, tmp = tempfile.mkstemp(dir=directory, prefix='.google_tokens.', suffix='.tmp')
+try:
+    with os.fdopen(fd, 'w') as f:
+        json.dump(tokens, f, indent=2)
+    os.chmod(tmp, 0o600)
+    os.replace(tmp, token_file)
+except BaseException:
+    try:
+        os.unlink(tmp)
+    except OSError:
+        pass
+    raise
 "
 
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Google OAuth token refreshed successfully"

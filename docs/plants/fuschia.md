@@ -16,6 +16,13 @@
 
 ## Intelligence Notes
 <!-- Appended by each intelligence run -->
+### 2026-06-04 (pruning)
+- Cut back spent blooms and reddish-brown tissues (improve air circulation and pest resilience)
+
+### 2026-06-04
+- Showing signs of stress (wilted areas and leaf asymmetry) in outdoor partial shade.
+- Needs immediate pruning of reddish-brown tissues and pest monitoring to sustain blooms.
+
 ### 2026-06-01 (pruning)
 - prune dead or wilted flowers (encourage new blooms and better foliage health)
 

@@ -16,6 +16,13 @@
 
 ## Intelligence Notes
 <!-- Appended by each intelligence run -->
+### 2026-06-04 (pruning)
+- Deadhead spent blooms (promote new growth)
+
+### 2026-06-04
+- Exhibiting dehydration stress due to high evaporation in full sun despite mulch application.
+- Requires regular daily soil moisture checks and deadheading spent blooms to encourage new growth.
+
 ### 2026-06-01 (pruning)
 - remove spent blooms (encourage new growth)
 

@@ -16,6 +16,10 @@
 
 ## Intelligence Notes
 <!-- Appended by each intelligence run -->
+### 2026-06-04
+- Thriving foliage overall, but pale bottom leaves indicate a risk of overwatering despite dry topsoil.
+- A Todoist task was created to inspect root-level soil moisture before executing the watering task due today.
+
 ### 2026-06-01
 - No immediate foliage damage, but exhibits pale bottom leaves.
 - High risk of overwatering despite dry topsoil, requiring soil moisture checks at the root level.

@@ -18,8 +18,8 @@ Make two parallel calls to get today's events from both calendars:
 **Call A — Personal calendar:**
 Call `mcp__google_calendar__gcal_list_events` with:
 - calendarId: `cianohughes@gmail.com`
-- startTime: today at 00:00:00 (ISO 8601, e.g. `2026-05-07T00:00:00`)
-- endTime: today at 23:59:59 (ISO 8601, e.g. `2026-05-07T23:59:59`)
+- startTime: today at 00:00:00 UTC (ISO 8601 with timezone, e.g. `2026-05-07T00:00:00+00:00`)
+- endTime: today at 23:59:59 UTC (ISO 8601 with timezone, e.g. `2026-05-07T23:59:59+00:00`)
 - timeZone: `Europe/Berlin`
 
 **Call B — On-call calendar:**
@@ -41,16 +41,16 @@ Make three parallel calls:
 **Call A — Primary calendar:**
 Call `mcp__google_calendar__gcal_list_events` with:
 - calendarId: `cianohughes@gmail.com`
-- startTime: tomorrow 00:00:00 (ISO 8601)
-- endTime: 30 days from now 23:59:59 (ISO 8601)
+- startTime: tomorrow 00:00:00 UTC (ISO 8601 with timezone, e.g. `2026-05-08T00:00:00+00:00`)
+- endTime: 30 days from now 23:59:59 UTC (ISO 8601 with timezone, e.g. `2026-06-06T23:59:59+00:00`)
 - timeZone: `Europe/Berlin`
 - pageSize: 50
 
 **Call B — On-call calendar:**
 Call `mcp__google_calendar__gcal_list_events` with:
 - calendarId: `8ubfqbcooeks9np5aufgu7g3mm0gj1rh@import.calendar.google.com`
-- startTime: tomorrow 00:00:00 (ISO 8601)
-- endTime: 30 days from now 23:59:59 (ISO 8601)
+- startTime: tomorrow 00:00:00 UTC (ISO 8601 with timezone, e.g. `2026-05-08T00:00:00+00:00`)
+- endTime: 30 days from now 23:59:59 UTC (ISO 8601 with timezone, e.g. `2026-06-06T23:59:59+00:00`)
 - timeZone: `Europe/Berlin`
 - pageSize: 50
 

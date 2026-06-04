@@ -13,9 +13,14 @@
 ## Frequency History
 | Date | Change | Reason |
 |---|---|---|
+| 2026-06-04 | 14→12 days | intelligence: thin, wrinkled, concave leaves under full sun |
 
 ## Intelligence Notes
 <!-- Appended by each intelligence run -->
+### 2026-06-04
+- Severe drought stress with thin, wrinkled, concave leaves and a collapsed rosette.
+- The 14-day baseline frequency is too long under full sun conditions, so it is reduced to 12 days to increase watering frequency.
+
 ### 2026-06-01
 - Showing severe drought stress with thin, wrinkled, concave leaves and a collapsed rosette.
 - Mismatch between the 14-day schedule and full-sun conditions (last watered 11 days ago).

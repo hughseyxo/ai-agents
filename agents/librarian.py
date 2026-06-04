@@ -33,8 +33,16 @@ SOURCE_CODE_OVERRIDES = {
     "telegram-bot": [
         REPO_ROOT / "telegram-bot" / "bot.py",
         REPO_ROOT / "telegram-bot" / "tools.py",
+        REPO_ROOT / "telegram-bot" / "antigravity_backend.py",
+        REPO_ROOT / "telegram-bot" / "claude_backend.py",
+        REPO_ROOT / "telegram-bot" / "tool_specs.py",
     ],
 }
+
+MCP_SERVER_FILES = [
+    REPO_ROOT / "mcp-servers" / "gmail_server.py",
+    REPO_ROOT / "mcp-servers" / "calendar_server.py",
+]
 
 BRIDGE_BASE = "http://yopflix.tailed77a8.ts.net:4242"
 
@@ -140,6 +148,20 @@ class LibrarianAgent(BaseAgent):
                 if py_file.exists():
                     source_code[agent_name] = py_file.read_text()[:15000]
 
+        mcp_source: dict[str, str] = {}
+        for path in MCP_SERVER_FILES:
+            if path.exists():
+                mcp_source[path.name] = path.read_text()[:8000]
+
+        import subprocess as _sp
+        try:
+            git_log = _sp.check_output(
+                ["git", "log", "--oneline", "--since=14 days ago", "--name-only", "--no-merges"],
+                cwd=str(REPO_ROOT), text=True, timeout=10,
+            )[:4000]
+        except Exception:
+            git_log = ""
+
         mem_file = REPO_ROOT / "docs" / "librarian-memory.md"
         arch_memory = mem_file.read_text() if mem_file.exists() else ""
 
@@ -149,6 +171,8 @@ class LibrarianAgent(BaseAgent):
             "prompts": prompts,
             "learnings": learnings,
             "source_code": source_code,
+            "mcp_source": mcp_source,
+            "recent_git_log": git_log,
             "arch_memory": arch_memory,
         }
         return {"agents_analysed": len(agent_stats)}
@@ -211,10 +235,12 @@ class LibrarianAgent(BaseAgent):
         for f in findings:
             conf = f.get("confidence", 0)
             ft = f.get("fix_type")
-            
-            if not (0.5 <= conf < 0.8):
+
+            # prompt_edit and architecture_plan always need human review regardless of confidence.
+            # _apply_learnings handles "learnings"/"memory_update" at conf >= 0.8 separately.
+            if conf < 0.5 or ft not in ("prompt_edit", "architecture_plan"):
                 continue
-                
+
             if ft == "prompt_edit":
                 stem = PROMPT_STEMS.get(f["agent"])
                 if not stem:
