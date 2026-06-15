@@ -353,7 +353,12 @@ class PlantAgent(BaseAgent):
         if freq_changed or needs_photo_changed:
             self.db.set_state("daily-briefing", "plants", plants)
 
-        # Append pruning notes
+        # Append pruning notes and persist as pending actions for daily briefing
+        if result.pruning:
+            self.set_state("pending_plant_actions", [
+                {"plant": p.name, "action": p.action, "reason": p.reason, "date": today}
+                for p in result.pruning
+            ])
         for pruning in result.pruning:
             slug = pruning.name.lower().replace(" ", "-").replace("/", "-")
             profile_path = PLANTS_DIR / f"{slug}.md"

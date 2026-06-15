@@ -5,7 +5,7 @@ LLM CLI (with MCP access) handles: calendar/todoist fetching, formatting, email 
 """
 
 import sys
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from .base import BaseAgent, REPO_ROOT
@@ -62,13 +62,63 @@ class DailyBriefingAgent(BaseAgent):
         self.mark_seen("email_sent", today)
         return {"sent": True, "output_path": str(output_path)}
 
+    def _build_plant_care_block(self, today: str) -> str:
+        """Build a pre-computed plant care section for injection into the briefing prompt."""
+        today_date = date.fromisoformat(today)
+        plants = self.db.get_state("daily-briefing", "plants") or []
+        pending_actions = self.db.get_state("plant-agent", "pending_plant_actions") or []
+
+        due_now = []
+        upcoming = []
+
+        for plant in plants:
+            last_watered = plant.get("last_watered")
+            freq = plant.get("frequency_days")
+            if not last_watered or not freq:
+                continue
+            try:
+                next_water = date.fromisoformat(last_watered) + timedelta(days=int(freq))
+            except (ValueError, TypeError):
+                continue
+            days_until = (next_water - today_date).days
+            if days_until <= 0:
+                suffix = f" (overdue {abs(days_until)}d)" if days_until < 0 else " (due today)"
+                due_now.append(f"Water {plant['name']}{suffix}")
+            elif days_until <= 7:
+                upcoming.append(f"Water {plant['name']} — {next_water.isoformat()}")
+
+        for a in pending_actions:
+            action_text = a.get("action", "").capitalize()
+            if a.get("reason"):
+                action_text += f" ({a['reason']})"
+            due_now.append(f"{action_text} — {a['plant']}")
+
+        if not due_now and not upcoming:
+            return ""
+
+        lines = [
+            "## Plant Care Tasks",
+            "Include these as [PLANT] items (🌱) in the Today and Coming Up sections.",
+            "Style: green border (#3fb950), same as [TASK] items.",
+        ]
+        if due_now:
+            lines.append("\nDue today / overdue / action needed:")
+            lines.extend(f"- {item}" for item in due_now)
+        if upcoming:
+            lines.append("\nComing up (next 7 days):")
+            lines.extend(f"- {item}" for item in upcoming)
+        return "\n".join(lines)
+
     def _build_prompt(self, today: str) -> str:
         """Build the Claude CLI prompt."""
         prompt_path = REPO_ROOT / "agents" / "prompts" / "daily_briefing.md"
         base_prompt = prompt_path.read_text()
+        plant_block = self._build_plant_care_block(today)
 
         return f"""{base_prompt}
 
 ## Today's Date
 {today}
+
+{plant_block}
 """

@@ -68,6 +68,12 @@ Call `mcp__todoist__find-tasks-by-date` with `startDate: "today"`, `daysCount: 3
 - `startDate: "today"` also returns overdue tasks — for the Coming Up section, keep only tasks whose due date is today through 30 days from now.
 - These tasks are **REQUIRED** in the Coming Up section, labelled `[TASK]`. Do NOT omit them — Coming Up must merge calendar events, on-call shifts, AND these tasks.
 
+## Step 4c: Plant care tasks (pre-computed, injected below)
+Plant care tasks are injected at the bottom of this prompt under **Plant Care Tasks**. Treat them as `[PLANT]` items:
+- Items listed under "Due today / overdue / action needed" → include in the **Today** section
+- Items listed under "Coming up (next 7 days)" → include in the **Coming Up** section
+These are NOT in Todoist — do not skip them.
+
 ## Step 5: Fetch Inbox tasks from Todoist
 Call `mcp__todoist__find-tasks` with `projectId: "6Crf3cH2RF5v86wc"`, `limit: 50` to retrieve only incomplete Inbox tasks.
 - Include task priority and due date where available
@@ -114,6 +120,7 @@ Gmail send args:
           [For each calendar event: <p style="margin:0 0 8px;padding:10px 14px;background:#1c2128;border-left:3px solid #58a6ff;border-radius:4px;font-size:14px;color:#c9d1d9;"><strong>[TIME]</strong> — [Title]</p>]
           [For each on-call shift: <p style="margin:0 0 8px;padding:10px 14px;background:#1c2128;border-left:3px solid #d29922;border-radius:4px;font-size:14px;color:#c9d1d9;"><strong>[TIME]</strong> — <span style="color:#d29922;font-weight:700;">[ON CALL]</span> On-Call Shift</p>]
           [For each Todoist task due today: <p style="margin:0 0 8px;padding:10px 14px;background:#1c2128;border-left:3px solid #3fb950;border-radius:4px;font-size:14px;color:#c9d1d9;"><span style="color:#3fb950;font-weight:700;">[TASK]</span> [Title]</p>]
+          [For each plant care task due today: <p style="margin:0 0 8px;padding:10px 14px;background:#1c2128;border-left:3px solid #3fb950;border-radius:4px;font-size:14px;color:#c9d1d9;"><span style="color:#3fb950;font-weight:700;">🌱</span> [Task]</p>]
           [If nothing: <p style="margin:0;color:#8b949e;font-size:14px;font-style:italic;">Nothing scheduled today</p>]
         </td></tr>
 
@@ -143,6 +150,7 @@ Gmail send args:
           [For each calendar event: <p style="margin:0 0 6px;padding:8px 12px;background:#1c2128;border-left:3px solid #58a6ff;border-radius:4px;font-size:14px;color:#c9d1d9;"><strong>[DATE]</strong> — [Title]</p>]
           [For each on-call shift: <p style="margin:0 0 6px;padding:8px 12px;background:#1c2128;border-left:3px solid #d29922;border-radius:4px;font-size:14px;color:#c9d1d9;"><strong>[DATE]</strong> — <span style="color:#d29922;font-weight:700;">[ON CALL]</span> On-Call Shift</p>]
           [For each Todoist task: <p style="margin:0 0 6px;padding:8px 12px;background:#1c2128;border-left:3px solid #3fb950;border-radius:4px;font-size:14px;color:#c9d1d9;"><strong>[DATE]</strong> — <span style="color:#3fb950;font-weight:700;">[TASK]</span> [Title]</p>]
+          [For each upcoming plant care task: <p style="margin:0 0 6px;padding:8px 12px;background:#1c2128;border-left:3px solid #3fb950;border-radius:4px;font-size:14px;color:#c9d1d9;"><strong>[DATE]</strong> — <span style="color:#3fb950;font-weight:700;">🌱</span> [Task]</p>]
           [All sorted chronologically, strictly within 30 days, max 15 entries total]
         </td></tr>
 

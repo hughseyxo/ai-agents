@@ -3,7 +3,7 @@
 Plant watering logic has been moved to PlantAgent — see test_plant_agent.py.
 """
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
@@ -68,6 +68,74 @@ class TestDailyBriefingPlan:
 
         assert "2026-05-28" in result
         assert "# Briefing Prompt" in result
+
+
+class TestBuildPlantCareBlock:
+    def _agent(self):
+        agent = DailyBriefingAgent(db_path=":memory:")
+        agent.run_id = agent.db.start_run(agent.name)
+        agent.context = {}
+        return agent
+
+    def _plants(self, *overrides):
+        today = date.today()
+        base = {"name": "Testus", "frequency_days": 7, "last_watered": today.isoformat(), "location": "indoor"}
+        return [{**base, **o} for o in overrides]
+
+    def test_empty_when_no_plants(self):
+        agent = self._agent()
+        assert agent._build_plant_care_block(date.today().isoformat()) == ""
+
+    def test_overdue_plant_in_due_now(self):
+        agent = self._agent()
+        last = (date.today() - timedelta(days=10)).isoformat()
+        agent.db.set_state("daily-briefing", "plants", [
+            {"name": "Fern", "frequency_days": 7, "last_watered": last, "location": "indoor"}
+        ])
+        block = agent._build_plant_care_block(date.today().isoformat())
+        assert "Water Fern" in block
+        assert "overdue" in block
+        assert "Coming up" not in block
+
+    def test_due_today_plant_in_due_now(self):
+        agent = self._agent()
+        last = (date.today() - timedelta(days=7)).isoformat()
+        agent.db.set_state("daily-briefing", "plants", [
+            {"name": "Basil", "frequency_days": 7, "last_watered": last, "location": "indoor"}
+        ])
+        block = agent._build_plant_care_block(date.today().isoformat())
+        assert "Water Basil" in block
+        assert "due today" in block
+
+    def test_upcoming_plant_in_coming_up(self):
+        agent = self._agent()
+        last = (date.today() - timedelta(days=4)).isoformat()
+        agent.db.set_state("daily-briefing", "plants", [
+            {"name": "Mint", "frequency_days": 7, "last_watered": last, "location": "indoor"}
+        ])
+        block = agent._build_plant_care_block(date.today().isoformat())
+        assert "Water Mint" in block
+        assert "Coming up" in block
+        assert "overdue" not in block and "due today" not in block
+
+    def test_plant_due_beyond_7_days_excluded(self):
+        agent = self._agent()
+        last = date.today().isoformat()
+        agent.db.set_state("daily-briefing", "plants", [
+            {"name": "Cactus", "frequency_days": 30, "last_watered": last, "location": "indoor"}
+        ])
+        block = agent._build_plant_care_block(date.today().isoformat())
+        assert block == ""
+
+    def test_pending_intelligence_action_in_due_now(self):
+        agent = self._agent()
+        agent.db.set_state("plant-agent", "pending_plant_actions", [
+            {"plant": "Gazania", "action": "deadhead", "reason": "spent flowers", "date": date.today().isoformat()}
+        ])
+        block = agent._build_plant_care_block(date.today().isoformat())
+        assert "Gazania" in block
+        assert "Deadhead" in block
+        assert "spent flowers" in block
 
 
 class TestComingUpTodoistPrompt:
