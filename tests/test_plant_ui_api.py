@@ -136,15 +136,13 @@ def test_water_plant(client, mock_store_db):
     )
     store.save_plants([plant_data])
     
-    # Mock Todoist task completion to avoid network calls
-    with patch("plant_ui.server.complete_todoist_task_for_plant", return_value=True) as mock_todoist:
-        response = client.post("/api/plants/Jade/water")
-        assert response.status_code == 200
-        assert response.json()["plant"]["last_watered"] == date.today().isoformat()
-        
-        # Verify plant state in DB
-        updated_plant = store.get_plant("Jade")
-        assert updated_plant.last_watered == date.today()
+    response = client.post("/api/plants/Jade/water")
+    assert response.status_code == 200
+    assert response.json()["plant"]["last_watered"] == date.today().isoformat()
+
+    # Verify plant state in DB
+    updated_plant = store.get_plant("Jade")
+    assert updated_plant.last_watered == date.today()
 
 def test_water_all_plants(client, mock_store_db):
     store, db, plants_dir = mock_store_db
@@ -156,20 +154,19 @@ def test_water_all_plants(client, mock_store_db):
     ]
     store.save_plants(plants)
     
-    with patch("plant_ui.server.complete_todoist_task_for_plant", return_value=True):
-        response = client.post("/api/plants/water-all", json={"location": "outdoor"})
-        assert response.status_code == 200
-        assert response.json()["waterED_count"] == 2
-        
-        # Verify Jade and Rosemary last_watered is today
-        db_plants = store.get_plants()
-        mint = next(p for p in db_plants if p.name == "Mint")
-        rosemary = next(p for p in db_plants if p.name == "Rosemary")
-        ficus = next(p for p in db_plants if p.name == "Ficus")
-        
-        assert mint.last_watered == date.today()
-        assert rosemary.last_watered == date.today()
-        assert ficus.last_watered != date.today() # Indoor plant not watered
+    response = client.post("/api/plants/water-all", json={"location": "outdoor"})
+    assert response.status_code == 200
+    assert response.json()["waterED_count"] == 2
+
+    # Verify Mint and Rosemary last_watered is today
+    db_plants = store.get_plants()
+    mint = next(p for p in db_plants if p.name == "Mint")
+    rosemary = next(p for p in db_plants if p.name == "Rosemary")
+    ficus = next(p for p in db_plants if p.name == "Ficus")
+
+    assert mint.last_watered == date.today()
+    assert rosemary.last_watered == date.today()
+    assert ficus.last_watered != date.today()  # Indoor plant not watered
 
 def test_update_plant(client, mock_store_db):
     store, db, plants_dir = mock_store_db
@@ -217,11 +214,10 @@ def test_delete_plant(client, mock_store_db):
     prof_path = plants_dir / "cactus.md"
     prof_path.write_text("# Cactus Profile")
     
-    with patch("plant_ui.server.complete_todoist_task_for_plant", return_value=True):
-        response = client.delete("/api/plants/Cactus")
-        assert response.status_code == 200
-        assert len(store.get_plants()) == 0
-        assert not prof_path.exists()
+    response = client.delete("/api/plants/Cactus")
+    assert response.status_code == 200
+    assert len(store.get_plants()) == 0
+    assert not prof_path.exists()
 
 def test_photo_assessment(client, mock_store_db):
     store, db, plants_dir = mock_store_db

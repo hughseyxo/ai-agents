@@ -4,12 +4,11 @@ import re
 import json
 import logging
 import tempfile
-import httpx
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Optional, Literal
 
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Depends, BackgroundTasks
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Depends
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse
 from pydantic import BaseModel, Field
@@ -35,7 +34,6 @@ logger = logging.getLogger("plant_ui")
 app = FastAPI(title="Plant AI PWA")
 
 # Constants
-PERSONAL_PROJECT_ID = "6Crf3cH2RF5v86wc"
 PLANT_ASSESSMENT_SYSTEM_PATH = REPO_ROOT / "agents" / "prompts" / "plant_photo_assessment.md"
 SPECIES_REFERENCE_PATH = REPO_ROOT / "docs" / "plants" / "species_reference.md"
 PLANT_HEALTH_SYSTEM = (
@@ -105,42 +103,6 @@ def create_profile_doc(name: str, location: str, sunlight: str, sensitivity: str
 """
     path.parent.mkdir(parents=True, exist_ok=True)
     write_profile_atomic(path, content)
-
-async def complete_todoist_task_for_plant(plant_name: str):
-    token = os.getenv("TODOIST_API_TOKEN")
-    if not token:
-        logger.info("TODOIST_API_TOKEN not set, skipping Todoist task completion.")
-        return False
-    
-    task_content = f"Water {plant_name}"
-    headers = {"Authorization": f"Bearer {token}"}
-    
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                "https://api.todoist.com/rest/v2/tasks",
-                params={"project_id": PERSONAL_PROJECT_ID},
-                headers=headers,
-                timeout=10.0
-            )
-            if response.status_code == 200:
-                tasks = response.json()
-                for task in tasks:
-                    if task.get("content", "").strip().lower() == task_content.lower():
-                        task_id = task.get("id")
-                        close_resp = await client.post(
-                            f"https://api.todoist.com/rest/v2/tasks/{task_id}/close",
-                            headers=headers,
-                            timeout=10.0
-                        )
-                        if close_resp.status_code == 204:
-                            logger.info(f"Closed Todoist task for {plant_name}: {task_id}")
-                            return True
-            else:
-                logger.warning(f"Todoist API tasks retrieval failed: {response.status_code}")
-    except Exception as e:
-        logger.error(f"Error completing Todoist task for {plant_name}: {e}")
-    return False
 
 def _load_species_context(plant_name: str) -> str:
     try:
@@ -329,20 +291,20 @@ def update_plant_fields(name: str, data: PlantUpdate, store: PlantStore = Depend
     return {"status": "success", "plant": updated_plant}
 
 @app.delete("/api/plants/{name}")
-def delete_plant(name: str, background_tasks: BackgroundTasks, store: PlantStore = Depends(get_store)):
+def delete_plant(name: str, store: PlantStore = Depends(get_store)):
     plants = store.get_plants()
     match_idx = -1
     for i, p in enumerate(plants):
         if p.name.lower() == name.lower().strip():
             match_idx = i
             break
-            
+
     if match_idx == -1:
         raise HTTPException(status_code=404, detail=f"Plant '{name}' not found")
-        
+
     plant = plants.pop(match_idx)
     store.save_plants(plants)
-    
+
     # Delete profile document if exists
     p_path = profile_path(plant.name)
     if p_path.exists():
@@ -350,41 +312,33 @@ def delete_plant(name: str, background_tasks: BackgroundTasks, store: PlantStore
             p_path.unlink()
         except Exception as e:
             logger.error(f"Failed to delete profile doc for {plant.name}: {e}")
-            
-    # Try to close any open Todoist task
-    background_tasks.add_task(complete_todoist_task_for_plant, plant.name)
-    
+
     return {"status": "success", "message": f"Plant '{plant.name}' removed"}
 
 @app.post("/api/plants/{name}/water")
-def water_plant(name: str, background_tasks: BackgroundTasks, store: PlantStore = Depends(get_store)):
+def water_plant(name: str, store: PlantStore = Depends(get_store)):
     plant = store.get_plant(name)
     if not plant:
         raise HTTPException(status_code=404, detail=f"Plant '{name}' not found")
-        
+
     plant.last_watered = date.today()
     store.update_plant(plant)
-    
-    # Complete Todoist task
-    background_tasks.add_task(complete_todoist_task_for_plant, plant.name)
-    
     return {"status": "success", "plant": plant}
 
 @app.post("/api/plants/water-all")
-def water_all_plants(data: WaterAllRequest, background_tasks: BackgroundTasks, store: PlantStore = Depends(get_store)):
+def water_all_plants(data: WaterAllRequest, store: PlantStore = Depends(get_store)):
     plants = store.get_plants()
     updated_count = 0
     today = date.today()
-    
+
     for p in plants:
         if p.location == data.location:
             p.last_watered = today
             updated_count += 1
-            background_tasks.add_task(complete_todoist_task_for_plant, p.name)
-            
+
     if updated_count > 0:
         store.save_plants(plants)
-            
+
     return {"status": "success", "waterED_count": updated_count}
 
 @app.get("/api/weather")
@@ -394,8 +348,6 @@ def get_weather(db: AgentDB = Depends(get_db)):
 @app.get("/api/status")
 def get_agent_status(db: AgentDB = Depends(get_db)):
     return {
-        "sync_watering": db.get_state("plant-agent", "last_sync_watering"),
-        "create_tasks": db.get_state("plant-agent", "last_create_tasks"),
         "photo_requests": db.get_state("plant-agent", "last_photo_requests"),
         "send_status_email": db.get_state("plant-agent", "last_send_status_email"),
         "intelligence_run": db.get_state("plant-agent", "last_intelligence_run"),

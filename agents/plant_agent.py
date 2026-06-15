@@ -1,4 +1,4 @@
-"""Master Plant Agent — frequency-gated steps for weather, watering sync, tasks, photos, and intelligence."""
+"""Master Plant Agent — frequency-gated steps for weather, photos, and intelligence."""
 
 import json
 import os
@@ -11,51 +11,9 @@ import requests
 
 from .base import BaseAgent, REPO_ROOT
 from .plant_model import PlantIntelligenceResult
-from .plant_weather import weather_adjusted_frequency, apply_frequency_step, is_heatwave_incoming
+from .plant_weather import weather_adjusted_frequency, apply_frequency_step
 from .plant_profiles import append_frequency_history, write_health_assessment, write_profile_atomic
 from .weather import fetch_weather
-
-PERSONAL_PROJECT_ID = "6Crf3cH2RF5v86wc"
-
-_SYNC_PROMPT = f"""
-You are a data-fetch step. Your only job is to find recently completed plant watering tasks in Todoist and return JSON.
-
-Use mcp__todoist__find-completed-tasks to find completed tasks in project {PERSONAL_PROJECT_ID} completed in the last 30 days.
-
-Filter to tasks whose content starts with "Water " (case-insensitive).
-
-Return ONLY valid JSON — no markdown, no explanation, no other text:
-[{{"name": "Plant Name", "completed_date": "YYYY-MM-DD"}}]
-
-Extract "Plant Name" by stripping the "Water " prefix from the task content.
-Use the task's completion date as "completed_date" in YYYY-MM-DD format.
-If no matching completed tasks found, return: []
-"""
-
-_CREATE_TASK_PROMPT = """\
-Create a Todoist task in project {project_id} if it does not already exist:
-  Content: "{content}", due: {due}, priority: p4
-
-Use mcp__todoist__find-tasks to search for an existing task with content "{content}" \
-due on {due}. Only call mcp__todoist__add-tasks if no such task exists.
-Return only the word "created" or "exists".
-"""
-
-
-def due_water_tasks(plants: list, today, weather) -> list:
-    """Plants whose folded next-water date is due today/overdue (or +1 day for
-    outdoor plants when a heatwave is incoming)."""
-    tasks = []
-    for plant in plants:
-        last_watered = datetime.strptime(plant["last_watered"], "%Y-%m-%d").date()
-        due_date = last_watered + timedelta(days=plant["frequency_days"])
-        if due_date <= today:
-            tasks.append({"name": plant["name"], "due": due_date.isoformat()})
-        elif (plant.get("location") == "outdoor" and weather
-              and is_heatwave_incoming(weather)
-              and due_date <= today + timedelta(days=1)):
-            tasks.append({"name": plant["name"], "due": due_date.isoformat(), "heatwave": True})
-    return tasks
 
 
 def _build_status_table(plants: list, weather_cache: dict, today) -> str:
@@ -168,8 +126,6 @@ class PlantAgent(BaseAgent):
     def steps(self):
         return [
             {"name": "weather_update", "fn": self._weather_update},
-            {"name": "sync_watering", "fn": self._sync_watering},
-            {"name": "create_tasks", "fn": self._create_tasks, "side_effects": True},
             {"name": "photo_requests", "fn": self._photo_requests, "side_effects": True},
             {"name": "send_status_email", "fn": self._send_status_email, "side_effects": True},
             {"name": "intelligence_run", "fn": self._intelligence_run, "side_effects": True},
@@ -182,7 +138,7 @@ class PlantAgent(BaseAgent):
 
     def _weather_update(self):
         weather = fetch_weather()
-        self.context["weather"] = weather  # reused by _create_tasks and _intelligence_run
+        self.context["weather"] = weather  # reused by _intelligence_run
         plants = self.context["plan"]["plants"]
         changed = False
         # Baseline migration is weather-independent — always run
@@ -206,94 +162,6 @@ class PlantAgent(BaseAgent):
         if changed:
             self.db.set_state("daily-briefing", "plants", plants)
         return {"updated": len(plants)}
-
-    def _sync_watering(self):
-        if not self._gate("sync_watering", 24):
-            return {"skipped": True}
-
-        try:
-            output = self.synthesize(_SYNC_PROMPT)
-        except Exception as e:
-            # Transient LLM failure (timeout/error) — leave gate open so the next
-            # run retries rather than waiting a full 24h.
-            print(f"[{self.name}] sync_watering LLM call failed: {e}", file=sys.stderr)
-            return {"synced": 0, "error": str(e)}
-
-        # The LLM responded; mark the gate now so an unparseable reply doesn't
-        # re-fire this step every hour for 24h.
-        self._mark_ran("sync_watering")
-
-        try:
-            completions = _extract_json_array(output)
-        except ValueError:
-            print(f"[{self.name}] sync_watering: no JSON array in LLM output", file=sys.stderr)
-            return {"synced": 0, "error": "bad_json"}
-
-        plants = self.db.get_state("daily-briefing", "plants") or []
-        synced = 0
-        updated = False
-
-        for completion in completions:
-            name = completion.get("name", "")
-            completed_date = completion.get("completed_date", "")
-            if not name or not completed_date:
-                continue
-            for plant in plants:
-                if plant["name"].lower() == name.lower():
-                    if completed_date > plant.get("last_watered", ""):
-                        plant["last_watered"] = completed_date
-                        synced += 1
-                        updated = True
-                    break
-
-        if updated:
-            self.db.set_state("daily-briefing", "plants", plants)
-
-        return {"synced": synced}
-
-    def _create_tasks(self):
-        if not self._gate("create_tasks", 12):
-            return {"skipped": True}
-
-        plants = self.context["plan"]["plants"]
-        weather_cache = self.context["plan"]["weather_cache"]
-        today = datetime.now(timezone.utc).date()
-        weather = self.context.get("weather") or fetch_weather()
-
-        tasks_to_create = due_water_tasks(plants, today, weather)
-
-        if not tasks_to_create:
-            self._mark_ran("create_tasks")
-            return {"skipped": True, "reason": "no_due_plants"}
-
-        created = 0
-        skipped = 0
-
-        for task in tasks_to_create:
-            name = task["name"]
-            due = task["due"]
-            is_heatwave_task = task.get("heatwave", False)
-            content = f"Water {name} before heatwave" if is_heatwave_task else f"Water {name}"
-            dedup_key = f"{name}:{today}"
-
-            if self.is_duplicate("task_created", dedup_key):
-                skipped += 1
-                continue
-
-            prompt = _CREATE_TASK_PROMPT.format(
-                project_id=PERSONAL_PROJECT_ID,
-                content=content,
-                due=due,
-            )
-            try:
-                self.synthesize(prompt)
-                self.mark_seen("task_created", dedup_key)
-                created += 1
-            except Exception as e:
-                print(f"[{self.name}] Failed to create task for {name}: {e}", file=sys.stderr)
-
-        self._mark_ran("create_tasks")
-        return {"created": created, "skipped": skipped}
 
     def _photo_requests(self):
         if not self._gate("photo_requests", 24):
@@ -506,15 +374,9 @@ class PlantAgent(BaseAgent):
 
     def report(self) -> str:
         weather = self.context.get("weather_update", {})
-        sync = self.context.get("sync_watering", {})
-        tasks = self.context.get("create_tasks", {})
         intel = self.context.get("intelligence_run", {})
 
         parts = [f"plant-agent: {weather.get('updated', 0)} plant(s) weather-updated"]
-        if not sync.get("skipped"):
-            parts.append(f"{sync.get('synced', 0)} watering(s) synced")
-        if not tasks.get("skipped"):
-            parts.append(f"{tasks.get('created', 0)} task(s) created")
         if intel.get("ran"):
             parts.append("intelligence run complete")
         return ", ".join(parts)
