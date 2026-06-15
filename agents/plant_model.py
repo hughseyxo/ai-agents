@@ -66,7 +66,6 @@ class PruningEntry(BaseModel):
 class PlantIntelligenceResult(BaseModel):
     plants: list[PlantIntelligenceEntry]
     pruning: list[PruningEntry] = []
-    tasks_created: list[str] = []
     email_sent: bool = False
 
     @classmethod

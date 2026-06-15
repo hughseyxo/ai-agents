@@ -161,6 +161,33 @@ h1, h2, h3, h4, h5, h6 {
   background-color: rgba(255, 255, 255, 0.1);
 }
 
+/* Attention Panel */
+.attention-panel {
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  border-left: 3px solid #d29922;
+}
+
+.attention-title {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #d29922;
+  margin: 0 0 10px;
+}
+
+.attention-group {
+  font-size: 14px;
+  color: #c9d1d9;
+  margin-bottom: 6px;
+}
+
+.attention-label {
+  font-weight: 600;
+  margin-right: 4px;
+}
+
 /* Control Bar (Filters) */
 .control-bar {
   display: flex;

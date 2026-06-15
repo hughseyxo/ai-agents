@@ -9,6 +9,9 @@
 
 ## Health Assessments
 <!-- Photo assessments appended here -->
+### 2026-06-05 — Healthy
+Multi-cane Yucca photographed on an indoor windowsill (bright/full-sun position, brick patio visible outside). All three leaf rosettes (upper, mid-trunk, base) are firm, stiff, and deep green with strong turgor and dense growth — classic healthy sword-leaf form radiating from the woody canes. Watered 1 day ago (2026-06-04); soil surface is dark and visibly moist, so no water needed — recommend delay and hold the 14-day base schedule. One dried brown leaf hangs at the top-right of the upper rosette and a few papery dead leaves sit at the trunk base/floor — normal lower-leaf senescence; can be pulled down or trimmed at the stem (best in spring). Notably, the recurring 'pale bottom leaves / overwatering risk' flag from intelligence notes (2026-05-28 to 2026-06-04) is NOT clearly visible in this photo — lower leaves read as healthy green, no trunk-base rot or mushy tissue. Earlier overwatering concern appears unrealised; continue routine root-level moisture checks but no schedule change warranted.
+
 
 ## Frequency History
 | Date | Change | Reason |
@@ -16,6 +19,35 @@
 
 ## Intelligence Notes
 <!-- Appended by each intelligence run -->
+### 2026-06-14
+- On-schedule 14-day cycle; last watered 2026-06-04 (10 days ago), adjusted watering 2026-06-18
+- Earlier overwatering concern (pale bottom leaves, 2026-05-28→06-04) appears unrealised; 2026-06-05 assessment found zero rot/yellowing/mushy tissue
+- All three rosettes firm and deep green; current 14-day schedule working well
+
+### 2026-06-12
+- Earlier overwatering concern (pale bottom leaves, 2026-05-28→06-04) appears unrealised; 2026-06-05 assessment found no rot/yellowing/mushy tissue
+- All three rosettes firm, deep green; current 14-day schedule working well
+
+### 2026-06-11
+- Earlier overwatering concern (pale bottom leaves, 2026-05-28→06-04) appears unrealised
+- 2026-06-05 assessment: all three rosettes firm, deep green, no rot/yellowing/mushy tissue
+- Current 14-day schedule working well; earlier intelligence was over-cautious
+
+### 2026-06-10
+- Earlier overwatering concern (pale bottom leaves, 2026-05-28→06-04) appears unrealised
+- 2026-06-05 assessment: all three rosettes firm, deep green, no rot/yellowing/mushy tissue
+- Current 14-day schedule working well; over-cautious intelligence has resolved
+
+### 2026-06-08
+- Earlier overwatering concern (pale bottom leaves) appears unrealised
+- 2026-06-05 assessment found no rot, yellowing, or mushy tissue; all three rosettes firm and deep green
+- Current 14-day schedule working well
+
+### 2026-06-07
+- Flagged 'needs_photo': true in input data; prior overwatering concern (pale bottom leaves, 2026-05-28 to 2026-06-04) appears unrealised
+- 2026-06-05 assessment found NO rot, yellowing, or mushy tissue; all three rosettes firm and deep green
+- Earlier 'overwatering risk' flags were over-cautious; current schedule (14 days) working well
+
 ### 2026-06-04
 - Thriving foliage overall, but pale bottom leaves indicate a risk of overwatering despite dry topsoil.
 - A Todoist task was created to inspect root-level soil moisture before executing the watering task due today.

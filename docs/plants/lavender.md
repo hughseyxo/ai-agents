@@ -9,6 +9,12 @@
 
 ## Health Assessments
 <!-- Photo assessments appended here -->
+### 2026-06-06 — Healthy
+Full-sun outdoor potted lavender photographed in heavy bloom — dozens of purple flower spikes over dense grey-green foliage with good turgor, upright and lightly mounded. Watered today (0 days ago); soil surface dark/moist and patio wet, so the plant is at the very start of its cycle and needs no water (delay). No drought signs (no wilting, no silvering, no flower-spike droop) and no overwatering signs (no basal grey/black stem rot, no yellowing, no mushy wood) despite being freshly watered. This is consistent with the 2026-06-05 assessment and again contradicts the older recurring 'heat stress / wilting / grey foliage' intelligence flags (2026-05-28 → 2026-07-01) — the visible plant is vigorous on the current schedule. Recommend HOLDING the 12-day baseline; do not drop toward 7 days. Bloom is at/just past peak with a meaningful share of spikes browning at the tips — the post-flowering prune is now due: cut back top growth by one-third to one-half into green wood only, never into bare old wood, to promote bushier regrowth and air circulation. Note for next session: 'last watered' shows 14-day base frequency here vs 12-day baseline referenced in profile history — worth reconciling which value is current.
+
+### 2026-06-05 — Healthy
+Photo shows the lavender in full bloom with dense purple flower spikes and a healthy compact mound. Grey-green foliage is firm and upright with good turgor — no wilting, no silvering, no basal stem rot or yellowing. Soil surface is dark/moist; watered 5 days ago on a 12-day effective cycle, so it is comfortably mid-cycle and does not need water yet (delay). This directly contradicts the recurring 'heat stress / wilting / grey foliage' notes logged in prior intelligence runs (2026-05-28 through 2026-07-01) — the visible plant is well-hydrated and vigorous, suggesting those flags were over-cautious. Recommend holding the current 12-day baseline rather than dropping to 7 days; the plant is not showing drought stress on this longer interval. Bloom is just past peak (some front spikes browning at tips) — schedule the post-flowering prune soon, cutting back top growth by one-third to one-half without cutting into bare old wood.
+
 
 ## Frequency History
 | Date | Change | Reason |
@@ -17,6 +23,78 @@
 
 ## Intelligence Notes
 <!-- Appended by each intelligence run -->
+### 2026-06-14 (pruning)
+- Post-bloom cut-back (top 1/3–1/2 into green wood only) (Blooms past peak with browning tips; promote bushier regrowth and air circulation (task exists))
+
+### 2026-06-14
+- Full-sun outdoor in heavy bloom with dense purple flower spikes; on 12-day baseline (adjusted to 18 days by recent rain)
+- Earlier intelligence (2026-05-28→06-05) falsely asserted wilting/grey foliage/heat stress; 2026-06-05/06 assessments confirm vigorous health—no changes warranted
+- Blooms now past peak with browning at tips; post-bloom cut-back task exists and overdue since 2026-06-06 (remove top 1/3–1/2 into green wood to promote bushier growth)
+
+### 2026-06-13 (pruning)
+- post-bloom cut-back (top 1/3–1/2 into green wood only) (blooms past peak with browning tips; promote bushier regrowth and air circulation)
+
+### 2026-06-13
+- Full-sun outdoor in heavy bloom with dense purple spikes; on 12-day baseline (adjusted to 18 days)
+- Blooms now past peak with browning at tips—post-bloom cut-back overdue since 2026-06-06
+- Earlier intelligence falsely asserted wilting/heat stress; 2026-06-05/06 assessments confirm vigorous health
+
+### 2026-06-12 (pruning)
+- post-bloom cut-back—remove top 1/3 to 1/2 into green wood only (promote bushier regrowth and air circulation; blooms past peak with browning tips)
+
+### 2026-06-12
+- Full-sun outdoor, in heavy bloom with dense purple flower spikes and firm grey-green foliage; 2026-06-05/06 assessments contradict prior intelligence falsely asserting wilting/heat stress
+- Thriving on 12-day baseline; blooms now past peak with browning at tips—post-bloom cut-back due
+
+### 2026-06-11 (pruning)
+- post-bloom cut-back — remove top 1/3 to 1/2 into green wood only (blooms past peak with browning tips; promote bushier regrowth and air circulation)
+
+### 2026-06-11
+- 2026-06-05/06 assessments contradict prior intelligence falsely asserting wilting and heat stress
+- Thriving on 12-day baseline; full bloom with dense purple spikes, firm grey-green foliage
+- Blooms now past peak with browning at tips; post-bloom cut-back (top 1/3–1/2) now due
+
+### 2026-06-10 (pruning)
+- post-bloom cut-back: remove top 1/3 to 1/2 into green wood only (blooms past peak with browning at tips; promote bushier regrowth and air circulation)
+
+### 2026-06-10
+- Full-sun outdoor lavender in heavy bloom with dense purple spikes and firm grey-green foliage
+- 2026-06-05/06 assessments directly contradict prior intelligence (2026-05-28→06-05) falsely asserting wilting/grey foliage/heat stress
+- Plant thriving on 12-day baseline; blooms past peak with browning at tips—post-bloom cut-back now due
+- Earlier intelligence was over-cautious; current visual confirms no drought or overwatering
+
+### 2026-06-08 (pruning)
+- post-bloom cut-back: remove top 1/3 to 1/2 into green wood only (promote bushier regrowth and air circulation; plant past peak bloom)
+
+### 2026-06-08
+- 2026-06-05/06 assessments contradict prior intelligence flagging wilting and heat stress
+- Current visual: full bloom, dense purple spikes, firm grey-green foliage, no wilting/silvering
+- Plant thriving on 12-day baseline; earlier flags were over-cautious
+- Post-bloom cut-back now due: spikes browning at tips, peak bloom passing
+
+### 2026-06-07 (pruning)
+- post-bloom cut-back: remove top 1/3 to 1/2 into green wood only (promote bushier regrowth and improve air circulation)
+
+### 2026-06-07
+- 2026-06-05 and 2026-06-06 assessments directly contradict prior intelligence (2026-05-28→2026-06-05) flagging wilting, grey foliage, and heat stress
+- Current visual: full bloom with dense purple spikes, grey-green foliage firm and upright, no wilting/silvering/basal rot; well-hydrated and vigorous
+- Earlier flags were over-cautious; plant thriving on 12-day baseline. Assessment recommends HOLDING at 12 days, not reducing to 7 days
+- Post-bloom cut-back is now due: top growth past peak bloom with some spikes browning at tips
+
+### 2026-06-06 (pruning)
+- post-bloom cut-back (top 1/3 to 1/2) (plant past peak bloom; promote bushier growth and air circulation; do not cut into bare old wood)
+
+### 2026-06-06
+- 2026-06-05 assessment contradicts prior 'wilting, grey foliage, heat stress' flags; plant is well-hydrated and vigorous
+- Earlier intelligence was over-cautious; assessment recommends HOLDING at 12 days, not reducing further
+- Plant in full bloom, past peak; post-bloom cut-back recommended to promote bushier growth
+
+### 2026-06-05
+- Wilting and grey foliage indicating heat stress despite recent watering (2026-05-31)
+- Baseline reduced 14→12 days on 2026-06-04; last assessment 2026-06-01 (4 days old)
+- Outdoor full sun in early June heat; weather-adjusted to +14 days due to recent rain
+- Needs re-assessment to confirm if 12-day baseline is sufficient
+
 ### 2026-06-04
 - Exhibiting wilting and grey foliage indicating heat stress under outdoor full sun.
 - Reducing the baseline frequency from 14 to 12 days to move closer to a summer 7-day schedule, and pruning top growth post-bloom.

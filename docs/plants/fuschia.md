@@ -9,6 +9,12 @@
 
 ## Health Assessments
 <!-- Photo assessments appended here -->
+### 2026-06-04 — Healthy
+Photo taken 7 days after watering (last watered 2026-05-28) on the 10-day effective cycle. The plant looks markedly improved versus the late-May/early-June 'Stressed/Concerning/Underwatered' notes. Foliage is uniformly green and turgid across both the upper crown and the long trailing lower stems hanging from the green fabric grow-bag — no wilting, drooping, leaf asymmetry, or reddish-brown stressed tissue observed this time. Flowering is vigorous: numerous fully-open magenta/pink pendant blooms plus a heavy set of unopened buds, indicating the plant is well-resourced and not water-stressed at day 7 of 10. A few older lower leaves are slightly darkened and some spent blooms remain — deadheading these would redirect energy into the developing buds, but this is maintenance, not a health concern. No visible pest damage. No watering or frequency change needed; continue current schedule and monitor.
+
+### 2026-06-04 — Healthy
+Vertical grow-bag fuchsia on the fence (partial shade) photographed 7 days after watering on a 10-day base cycle. Plant looks healthy and vigorous: abundant open magenta-purple pendant blooms in the upper and mid sections plus many tight unopened buds along the trailing tips, signalling active bloom production. Foliage is uniformly green with good turgor, held outward (not wilting); no widespread yellowing, leaf scorch, or signs of overwatering. Minor edge darkening on a few older lower leaves and some spent blooms present — consistent with prior deadheading recommendations. Note: vertical grow-bag medium dries unevenly top-to-bottom, so confirm the lower portion is not drying out between waterings. This photo does NOT support the repeated 'Stressed/Concerning' flags in recent intelligence notes; current visible state is good. Watering can stay on the existing 10-day schedule; continue light deadheading of spent flowers and routine pest checks.
+
 
 ## Frequency History
 | Date | Change | Reason |
@@ -16,6 +22,71 @@
 
 ## Intelligence Notes
 <!-- Appended by each intelligence run -->
+### 2026-06-14 (pruning)
+- Deadhead spent magenta blooms (Sustain flowering and redirect energy to developing buds (task exists))
+
+### 2026-06-14
+- Last adjusted watering date 2026-06-13 (1 day overdue); watering needed today
+- Clear recovery from late-May/early-June underwatering stress (wilting through 2026-06-03); now uniformly green and turgid
+- Vigorous flowering with numerous open magenta blooms and heavy bud set; 10-day effective cycle (7-day baseline + 3-day rain adjustment) working well
+
+### 2026-06-13 (pruning)
+- deadhead spent magenta blooms (sustain flowering and redirect energy to developing buds)
+
+### 2026-06-13
+- Clear recovery from late-May/early-June underwatering stress; uniformly green and turgid foliage
+- Vigorous flowering with numerous open magenta blooms and heavy bud set
+- Deadheading spent blooms flagged repeatedly since 2026-06-06
+
+### 2026-06-12 (pruning)
+- deadhead spent magenta blooms (sustain flowering and redirect energy to developing buds)
+
+### 2026-06-12
+- Clear recovery from late-May/early-June underwatering stress (wilting, reddish-brown tissue through 2026-06-03)
+- Uniformly green and turgid foliage; vigorous flowering with numerous open magenta blooms and heavy bud set
+
+### 2026-06-11 (pruning)
+- deadhead spent magenta blooms (sustain flowering and redirect energy to developing buds)
+
+### 2026-06-11
+- Clear recovery from late-May/early-June underwatering stress (wilting, reddish-brown tissue through 2026-06-03)
+- Uniformly green and turgid foliage; vigorous flowering with numerous open magenta blooms and heavy bud set
+- 10-day effective cycle (7-day baseline + 3-day rain adjustment) working well
+
+### 2026-06-10 (pruning)
+- deadhead spent magenta blooms (sustain flowering and redirect energy to developing buds)
+
+### 2026-06-10
+- Clear recovery from late-May/early-June underwatering stress (wilting, reddish-brown tissue through 2026-06-03)
+- Uniformly green and turgid foliage across upper crown and trailing stems; vigorous flowering
+- Numerous open magenta blooms plus heavy bud set; 10-day effective cycle (7-day baseline + 3-day rain) working well
+
+### 2026-06-08 (pruning)
+- deadhead spent magenta blooms (sustain flowering and redirect energy to developing buds)
+
+### 2026-06-08
+- Clear recovery from late-May/early-June underwatering stress (wilting, reddish-brown tissue through 2026-06-03)
+- Uniformly green and turgid foliage across upper crown and trailing stems
+- Vigorous flowering with numerous open magenta blooms plus heavy bud set
+
+### 2026-06-07 (pruning)
+- deadhead spent magenta blooms (sustain flowering and redirect energy to developing buds)
+
+### 2026-06-07
+- Clear recovery from late-May/early-June underwatering stress (wilting, reddish-brown tissue through 2026-06-03)
+- 2026-06-04 assessment shows: uniformly green and turgid foliage across upper crown and trailing stems, numerous open magenta blooms plus heavy bud set
+- No wilting, drooping, leaf asymmetry, or stressed tissue — vigorous flowering confirms plant is well-resourced
+- 10-day effective cycle (7-day baseline + 3-day rain adjustment) working well
+
+### 2026-06-05 (pruning)
+- deadhead spent blooms (sustain flowering and redirect energy to new buds)
+
+### 2026-06-05
+- Clear recovery from late-May/early-June underwatering stress (wilting and red tissue)
+- Vigorous flowering on 10-day effective cycle (baseline 7d + 3d rain adjustment)
+- Abundant open magenta blooms and heavy bud set; no wilting or stress signs
+- Minor spent blooms present — deadheading will sustain bloom production
+
 ### 2026-06-04 (pruning)
 - Cut back spent blooms and reddish-brown tissues (improve air circulation and pest resilience)
 

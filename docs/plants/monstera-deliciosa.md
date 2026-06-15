@@ -9,6 +9,21 @@
 
 ## Health Assessments
 <!-- Photo assessments appended here -->
+### 2026-06-06 — Healthy
+- Photographed at day 10 of the 10-day cycle (last watered 2026-05-27); today's scheduled watering is appropriate — water on schedule.
+- Canopy remains large, vigorous and glossy with many deeply fenestrated mature leaves; firm turgor throughout, no wilt, no inward edge curl (no underwatering despite full 10-day interval), no lower-leaf yellowing, no mushy stems, no webbing/scale.
+- Surface soil in the blue ceramic pot is dry and coarse with prominent exposed roots and woody/bark debris at the soil line — same compaction/outgrowth flagged across every prior run (2026-05-28 onward). The long-standing Todoist repot task remains valid; repot into a slightly larger pot with fresh well-draining mix is now overdue rather than merely advisable.
+- One or two lower leaves show faint dried surface residue / minor tip flecking — cosmetic only, monitor, no action.
+- 10-day base frequency continues to suit the plant; no frequency change indicated.
+
+### 2026-06-04 — Healthy
+- Photographed at day 8 of the 10-day cycle (last watered 2026-05-27); next watering 2026-06-06 remains appropriate.
+- Plant is large and vigorous: many mature, deeply fenestrated dark-green leaves with firm turgor. No wilting, edge curl, yellowing, mushy stems, webbing, or scale — no watering-stress signals in either direction.
+- Surface soil appears dry and crumbly, consistent with the schedule; no need to water early.
+- Aerial and exposed surface roots remain prominent and are now trailing down the outside of the pot — repotting into a slightly larger container with fresh well-draining soil is increasingly warranted (consistent Todoist repot task from prior runs still stands). Loose soil on the floor mat suggests compacted/depleted topsoil.
+- One small brown speck on a lower-left leaf tip is cosmetic only; monitor but no action needed.
+- 10-day base frequency continues to suit the plant; no frequency change indicated.
+
 
 ## Frequency History
 | Date | Change | Reason |
@@ -16,6 +31,29 @@
 
 ## Intelligence Notes
 <!-- Appended by each intelligence run -->
+### 2026-06-14
+- On-schedule 10-day cycle; last watered 2026-06-08 (6 days ago), adjusted watering 2026-06-18
+- Vigorous, robust growth with excellent turgor; large, glossy, deeply fenestrated foliage with no wilting, yellowing, or pest signs
+- Standing maintenance issue: exposed surface roots and soil compaction; repot task already active in Todoist (long-pending—recommend prioritize within 2–3 weeks)
+
+### 2026-06-13
+- On-schedule 10-day cycle, vigorous and well-hydrated throughout assessments
+- Standing maintenance issue: exposed surface roots and soil compaction
+- Repot task already active in Todoist (long-pending); recommend prioritize within 2–3 weeks
+
+### 2026-06-12
+- On-schedule on 10-day cycle, large vigorous foliage with excellent turgor
+- Standing issue: exposed roots and soil compaction; repot task already active in Todoist
+
+### 2026-06-07
+- On-schedule at day 10 of 10-day cycle; large, vigorous, deeply fenestrated foliage with excellent turgor
+- Long-standing exposed roots and soil compaction remain — repot task is active in Todoist
+
+### 2026-06-06
+- Vigorous, robust growth, excellent turgor, no stress signs
+- Exposed roots at pot top continuing to develop, indicating soil compaction or outgrowth
+- Active Todoist repot task already in place; soil refresh recommended soon
+
 ### 2026-06-01
 - Foliage is in good health with no stress, pests, or disease signs.
 - Aerial roots are visible at the top, indicating the soil is compacted or the plant has outgrown its pot.

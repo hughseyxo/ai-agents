@@ -10,6 +10,9 @@
 
 ## Health Assessments
 <!-- Photo assessments appended here -->
+### 2026-06-04 — Healthy
+Gazania Orange healthy 7 days after last watering (2026-05-28), outdoor full sun. Foliage dense, deep green, upright — no chlorosis, curl, crisping or heat/sun stress. Persistent flowering continues: several orange blooms (most furled — normal low-light closure, not wilt), one spent/ragged flower at lower-right rim (normal senescence — deadhead to promote bloom), plus multiple developing buds. Soil surface dark and moist and surrounding pavement visibly wet, indicating recent rain — held watering to 'delay' (would otherwise be ~2 days from due on the 9-day baseline). No frequency change warranted: plant tracks comfortably across every assessment to date with no recurring stress signal.
+
 
 ## Frequency History
 | Date | Change | Reason |
@@ -17,6 +20,65 @@
 
 ## Intelligence Notes
 <!-- Appended by each intelligence run -->
+### 2026-06-14 (pruning)
+- Deadhead spent flower at lower-right rim (Encourage further blooming and improve appearance (task exists))
+
+### 2026-06-14
+- Last adjusted watering date 2026-06-13 (1 day overdue); watering needed
+- Dense deep green foliage upright and firm with no chlorosis, curl, or crisping; no heat/sun stress visible
+- Persistent flowering with several orange blooms and multiple developing buds; one spent/ragged flower at lower-right rim (normal senescence, deadheading task exists)
+
+### 2026-06-13 (pruning)
+- deadhead spent flower at lower-right rim (encourage further blooming and improve appearance)
+
+### 2026-06-13
+- Single plant in own pot; dense deep green foliage upright and firm with no stress signs
+- Persistent flowering with several orange blooms and multiple developing buds
+- Deadheading spent flower at lower-right rim flagged repeatedly since 2026-06-06
+
+### 2026-06-12 (pruning)
+- deadhead spent flower at lower-right rim (encourage further blooming and improve appearance)
+
+### 2026-06-12
+- Own pot, single gazania; dense deep green foliage upright and firm with no stress signs
+- Persistent flowering with several orange blooms and multiple developing buds; 7-day baseline tracks comfortably
+
+### 2026-06-11 (pruning)
+- deadhead spent flower at lower-right rim (encourage further blooming and improve appearance)
+
+### 2026-06-11
+- Own pot, single gazania; dense deep green foliage upright and firm
+- Persistent flowering with several orange blooms and multiple developing buds
+- One spent/ragged flower at lower-right rim (normal senescence); 7-day baseline tracks comfortably
+
+### 2026-06-10 (pruning)
+- deadhead spent flower at lower-right rim (encourage further blooming and improve appearance)
+
+### 2026-06-10
+- Own pot, single gazania; dense deep green foliage upright and firm
+- Persistent flowering with several orange blooms and multiple developing buds
+- One spent/ragged flower at lower-right rim (normal senescence); 7-day baseline tracks comfortably across all assessments
+
+### 2026-06-08 (pruning)
+- deadhead spent flower at lower-right rim (promote new bloom and appearance)
+
+### 2026-06-08
+- Dense deep green foliage, upright and firm
+- Persistent flowering with several orange blooms and multiple developing buds
+- One spent/ragged flower at lower-right rim (normal senescence)
+
+### 2026-06-07 (pruning)
+- deadhead spent flower at lower-right rim (promote new bloom and appearance)
+
+### 2026-06-07
+- Dense, deep green foliage upright and firm; no chlorosis, curl, crisping, or heat/sun stress
+- Persistent flowering with several orange blooms (many furled in low light, normal not wilt) plus multiple developing buds
+- One spent/ragged flower at lower-right rim — normal senescence, deadhead to promote new bloom
+- 7-day baseline tracks comfortably across all assessments with no recurring stress signal
+
+### 2026-06-06 (pruning)
+- deadhead spent flower (encourage further blooming; improve appearance)
+
 ### 2026-06-04 (pruning)
 - Deadhead spent drooping flower (encourage further blooming)
 

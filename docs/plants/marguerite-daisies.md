@@ -9,6 +9,15 @@
 
 ## Health Assessments
 <!-- Photo assessments appended here -->
+### 2026-06-06 — Healthy
+Second assessment today, post-watering (0 days). All three Marguerites in the shared blue pot are healthy and recovered — foliage across pink (left), white double (top-right) and yellow-centred (front) plants is green, finely divided and turgid with no wilting, curl or crisping. The dehydration-stress pattern flagged 2026-06-01 through 2026-06-05 is no longer visible; the 5-day baseline plus mulch continues to hold. Soil is dark, mulched and visibly moist and the surrounding paving is wet, confirming watering today. Blooming is strong on the pink and white plants; the front yellow-centred plant carries the most spent/browning heads, and a few faded/papery blooms are also present at the lower-left edge near the white plant. Action: deadhead spent and browning heads across all three (priority on the front yellow-centred plant) to sustain flowering. Hold watering — do not water again until the soil surface dries; reassess turgor during the next hot spell to confirm the 5-day cadence remains adequate.
+
+### 2026-06-06 — Healthy
+Post-watering assessment (watered today). Three clumps in the shared blue pot: pink (upper-left) and white-pompom (right) are vibrant, well-turgid, and blooming heavily; the front-centre yellow clump is noticeably sparser/floppier and carries several spent yellow-brown blooms needing deadheading. Soil is dark and saturated from today's watering; surrounding paving is wet. No visible wilting, leaf curl, marginal crisping, or chlorosis — foliage turgor is strong throughout. This directly contradicts the run of recent intelligence notes (2026-06-01→2026-06-07) asserting ongoing dehydration stress and the future-dated suggestion to cut to a 5-day interval; current visual evidence shows a well-hydrated, healthy plant, so no frequency change is warranted off this photo. Recommend deadheading the spent yellow blooms to redirect energy into new growth, and confirming the mulch layer is intact (not visible at surface). Re-photograph after the soil has dried back (mid-cycle) to judge true moisture demand rather than immediately post-watering.
+
+### 2026-06-06 — Healthy
+Follow-up after watering today (0 days ago). All three Marguerites in the shared blue pot look recovered and healthy — foliage is green, finely divided and turgid with no wilting, curl, or leaf crisping. The dehydration-stress pattern flagged repeatedly from 2026-06-01 through 2026-06-05 is no longer visible; the move to a 5-day baseline plus mulch appears to be working. Soil is dark, mulched and visibly moist; surrounding paving is wet, confirming the watering. Pink single daisies (left) and white double daisies (right) are blooming strongly; front yellow-centred plant has the most spent blooms and would benefit from deadheading. Action: deadhead spent/browning heads across all three plants to sustain flowering. Hold watering — do not water again until soil surface dries; reassess turgor during the next hot spell to confirm 5-day cadence remains adequate.
+
 
 ## Frequency History
 | Date | Change | Reason |
@@ -16,6 +25,79 @@
 
 ## Intelligence Notes
 <!-- Appended by each intelligence run -->
+### 2026-06-14 (pruning)
+- Deadhead spent and browning heads across all three (Priority on front yellow-centred plant; sustain flowering (task exists))
+
+### 2026-06-14
+- Last adjusted watering date 2026-06-11 (3 days overdue); catch-up watering needed
+- All three clumps (pink, white, yellow-centre) in shared blue pot fully recovered from 2026-06-01→06-05 dehydration stress
+- Green, finely divided, turgid foliage with no wilting/curl; 5-day baseline + mulch working well; pink and white blooming heavily
+
+### 2026-06-13 (pruning)
+- deadhead spent and browning heads across all three (sustain flowering; priority on front yellow-centred plant which carries most spent heads)
+
+### 2026-06-13
+- All three clumps in shared blue pot fully recovered from 2026-06-01→06-05 dehydration stress
+- Green, finely divided, turgid; 5-day baseline + mulch working well since adjustment
+- Deadheading spent/browning heads flagged repeatedly since 2026-06-06 (priority: front yellow-centred)
+
+### 2026-06-12 (pruning)
+- deadhead spent and browning heads across all three; priority on front yellow-centred (sustain flowering and redirect energy to new growth)
+
+### 2026-06-12
+- All three clumps (pink, white, yellow-centre) in shared blue pot fully recovered from 2026-06-01→06-05 dehydration stress
+- Green, finely divided, turgid with no wilting/curl/crisping; 5-day baseline + mulch working well; pink and white blooming heavily
+
+### 2026-06-11 (pruning)
+- deadhead spent and browning heads across all three (priority on front yellow-centred plant which carries most spent heads; sustain flowering)
+
+### 2026-06-11
+- Multiple 2026-06-06 post-watering assessments show stress fully resolved from 2026-06-01→2026-06-05 dehydration
+- All three clumps (pink, white, yellow-centre) green, finely divided, turgid with no wilting/curl/crisping
+- 5-day baseline + mulch + weather adjustment working well; pink and white blooming heavily
+
+### 2026-06-10 (pruning)
+- deadhead spent and browning heads across all three (priority on front yellow-centred plant which carries most spent heads; sustain flowering)
+
+### 2026-06-10
+- Three clumps (pink, white, yellow-centre) in shared blue pot fully recovered from 2026-06-01→06-05 dehydration stress
+- All green, finely divided, turgid with no wilting/curl/crisping post-watering (2026-06-06)
+- 5-day baseline + mulch working well; pink and white blooming heavily, yellow-centred has most spent heads
+
+### 2026-06-08 (pruning)
+- deadhead spent and browning heads across all three plants (sustain flowering; priority on front yellow-centred plant which carries most spent heads)
+
+### 2026-06-08
+- Multiple 2026-06-06 post-watering assessments show stress fully resolved from 2026-06-01→2026-06-05 dehydration
+- All three clumps (pink, white, yellow-centre) green, finely divided, turgid with no wilting/curl/crisping
+- Earlier intelligence (2026-06-05→07) asserts ongoing stress; actual visual evidence contradicts and supports 5-day baseline
+
+### 2026-06-07 (pruning)
+- deadhead spent and browning heads across all three plants (sustain flowering; priority on front yellow-centred plant which carries most spent heads)
+
+### 2026-06-07
+- 2026-06-06 post-watering assessments show healthy recovery from 2026-06-01→2026-06-05 dehydration stress pattern
+- All three clumps green, finely divided, turgid with no wilting, curl, or crisping; stress fully resolved
+- Multiple 2026-06-06 assessments contradict prior intelligence (2026-06-05→2026-06-07) asserting ongoing stress and suggesting 5-day cut; current visual evidence supports current 5-day baseline
+- Pink and white plants blooming heavily; front yellow-centred plant carries most spent/browning heads
+
+### 2026-06-06 (pruning)
+- deadhead spent blooms (promote new growth and sustain flowering)
+
+### 2026-06-06
+- 2026-06-01 assessment flagged dehydration stress from high evaporation in full sun despite mulch application
+- Watered 2026-06-02 but condition post-watering not yet assessed; needs photo verification that stress has resolved
+- Mulch is helping but soil moisture remains inadequate; monitor closely during hot periods
+
+### 2026-06-05 (pruning)
+- deadhead spent blooms (encourage new growth and sustain blooming under full-sun stress)
+
+### 2026-06-05
+- Dehydration stress from high evaporation in full sun despite mulch application
+- Last assessment 2026-06-01 (4 days old); watered 2026-06-02 but condition unknown
+- Baseline at 5 days; mulch helping but evaporation still a concern
+- Needs re-assessment after recent watering to confirm recovery
+
 ### 2026-06-04 (pruning)
 - Deadhead spent blooms (promote new growth)
 

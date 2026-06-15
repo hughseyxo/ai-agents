@@ -36,6 +36,17 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+// Open the PWA when a notification is clicked
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      if (clientList.length > 0) return clientList[0].focus();
+      return clients.openWindow('/');
+    })
+  );
+});
+
 // Fetch events: Cache-First for static assets, Network-First for API routes
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);

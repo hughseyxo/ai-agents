@@ -1,13 +1,10 @@
-"""Master Plant Agent — frequency-gated steps for weather, photos, and intelligence."""
+"""Master Plant Agent — frequency-gated steps for weather and intelligence."""
 
 import json
-import os
 import re
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-
-import requests
 
 from .base import BaseAgent, REPO_ROOT
 from .plant_model import PlantIntelligenceResult
@@ -126,7 +123,6 @@ class PlantAgent(BaseAgent):
     def steps(self):
         return [
             {"name": "weather_update", "fn": self._weather_update},
-            {"name": "photo_requests", "fn": self._photo_requests, "side_effects": True},
             {"name": "send_status_email", "fn": self._send_status_email, "side_effects": True},
             {"name": "intelligence_run", "fn": self._intelligence_run, "side_effects": True},
         ]
@@ -162,66 +158,6 @@ class PlantAgent(BaseAgent):
         if changed:
             self.db.set_state("daily-briefing", "plants", plants)
         return {"updated": len(plants)}
-
-    def _photo_requests(self):
-        if not self._gate("photo_requests", 24):
-            return {"skipped": True}
-
-        token = os.environ.get("CONCIERGE_BOT_TOKEN", "")
-        user_id = os.environ.get("TELEGRAM_USER_ID", "")
-        if not token or not user_id:
-            return {"skipped": True, "reason": "no_telegram_config"}
-
-        photo_rates = self.get_state("photo_request_rates") or {}
-        plants = self.context["plan"]["plants"]
-        sent = 0
-
-        for plant in plants:
-            name = plant["name"]
-
-            last_req = photo_rates.get(name)
-            if last_req:
-                days_since = (datetime.now(timezone.utc) - datetime.fromisoformat(last_req)).days
-                if days_since < 3:
-                    continue
-
-            should_request = False
-            reason = ""
-
-            if plant.get("needs_photo"):
-                should_request = True
-                reason = "flagged by intelligence analysis"
-
-            last_assessment = plant.get("last_assessment")
-            if not last_assessment:
-                should_request = True
-                reason = reason or "no health assessment on record"
-            elif last_assessment.get("date"):
-                try:
-                    last_date = datetime.fromisoformat(last_assessment["date"]).replace(tzinfo=timezone.utc)
-                    if (datetime.now(timezone.utc) - last_date).days > 14:
-                        should_request = True
-                        reason = reason or f"last assessment was {(datetime.now(timezone.utc) - last_date).days} days ago"
-                except ValueError:
-                    pass
-
-            if should_request:
-                msg = f"📸 Can you send a photo of your {name}? ({reason})"
-                try:
-                    resp = requests.post(
-                        f"https://api.telegram.org/bot{token}/sendMessage",
-                        json={"chat_id": user_id, "text": msg},
-                        timeout=10,
-                    )
-                    if resp.ok:
-                        photo_rates[name] = datetime.now(timezone.utc).isoformat()
-                        sent += 1
-                except Exception as e:
-                    print(f"[{self.name}] Photo request failed for {name}: {e}", file=sys.stderr)
-
-        self.set_state("photo_request_rates", photo_rates)
-        self._mark_ran("photo_requests")
-        return {"sent": sent}
 
     def _send_status_email(self):
         if not self._gate("send_status_email", 24):

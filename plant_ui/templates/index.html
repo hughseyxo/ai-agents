@@ -59,6 +59,29 @@
     <!-- View: Dashboard (Home) -->
     <div x-show="currentView === 'dashboard'" x-transition:enter="transition-fade-in" class="view-pane">
       
+      <!-- Attention Panel -->
+      <section x-show="hasAttentionItems()" class="attention-panel glass-panel" x-transition>
+        <h2 class="attention-title">⚠️ Needs Attention</h2>
+        <template x-if="attention.watering_needed.length > 0">
+          <div class="attention-group">
+            <span class="attention-label">💧 Watering overdue:</span>
+            <span x-text="attention.watering_needed.map(p => p.name + ' (' + p.overdue_days + 'd)').join(', ')"></span>
+          </div>
+        </template>
+        <template x-if="attention.photos_needed.length > 0">
+          <div class="attention-group">
+            <span class="attention-label">📸 Photo needed:</span>
+            <span x-text="attention.photos_needed.map(p => p.name).join(', ')"></span>
+          </div>
+        </template>
+        <template x-if="attention.care_tasks.length > 0">
+          <div class="attention-group">
+            <span class="attention-label">🌱 Care tasks:</span>
+            <span x-text="attention.care_tasks.map(t => t.action + ' ' + t.plant).join(', ')"></span>
+          </div>
+        </template>
+      </section>
+
       <!-- Filter and Stats Bar -->
       <section class="control-bar glass-panel">
         <div class="filter-toggles">
@@ -97,6 +120,10 @@
                     <span :class="'badge badge-' + plant.location" x-text="plant.location === 'indoor' ? '🏠 Indoor' : '☀️ Outdoor'"></span>
                     <span :class="'badge status-' + plant.status_label.toLowerCase()" x-text="plant.status_label"></span>
                     
+                    <!-- Needs photo badge -->
+                    <template x-if="plant.needs_photo">
+                      <span class="badge badge-warning animate-pulse">📸</span>
+                    </template>
                     <!-- Weather adjustment badge -->
                     <template x-if="plant.frequency_days !== plant.baseline_frequency_days">
                       <span class="badge badge-weather-adjust" :title="'Baseline: ' + plant.baseline_frequency_days + 'd, Current: ' + plant.frequency_days + 'd'">
@@ -416,18 +443,6 @@
       </div>
       <div class="modal-body">
         <div class="status-list">
-          <div class="status-item">
-            <span class="status-name">Sync Watering Gate (24h)</span>
-            <span class="status-val" x-text="formatDateTime(agentStatus.sync_watering)"></span>
-          </div>
-          <div class="status-item">
-            <span class="status-name">Create Tasks Gate (12h)</span>
-            <span class="status-val" x-text="formatDateTime(agentStatus.create_tasks)"></span>
-          </div>
-          <div class="status-item">
-            <span class="status-name">Photo Requests Gate (24h)</span>
-            <span class="status-val" x-text="formatDateTime(agentStatus.photo_requests)"></span>
-          </div>
           <div class="status-item">
             <span class="status-name">Status Email Gate (24h)</span>
             <span class="status-val" x-text="formatDateTime(agentStatus.send_status_email)"></span>

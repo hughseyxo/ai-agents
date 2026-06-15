@@ -38,17 +38,60 @@ function plantApp() {
     photoUploading: false,
     diagnosticResult: null,
 
+    // Attention panel
+    attention: { watering_needed: [], photos_needed: [], care_tasks: [] },
+
     init() {
       this.fetchPlants();
       this.fetchWeather();
       this.fetchStatus();
-      
-      // Auto refresh list every 60s
+      this.loadAttention();
+      this.requestNotificationPermission();
+
+      // Auto refresh every 60s
       setInterval(() => {
         if (this.currentView === 'dashboard') {
           this.fetchPlants();
+          this.loadAttention().then(() => this.maybeNotify());
         }
       }, 60000);
+    },
+
+    async requestNotificationPermission() {
+      if ('Notification' in window && Notification.permission === 'default') {
+        await Notification.requestPermission();
+      }
+    },
+
+    async loadAttention() {
+      try {
+        const res = await fetch('/api/plants/attention');
+        if (res.ok) this.attention = await res.json();
+      } catch (e) {
+        console.error('Failed to load attention:', e);
+      }
+    },
+
+    hasAttentionItems() {
+      return this.attention.watering_needed.length > 0
+          || this.attention.photos_needed.length > 0
+          || this.attention.care_tasks.length > 0;
+    },
+
+    maybeNotify() {
+      if (!this.hasAttentionItems()) return;
+      if (!('Notification' in window) || Notification.permission !== 'granted') return;
+      const key = `florapulse-notified-${new Date().toISOString().slice(0, 10)}`;
+      if (localStorage.getItem(key)) return;
+      const parts = [];
+      if (this.attention.watering_needed.length)
+        parts.push(`💧 Water: ${this.attention.watering_needed.map(p => p.name).join(', ')}`);
+      if (this.attention.photos_needed.length)
+        parts.push(`📸 Photo: ${this.attention.photos_needed.map(p => p.name).join(', ')}`);
+      if (this.attention.care_tasks.length)
+        parts.push(`🌱 ${this.attention.care_tasks.map(t => `${t.action} ${t.plant}`).join(', ')}`);
+      new Notification('FloraPulse — Plants need attention', { body: parts.join('\n'), icon: '/static/icon-192.png' });
+      localStorage.setItem(key, '1');
     },
 
     setView(view) {

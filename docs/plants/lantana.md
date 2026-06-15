@@ -9,6 +9,9 @@
 
 ## Health Assessments
 <!-- Photo assessments appended here -->
+### 2026-06-04 — Healthy
+Clear recovery confirmed. Photo (outdoor, against fence, full sun) shows a turgid, bushy plant with no wilting at all — a decisive improvement over the persistent wilted/droopy underwatering stress logged from 2026-05-25 through 2026-06-02. Foliage is uniformly deep green with strong turgor; no yellowing, no crispy edges, no leaf/flower drop. Many immature flower buds forming across stem tips (not yet open), indicating the plant is healthy and about to enter bloom. Soil surface looks dark/moist, consistent with watering 4 days ago. The reduced watering cadence (5 days, applied via prior assessments) appears to be working — drought stress has resolved. No pest signs (whitefly/spider mite/mildew) visible. Recommend holding current cadence and deadheading once buds open to sustain bloom. No frequency change warranted at this time; continue monitoring that turgor holds through warmer spells.
+
 
 ## Frequency History
 | Date | Change | Reason |
@@ -16,6 +19,90 @@
 
 ## Intelligence Notes
 <!-- Appended by each intelligence run -->
+### 2026-06-14 (pruning)
+- Deadhead spent blooms once buds open (Sustain flowering and redirect energy to developing buds (task exists))
+
+### 2026-06-14
+- Last adjusted watering date 2026-06-11 (3 days overdue); catch-up watering needed
+- Clear recovery from persistent late-May underwatering stress; now dense, bushy, turgid with no wilting
+- Many immature flower buds forming; 5-day baseline working excellently since recovery
+
+### 2026-06-13 (pruning)
+- deadhead buds once open (sustain flowering and redirect energy to new blooms)
+
+### 2026-06-13
+- Clear recovery from persistent late-May underwatering stress; now dense, bushy, turgid growth
+- Many immature flower buds forming; 5-day baseline working excellently
+- Deadheading once buds open flagged repeatedly since 2026-06-06 (sustain flowering)
+
+### 2026-06-12 (pruning)
+- deadhead once buds open (sustain flowering and redirect energy to new blooms)
+
+### 2026-06-12
+- Clear recovery from persistent late-May underwatering stress (wilting through 2026-06-02); now dense, bushy, turgid growth
+- Many immature flower buds forming; 5-day baseline + weather adjustment working excellently
+
+### 2026-06-11 (pruning)
+- deadhead once buds open (sustain flowering and redirect energy to new blooms)
+
+### 2026-06-11
+- Clear recovery from persistent late-May underwatering stress (wilting through 2026-06-02)
+- Now dense, bushy, turgid growth with many immature flower buds forming
+- 5-day baseline + 2-day weather adjustment working excellently; drought stress fully resolved
+
+### 2026-06-10 (pruning)
+- deadhead once buds open (sustain flowering and redirect energy to new blooms)
+
+### 2026-06-10
+- Clear recovery from persistent late-May underwatering stress (wilting through 2026-06-02)
+- Dense, bushy, turgid growth with many immature flower buds forming
+- 5-day baseline + 2-day rain adjustment working excellently; drought stress fully resolved
+
+### 2026-06-08 (pruning)
+- deadhead once buds open (sustain flowering and redirect energy as flowers finish)
+
+### 2026-06-08
+- Clear recovery from persistent late-May underwatering stress
+- Dense, bushy, turgid foliage with many immature flower buds forming
+- 5-day baseline + weather adjustment working excellently
+
+### 2026-06-07 (pruning)
+- deadhead spent blooms once buds open (sustain flowering and redirect energy as flowers finish)
+
+### 2026-06-07
+- Clear recovery confirmed from persistent late-May underwatering stress (wilting episodes through 2026-06-02)
+- 2026-06-04 assessment shows: dense, bushy growth with no wilting, excellent turgor, deep green foliage, many immature flower buds forming
+- 5-day baseline + weather adjustment working excellently; drought stress has fully resolved
+
+### 2026-06-06 (pruning)
+- deadhead once buds open (sustain blooming and redirect energy as flowers finish)
+
+### 2026-06-06
+- Clear recovery from persistent late-May underwatering stress; 2026-06-04 assessment shows no wilting, excellent turgor
+- Many immature flower buds forming across canopy, indicating healthy resource status
+- 5-day baseline working excellently; continue current schedule
+
+### 2026-06-05 (pruning)
+- deadhead once buds open (prevent resource drain and sustain flowering)
+
+### 2026-06-05
+- Clear recovery from persistent late-May underwatering stress
+- Dense, turgid foliage with no wilting; many immature flower buds forming
+- 5-day baseline working well; outdoor full sun benefiting from recent rain (+2d adjustment)
+- Deadheading once buds open will sustain flowering
+
+### 2026-06-04
+- wilting
+
+### 2026-06-04
+- wilting
+
+### 2026-06-04
+- wilting
+
+### 2026-06-04
+- wilting
+
 ### 2026-06-04
 - wilting
 
