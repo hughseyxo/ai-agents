@@ -191,6 +191,32 @@ def get_plants(store: PlantStore = Depends(get_store)):
     result.sort(key=lambda x: (x["overdue_days"] == 0, x["next_due_date"], x["name"]))
     return result
 
+@app.get("/api/plants/attention")
+def get_attention(store: PlantStore = Depends(get_store), db: AgentDB = Depends(get_db)):
+    plants = store.get_plants()
+    today = date.today()
+
+    watering_needed = []
+    photos_needed = []
+    for p in plants:
+        overdue = (today - p.last_watered).days - p.frequency_days
+        if overdue > 0:
+            watering_needed.append({"name": p.name, "overdue_days": overdue})
+        if p.needs_photo:
+            reason = "flagged by intelligence"
+            if p.last_assessment:
+                days_since = (today - p.last_assessment.date).days
+                reason = f"last assessed {days_since}d ago"
+            photos_needed.append({"name": p.name, "reason": reason})
+
+    care_tasks = db.get_state("plant-agent", "pending_plant_actions") or []
+    return {
+        "watering_needed": watering_needed,
+        "photos_needed": photos_needed,
+        "care_tasks": care_tasks,
+    }
+
+
 @app.get("/api/plants/{name}")
 def get_plant_detail(name: str, store: PlantStore = Depends(get_store)):
     plant = store.get_plant(name)
@@ -355,31 +381,6 @@ def get_agent_status(db: AgentDB = Depends(get_db)):
     return {
         "send_status_email": db.get_state("plant-agent", "last_send_status_email"),
         "intelligence_run": db.get_state("plant-agent", "last_intelligence_run"),
-    }
-
-@app.get("/api/plants/attention")
-def get_attention(store: PlantStore = Depends(get_store), db: AgentDB = Depends(get_db)):
-    plants = store.get_plants()
-    today = date.today()
-
-    watering_needed = []
-    photos_needed = []
-    for p in plants:
-        overdue = (today - p.last_watered).days - p.frequency_days
-        if overdue > 0:
-            watering_needed.append({"name": p.name, "overdue_days": overdue})
-        if p.needs_photo:
-            reason = "flagged by intelligence"
-            if p.last_assessment:
-                days_since = (today - p.last_assessment.date).days
-                reason = f"last assessed {days_since}d ago"
-            photos_needed.append({"name": p.name, "reason": reason})
-
-    care_tasks = db.get_state("plant-agent", "pending_plant_actions") or []
-    return {
-        "watering_needed": watering_needed,
-        "photos_needed": photos_needed,
-        "care_tasks": care_tasks,
     }
 
 @app.post("/api/care-tasks/complete")
