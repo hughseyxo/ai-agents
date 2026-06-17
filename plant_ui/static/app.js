@@ -81,7 +81,7 @@ function plantApp() {
     maybeNotify() {
       if (!this.hasAttentionItems()) return;
       if (!('Notification' in window) || Notification.permission !== 'granted') return;
-      const key = `florapulse-notified-${new Date().toISOString().slice(0, 10)}`;
+      const key = `yopflix-gardening-notified-${new Date().toISOString().slice(0, 10)}`;
       if (localStorage.getItem(key)) return;
       const parts = [];
       if (this.attention.watering_needed.length)
@@ -90,7 +90,7 @@ function plantApp() {
         parts.push(`📸 Photo: ${this.attention.photos_needed.map(p => p.name).join(', ')}`);
       if (this.attention.care_tasks.length)
         parts.push(`🌱 ${this.attention.care_tasks.map(t => `${t.action} ${t.plant}`).join(', ')}`);
-      new Notification('FloraPulse — Plants need attention', { body: parts.join('\n'), icon: '/static/icon-192.png' });
+      new Notification('Yopflix Gardening — Plants need attention', { body: parts.join('\n'), icon: '/static/icon-192.png' });
       localStorage.setItem(key, '1');
     },
 
@@ -424,6 +424,22 @@ function plantApp() {
     dismissSuggestedFrequency() {
       if (this.diagnosticResult) {
         this.diagnosticResult.frequency_suggestion = null;
+      }
+    },
+
+    async completeTask(plant, action) {
+      try {
+        const res = await fetch('/api/care-tasks/complete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ plant, action })
+        });
+        if (!res.ok) throw new Error('Failed to complete task');
+        this.attention.care_tasks = this.attention.care_tasks.filter(
+          t => !(t.plant === plant && t.action === action)
+        );
+      } catch (e) {
+        alert('Failed to mark task done: ' + e.message);
       }
     },
 

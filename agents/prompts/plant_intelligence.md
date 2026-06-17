@@ -23,7 +23,7 @@ Analyze all data to identify:
 2. Plants showing signs of stress, overwatering, or frequency mismatch based on data trends
 3. Plants that would benefit from a photo health check (long gap since last assessment, concerning data patterns, weather stress)
 4. Actionable changes to watering frequency or care
-5. Pruning needs — based on assessment notes, growth stage, season, and plant type. Flag if a plant is overdue for deadheading, shape pruning, post-bloom cut-back, or size control.
+5. Pruning needs — based on assessment notes, growth stage, season, and plant type. Flag if a plant is overdue for deadheading, shape pruning, post-bloom cut-back, or size control. Do NOT re-flag a task that already has a `(completed)` marker in Intelligence Notes within the last 30 days, unless clear evidence of recurrence exists (e.g. new spent blooms in a subsequent photo assessment).
 
 ## Steps
 

@@ -11,6 +11,8 @@ PLANTS_DIR = REPO_ROOT / "docs" / "plants"
 _TABLE_HEADER = "| Date | Change | Reason |\n|---|---|---|\n"
 _HEALTH_SECTION = "## Health Assessments"
 _HEALTH_COMMENT = "<!-- Photo assessments appended here -->"
+_INTELLIGENCE_SECTION = "## Intelligence Notes"
+_INTELLIGENCE_COMMENT = "<!-- Appended by each intelligence run -->"
 
 
 def _write_atomic(path: Path, content: str) -> None:
@@ -53,6 +55,28 @@ def write_health_assessment(plant_name: str, profile_notes: str) -> bool:
         content = content.replace(f"{_HEALTH_SECTION}\n", f"{_HEALTH_SECTION}\n{entry}", 1)
     else:
         content += f"\n{_HEALTH_SECTION}\n{entry}"
+    _write_atomic(path, content)
+    return True
+
+
+def append_intelligence_note(plant_name: str, note: str) -> bool:
+    """Prepend a timestamped note to the ## Intelligence Notes section of a plant profile.
+    Returns False if the profile doc does not exist or the resolved path escapes PLANTS_DIR."""
+    path = profile_path(plant_name)
+    try:
+        path.resolve().relative_to(PLANTS_DIR.resolve())
+    except ValueError:
+        return False
+    if not path.exists():
+        return False
+    content = path.read_text()
+    entry = f"\n{note.strip()}\n"
+    if _INTELLIGENCE_COMMENT in content:
+        content = content.replace(_INTELLIGENCE_COMMENT, f"{_INTELLIGENCE_COMMENT}{entry}", 1)
+    elif f"{_INTELLIGENCE_SECTION}\n" in content:
+        content = content.replace(f"{_INTELLIGENCE_SECTION}\n", f"{_INTELLIGENCE_SECTION}\n{entry}", 1)
+    else:
+        content += f"\n{_INTELLIGENCE_SECTION}\n{_INTELLIGENCE_COMMENT}{entry}"
     _write_atomic(path, content)
     return True
 

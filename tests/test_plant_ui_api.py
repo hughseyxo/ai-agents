@@ -219,6 +219,46 @@ def test_delete_plant(client, mock_store_db):
     assert len(store.get_plants()) == 0
     assert not prof_path.exists()
 
+def test_complete_care_task_removes_task(client, mock_store_db):
+    store, db, plants_dir = mock_store_db
+    db.set_state("plant-agent", "pending_plant_actions", [
+        {"plant": "Lavender", "action": "deadhead", "reason": "spent blooms", "date": "2026-06-17"},
+        {"plant": "Monstera", "action": "repot", "reason": "root bound", "date": "2026-06-17"},
+    ])
+    response = client.post("/api/care-tasks/complete", json={"plant": "Lavender", "action": "deadhead"})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "success"
+    assert data["remaining"] == 1
+    remaining = db.get_state("plant-agent", "pending_plant_actions")
+    assert len(remaining) == 1
+    assert remaining[0]["plant"] == "Monstera"
+
+
+def test_complete_care_task_writes_profile_note(client, mock_store_db):
+    store, db, plants_dir = mock_store_db
+    plants_dir.mkdir(parents=True, exist_ok=True)
+    prof = plants_dir / "lavender.md"
+    prof.write_text(
+        "# Lavender\n\n## Intelligence Notes\n<!-- Appended by each intelligence run -->\n"
+    )
+    db.set_state("plant-agent", "pending_plant_actions", [
+        {"plant": "Lavender", "action": "deadhead", "reason": "spent blooms", "date": "2026-06-17"},
+    ])
+    client.post("/api/care-tasks/complete", json={"plant": "Lavender", "action": "deadhead"})
+    txt = prof.read_text()
+    assert "(completed)" in txt
+    assert "deadhead" in txt
+
+
+def test_complete_care_task_idempotent(client, mock_store_db):
+    store, db, plants_dir = mock_store_db
+    db.set_state("plant-agent", "pending_plant_actions", [])
+    response = client.post("/api/care-tasks/complete", json={"plant": "Ghost", "action": "prune"})
+    assert response.status_code == 200
+    assert response.json()["remaining"] == 0
+
+
 def test_photo_assessment(client, mock_store_db):
     store, db, plants_dir = mock_store_db
     

@@ -63,3 +63,42 @@ def test_write_health_assessment_slug_with_spaces(tmp_path, monkeypatch):
     result = pp.write_health_assessment("Snake Plant", "### 2026-06-04 — Healthy\n- Fine")
     assert result is True
     assert "Fine" in p.read_text()
+
+
+# --- append_intelligence_note ---
+
+def test_append_intelligence_note_inserts_after_comment(tmp_path, monkeypatch):
+    from agents import plant_profiles as pp
+    monkeypatch.setattr(pp, "PLANTS_DIR", tmp_path)
+    p = tmp_path / "lavender.md"
+    p.write_text(
+        "# Lavender\n\n"
+        "## Intelligence Notes\n"
+        "<!-- Appended by each intelligence run -->\n"
+        "### 2026-06-01 (pruning)\n- Old note\n"
+    )
+    result = pp.append_intelligence_note("Lavender", "### 2026-06-17 (completed)\n- deadhead (done via PWA)")
+    assert result is True
+    txt = p.read_text()
+    assert "### 2026-06-17 (completed)" in txt
+    assert "deadhead (done via PWA)" in txt
+    # New note should appear before the old one (inserted after comment)
+    assert txt.index("2026-06-17") < txt.index("2026-06-01")
+
+
+def test_append_intelligence_note_section_missing_creates_it(tmp_path, monkeypatch):
+    from agents import plant_profiles as pp
+    monkeypatch.setattr(pp, "PLANTS_DIR", tmp_path)
+    p = tmp_path / "fern.md"
+    p.write_text("# Fern\n\n## Plant Info\n- Location: Indoor\n")
+    result = pp.append_intelligence_note("Fern", "### 2026-06-17 (completed)\n- repot (done via PWA)")
+    assert result is True
+    txt = p.read_text()
+    assert "## Intelligence Notes" in txt
+    assert "repot (done via PWA)" in txt
+
+
+def test_append_intelligence_note_missing_profile_returns_false(tmp_path, monkeypatch):
+    from agents import plant_profiles as pp
+    monkeypatch.setattr(pp, "PLANTS_DIR", tmp_path)
+    assert pp.append_intelligence_note("Ghost", "### 2026-06-17\n- note") is False

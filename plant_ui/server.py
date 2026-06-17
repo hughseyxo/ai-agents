@@ -23,6 +23,7 @@ from agents.db import AgentDB
 from agents.plant_profiles import (
     write_health_assessment,
     append_frequency_history,
+    append_intelligence_note,
     profile_path,
     write_profile_atomic
 )
@@ -62,6 +63,10 @@ class PlantUpdate(BaseModel):
 
 class WaterAllRequest(BaseModel):
     location: Literal["indoor", "outdoor"]
+
+class CompleteTaskRequest(BaseModel):
+    plant: str
+    action: str
 
 # Helper functions
 def get_store() -> PlantStore:
@@ -376,6 +381,16 @@ def get_attention(store: PlantStore = Depends(get_store), db: AgentDB = Depends(
         "photos_needed": photos_needed,
         "care_tasks": care_tasks,
     }
+
+@app.post("/api/care-tasks/complete")
+def complete_care_task(data: CompleteTaskRequest, db: AgentDB = Depends(get_db)):
+    tasks = db.get_state("plant-agent", "pending_plant_actions") or []
+    updated = [t for t in tasks if not (t.get("plant") == data.plant and t.get("action") == data.action)]
+    db.set_state("plant-agent", "pending_plant_actions", updated)
+    today = date.today().isoformat()
+    append_intelligence_note(data.plant, f"### {today} (completed)\n- {data.action} (marked done via PWA)")
+    return {"status": "success", "remaining": len(updated)}
+
 
 @app.post("/api/plants/{name}/photo")
 async def upload_photo(name: str, file: UploadFile = File(...), store: PlantStore = Depends(get_store)):

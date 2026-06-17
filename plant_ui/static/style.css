@@ -1101,3 +1101,7 @@ input[type="text"]:focus, input[type="number"]:focus, select:focus {
 .font-bold {
   font-weight: 700;
 }
+
+.care-task-list { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.care-task-row  { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.btn-xs         { font-size: 11px; padding: 3px 8px; border-radius: 6px; }
