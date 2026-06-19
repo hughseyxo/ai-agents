@@ -56,7 +56,7 @@ Analyze all data to identify:
 Field rules:
 - Include a `plants` entry for every plant where there is something worth noting. Skip plants with nothing to report.
 - `status`: one of `Healthy`, `Stressed`, `Overwatered`, `Underwatered`, `Concerning`
-- `notes`: 2–5 bullet points about patterns, trends, anything notable from the data
+- `notes`: 2–5 concise bullet points — **current state only**. Write what is true NOW; do not re-narrate past events or repeat notes already in the profile. These will **replace** (not append to) `## Current Observations` in the plant profile, so keep them tightly curated. Add `[[wikilinks]]` to related plants (same species or location) where relevant. Add `#tags` for conditions (e.g. `#overdue-water`, `#outdoor-heat`). If a horticultural knowledge gap blocks a decision (e.g. species-specific frequency), search the web for 3+ sources and record the consensus + citations as an extra note under `## Care Research`.
 - `needs_photo`: true if the plant needs a photo check (concerning patterns, last assessment >14 days ago, or weather stress). The FloraPulse PWA will surface this to the user.
 - `frequency_change`: null if no change needed. If the plant's **baseline** watering cadence should change based on observations, set `{"days": N, "reason": "short reason"}`. Changes are clamped to ±2 days per run; large moves converge over several runs. Do NOT pre-adjust for today's weather — the system folds that in automatically.
 - `pruning`: one entry per plant that needs a pruning action. Empty array if none. These are surfaced in the FloraPulse PWA attention panel.
