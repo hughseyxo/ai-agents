@@ -1,3 +1,27 @@
+---
+type: plant
+location: outdoor
+sunlight: full sun
+water_sensitivity: medium
+baseline_frequency_days: 12
+effective_frequency_days: 10
+last_watered: '2026-06-16'
+needs_photo: false
+latest_health:
+  date: '2026-06-16'
+  summary: "Full-sun outdoor potted lavender in good health \u2014 abundant purple\
+    \ flower spikes over dense, upright grey-green foliage with firm turgor and a\
+    \ lightly mounded form. Just watered today (0 days ago): soil surface is dark/moist\
+    \ and the patio is visibly wet, so the plant is at the very start of its cycle\
+    \ and needs no further water. No drought signs (no wilting, silvering, or flower-spike\
+    \ droop) and no overwatering signs (no basal grey/black stem rot, yellowing, or\
+    \ mushy wood), consistent with the run of healthy assessments from 2026-06-05/06."
+  status: Healthy
+tags:
+- plant
+- outdoor
+- sensitivity/medium
+---
 # Lavender
 
 ## Plant Info

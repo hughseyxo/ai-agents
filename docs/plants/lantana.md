@@ -1,3 +1,27 @@
+---
+type: plant
+location: outdoor
+sunlight: full sun
+water_sensitivity: medium
+baseline_frequency_days: 5
+effective_frequency_days: 3
+last_watered: '2026-06-16'
+needs_photo: false
+latest_health:
+  date: '2026-06-16'
+  summary: "The Lantana is in excellent health \u2014 dense, bushy and fully turgid\
+    \ with deep green foliage and no wilting whatsoever, confirming the sustained\
+    \ recovery from the late-May/early-June underwatering episodes. Numerous flower\
+    \ buds are forming at the stem tips and beginning to open, indicating the plant\
+    \ is entering its bloom cycle. Soil is dark and visibly moist (watered today,\
+    \ plus recent rain on the fence/ground), and the 5-day cadence continues to serve\
+    \ it well."
+  status: Healthy
+tags:
+- plant
+- outdoor
+- sensitivity/medium
+---
 # Lantana
 
 ## Plant Info

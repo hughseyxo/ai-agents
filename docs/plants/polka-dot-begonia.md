@@ -1,3 +1,28 @@
+---
+type: plant
+location: indoor
+sunlight: partial shade
+water_sensitivity: medium
+baseline_frequency_days: 7
+effective_frequency_days: 7
+last_watered: '2026-06-16'
+needs_photo: false
+latest_health:
+  date: '2026-06-16'
+  summary: "The Begonia maculata's light stress has progressed markedly since the\
+    \ 2026-06-06 assessment: the red/coral/bronze pigmentation that was confined to\
+    \ outer/upper leaves is now near-universal across the entire canopy, with very\
+    \ little deep green remaining. Core structure is still sound \u2014 stems are\
+    \ green, firm and upright with no wilting or rot \u2014 but the repeatedly-flagged\
+    \ repositioning and pruning actions have still not been taken, and the plant is\
+    \ visibly worse than baseline. This is a light/cultural problem, not a watering\
+    \ one."
+  status: Concerning
+tags:
+- plant
+- indoor
+- sensitivity/medium
+---
 # Polka Dot Begonia
 
 ## Plant Info

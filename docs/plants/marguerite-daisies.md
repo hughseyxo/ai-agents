@@ -1,3 +1,25 @@
+---
+type: plant
+location: outdoor
+sunlight: full sun
+water_sensitivity: medium
+baseline_frequency_days: 5
+effective_frequency_days: 3
+last_watered: '2026-06-16'
+needs_photo: false
+latest_health:
+  date: '2026-06-16'
+  summary: "All three Marguerite clumps in the shared blue pot are healthy post-watering\
+    \ (0 days). Foliage is green, finely divided and turgid across the pink (left),\
+    \ white-double (right) and front clumps, with no wilting, curl or marginal crisping.\
+    \ The dehydration-stress pattern from 2026-06-01\u219205 remains fully resolved;\
+    \ the 5-day baseline plus mulch continues to hold."
+  status: Healthy
+tags:
+- plant
+- outdoor
+- sensitivity/medium
+---
 # Marguerite daisies
 
 ## Plant Info

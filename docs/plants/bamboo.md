@@ -1,3 +1,26 @@
+---
+type: plant
+location: outdoor
+sunlight: ''
+water_sensitivity: medium
+baseline_frequency_days: 7
+effective_frequency_days: 6
+last_watered: '2026-06-16'
+needs_photo: false
+latest_health:
+  date: '2026-06-16'
+  summary: "This potted black-caned bamboo (likely Fargesia or Phyllostachys nigra)\
+    \ shows a dense, vigorous upper canopy of healthy green foliage with good turgor\
+    \ \u2014 consistent with the prior 2026-06-01 'vibrant lush foliage' assessment.\
+    \ There is some expected browning and leaf drop in the shaded lower interior,\
+    \ which is normal self-thinning rather than disease. Watered today, so it is well\
+    \ hydrated."
+  status: Healthy
+tags:
+- plant
+- outdoor
+- sensitivity/medium
+---
 # Bamboo
 
 ## Plant Info

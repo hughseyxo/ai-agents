@@ -1,3 +1,25 @@
+---
+type: plant
+location: outdoor
+sunlight: partial shade
+water_sensitivity: medium
+baseline_frequency_days: 7
+effective_frequency_days: 6
+last_watered: '2026-06-16'
+needs_photo: true
+latest_health:
+  date: '2026-06-04'
+  summary: This fuchsia is in good health, displaying numerous vibrant magenta-pink
+    pendant blooms alongside a heavy set of unopened buds, indicating active, sustained
+    flowering. Foliage across both the upper and lower trailing growth is green and
+    turgid with no wilting, marking a clear improvement over the late-May/early-June
+    assessments that flagged wilting and reddish-brown stressed tissue.
+  status: Healthy
+tags:
+- plant
+- outdoor
+- sensitivity/medium
+---
 # fuschia
 
 ## Plant Info

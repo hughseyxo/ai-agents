@@ -1,3 +1,25 @@
+---
+type: plant
+location: outdoor
+sunlight: full sun
+water_sensitivity: medium
+baseline_frequency_days: 7
+effective_frequency_days: 5
+last_watered: '2026-06-16'
+needs_photo: false
+latest_health:
+  date: '2026-06-18'
+  summary: "Gazania Orange is healthy 2 days after its last watering (2026-06-16),\
+    \ outdoor full sun on an 8-day cycle. Foliage is dense and deep green with no\
+    \ chlorosis, curl, or crisping, and persistent flowering continues with several\
+    \ orange blooms and developing buds. Consistent with the comfortable tracking\
+    \ seen across every prior assessment \u2014 no stress signal."
+  status: Healthy
+tags:
+- plant
+- outdoor
+- sensitivity/medium
+---
 # Gazania (Orange)
 
 ## Plant Info

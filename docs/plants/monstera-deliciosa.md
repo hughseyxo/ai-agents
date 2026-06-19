@@ -1,3 +1,25 @@
+---
+type: plant
+location: indoor
+sunlight: partial shade
+water_sensitivity: medium
+baseline_frequency_days: 10
+effective_frequency_days: 10
+last_watered: '2026-06-18'
+needs_photo: false
+latest_health:
+  date: '2026-06-18'
+  summary: "Large, vigorous Monstera at day 10 of its 10-day cycle and due for watering\
+    \ today. Foliage is glossy dark-green with many deeply fenestrated mature leaves\
+    \ and firm turgor throughout \u2014 no underwatering stress despite the full interval,\
+    \ and no overwatering signs. Consistent with every prior assessment since late\
+    \ May."
+  status: Healthy
+tags:
+- plant
+- indoor
+- sensitivity/medium
+---
 # Monstera Deliciosa
 
 ## Plant Info

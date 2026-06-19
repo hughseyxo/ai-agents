@@ -1,3 +1,27 @@
+---
+type: plant
+location: outdoor
+sunlight: full sun
+water_sensitivity: medium
+baseline_frequency_days: 5
+effective_frequency_days: 3
+last_watered: '2026-06-16'
+needs_photo: false
+latest_health:
+  date: '2026-06-18'
+  summary: "Vigorous potted oleander with a dense, deep-green canopy of lance-shaped\
+    \ leaves at full turgor and no yellowing, wilt, or leaf scorch. A fresh flush\
+    \ of pink blooms is opening at the lower-left and scattered around the canopy,\
+    \ with abundant developing bud trusses across the centre. The dried/spent flower\
+    \ trusses noted throughout the recent history remain present but the foliage shows\
+    \ zero stress \u2014 consistent with the established post-bloom senescence pattern,\
+    \ not a watering fault."
+  status: Healthy
+tags:
+- plant
+- outdoor
+- sensitivity/medium
+---
 # Oleander
 
 ## Plant Info

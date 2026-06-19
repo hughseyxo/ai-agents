@@ -1,3 +1,26 @@
+---
+type: plant
+location: indoor
+sunlight: full sun
+water_sensitivity: medium
+baseline_frequency_days: 14
+effective_frequency_days: 14
+last_watered: '2026-06-16'
+needs_photo: true
+latest_health:
+  date: '2026-06-06'
+  summary: "This Aloe Vera shows the same open, splaying rosette as the 2026-06-05\
+    \ assessment \u2014 leaves spread wide and the lowest leaves drape outward over\
+    \ the pot rim rather than standing upright. The pattern indicates light/etiolation\
+    \ stress and sun tinting at the windowsill, not thirst: leaves remain firm with\
+    \ no deep wrinkling, translucency, basal yellowing, or soft rot. Watered only\
+    \ 5 days ago on a 12-day cycle; it does not need water."
+  status: Stressed
+tags:
+- plant
+- indoor
+- sensitivity/medium
+---
 # Aloe Vera
 
 ## Plant Info

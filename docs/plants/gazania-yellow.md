@@ -1,3 +1,26 @@
+---
+type: plant
+location: outdoor
+sunlight: full sun
+water_sensitivity: medium
+baseline_frequency_days: 7
+effective_frequency_days: 5
+last_watered: '2026-06-16'
+needs_photo: false
+latest_health:
+  date: '2026-06-18'
+  summary: 'The Gazania is in good health: strappy grey-green foliage on the left
+    of the pot is upright and turgid with no wilt, scorch, browning, spotting, or
+    pest signs. Several daisy-form blooms are present but mostly closed/half-furled,
+    which is normal gazania behaviour under the overcast/low light in this frame rather
+    than a stress signal. Soil surface is dark and appears moist; watered only 2 days
+    ago, so no watering need.'
+  status: Healthy
+tags:
+- plant
+- outdoor
+- sensitivity/medium
+---
 # Gazania (Yellow)
 
 ## Plant Info

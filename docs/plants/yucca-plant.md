@@ -1,3 +1,24 @@
+---
+type: plant
+location: indoor
+sunlight: full sun
+water_sensitivity: medium
+baseline_frequency_days: 14
+effective_frequency_days: 14
+last_watered: '2026-06-18'
+needs_photo: false
+latest_health:
+  date: '2026-06-01'
+  summary: 'The Yucca Plant is exhibiting no visible signs of stress or damage, with
+    healthy green leaves and a consistent growth pattern. Overwatering is a potential
+    concern, particularly at the root level, and requires monitoring before the next
+    watering task on 2026-06-04. '
+  status: ''
+tags:
+- plant
+- indoor
+- sensitivity/medium
+---
 # Yucca Plant
 
 ## Plant Info
