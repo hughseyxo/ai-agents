@@ -1,5 +1,70 @@
 """Tests for agents.plant_profiles — profile-doc file I/O helpers."""
 
+import agents.plant_profiles as pp
+
+
+# --- frontmatter parse/upsert ---
+
+def test_parse_frontmatter_roundtrip():
+    text = "---\ntype: plant\nlocation: indoor\n---\n# Monstera\nbody\n"
+    meta, body = pp.parse_frontmatter(text)
+    assert meta == {"type": "plant", "location": "indoor"}
+    assert body == "# Monstera\nbody\n"
+
+
+def test_parse_frontmatter_absent():
+    meta, body = pp.parse_frontmatter("# No fm\n")
+    assert meta == {}
+    assert body == "# No fm\n"
+
+
+def test_upsert_frontmatter_preserves_body(tmp_path, monkeypatch):
+    monkeypatch.setattr(pp, "PROFILES_DIR", tmp_path)
+    p = tmp_path / "monstera.md"
+    p.write_text("# Monstera\n\n## Current Observations\n- vigorous\n")
+    pp.upsert_frontmatter("Monstera", {"type": "plant", "needs_photo": False})
+    out = p.read_text()
+    assert out.startswith("---\n")
+    assert "## Current Observations" in out
+    assert "- vigorous" in out
+
+
+# --- rewrite_section ---
+
+def test_rewrite_existing_section(tmp_path, monkeypatch):
+    monkeypatch.setattr(pp, "PROFILES_DIR", tmp_path)
+    p = tmp_path / "monstera.md"
+    p.write_text("# M\n\n## Current Observations\n- old\n\n## History\n- 2026-05 repot\n")
+    pp.rewrite_section("Monstera", "Current Observations", "- new fact\n")
+    out = p.read_text()
+    assert "- new fact" in out and "- old" not in out
+    assert "## History\n- 2026-05 repot" in out   # other section intact
+
+
+def test_rewrite_creates_absent_section(tmp_path, monkeypatch):
+    monkeypatch.setattr(pp, "PROFILES_DIR", tmp_path)
+    p = tmp_path / "m.md"; p.write_text("# M\n")
+    pp.rewrite_section("M", "Care Research", "- tolerates 7-14d\n")
+    assert "## Care Research\n- tolerates 7-14d" in p.read_text()
+
+
+# --- read_profile_context ---
+
+def test_read_profile_context(tmp_path, monkeypatch):
+    monkeypatch.setattr(pp, "PROFILES_DIR", tmp_path)
+    (tmp_path / "m.md").write_text(
+        "---\ntype: plant\nneeds_photo: false\n---\n# M\n"
+        "## Current Observations\n- repot overdue\n\n"
+        "## Health Assessments\n"
+        "### 2026-06-18 — Healthy\n- delta a\n"
+        "### 2026-06-06 — Healthy\n- delta b\n"
+        "### 2026-05-01 — Healthy\n- old\n"
+    )
+    ctx = pp.read_profile_context("M", max_assessments=2)
+    assert "repot overdue" in ctx
+    assert "2026-06-18" in ctx and "2026-06-06" in ctx
+    assert "2026-05-01" not in ctx        # bounded
+
 
 def test_append_frequency_history_inserts_row(tmp_path, monkeypatch):
     from agents import plant_profiles as pp
