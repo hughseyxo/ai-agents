@@ -252,7 +252,7 @@ class TestSynthesize:
         agent.synthesize(prompt)
 
         claude_cmd = mock_run.call_args_list[3][0][0]
-        assert "-p" not in claude_cmd
+        assert "-p" in claude_cmd
         claude_prompt = mock_run.call_args_list[3][1]["input"]
         assert "mcp__todoist__find-tasks" in claude_prompt
 

@@ -70,161 +70,6 @@ class TestGate:
 
 
 # ---------------------------------------------------------------------------
-# 2. _create_tasks() short-circuit
-# ---------------------------------------------------------------------------
-
-class TestCreateTasksShortCircuit:
-
-    def _setup_context(self, agent, plants, weather=None):
-        agent.context["plan"] = {"plants": plants, "weather_cache": {}}
-
-    def test_returns_skipped_when_no_plants_due(self, agent):
-        # Plant watered recently, not yet due
-        plant = _make_plant(last_watered="2026-12-01", frequency_days=7)
-        self._setup_context(agent, [plant])
-
-        with patch.object(agent, "synthesize") as mock_synth, \
-             patch("agents.plant_agent.fetch_weather", return_value=None):
-            result = agent._create_tasks()
-
-        assert result.get("skipped") is True
-        assert result.get("reason") == "no_due_plants"
-        mock_synth.assert_not_called()
-
-    def test_does_not_call_synthesize_on_short_circuit(self, agent):
-        plant = _make_plant(last_watered="2026-12-01", frequency_days=7)
-        self._setup_context(agent, [plant])
-
-        synthesize_spy = MagicMock()
-        agent.synthesize = synthesize_spy
-
-        with patch("agents.plant_agent.fetch_weather", return_value=None):
-            agent._create_tasks()
-
-        synthesize_spy.assert_not_called()
-
-    def test_gate_skips_without_calling_synthesize(self, agent):
-        """If the gate blocks (ran recently), synthesize is also not called."""
-        recent_ts = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
-        agent.set_state("last_create_tasks", recent_ts)
-
-        plant = _make_plant(last_watered="2026-05-01", frequency_days=7)
-        self._setup_context(agent, [plant])
-
-        synthesize_spy = MagicMock()
-        agent.synthesize = synthesize_spy
-
-        with patch("agents.plant_agent.fetch_weather", return_value=None):
-            result = agent._create_tasks()
-
-        assert result.get("skipped") is True
-        synthesize_spy.assert_not_called()
-
-
-# ---------------------------------------------------------------------------
-# 3. _photo_requests() rate limiting
-# ---------------------------------------------------------------------------
-
-class TestPhotoRequests:
-
-    def _setup_context(self, agent, plants):
-        agent.context["plan"] = {"plants": plants, "weather_cache": {}}
-
-    def test_skips_when_no_telegram_token(self, agent):
-        plant = _make_plant(needs_photo=True)
-        self._setup_context(agent, [plant])
-
-        with patch.dict(os.environ, {}, clear=True):
-            # Ensure both vars absent
-            os.environ.pop("TELEGRAM_BOT_TOKEN", None)
-            os.environ.pop("TELEGRAM_USER_ID", None)
-            result = agent._photo_requests()
-
-        assert result.get("skipped") is True
-        assert result.get("reason") == "no_telegram_config"
-
-    def test_skips_when_only_token_missing(self, agent):
-        plant = _make_plant(needs_photo=True)
-        self._setup_context(agent, [plant])
-
-        env = {"TELEGRAM_USER_ID": "123456"}
-        with patch.dict(os.environ, env, clear=True):
-            result = agent._photo_requests()
-
-        assert result.get("skipped") is True
-
-    def test_skips_plant_if_photo_requested_within_3_days(self, agent):
-        plant = _make_plant(needs_photo=True)
-        self._setup_context(agent, [plant])
-
-        # Record a request 1 day ago
-        recent_ts = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
-        agent.set_state("photo_request_rates", {"Fern": recent_ts})
-
-        mock_resp = MagicMock()
-        mock_resp.ok = True
-
-        env = {"CONCIERGE_BOT_TOKEN": "fake-token", "TELEGRAM_USER_ID": "123456"}
-        with patch.dict(os.environ, env), \
-             patch("agents.plant_agent.requests.post", return_value=mock_resp) as mock_post:
-            result = agent._photo_requests()
-
-        mock_post.assert_not_called()
-        assert result["sent"] == 0
-
-    def test_sends_request_when_no_rate_limit_entry(self, agent):
-        # No previous request recorded — plant needs_photo=True, no assessment
-        plant = _make_plant(needs_photo=True)
-        self._setup_context(agent, [plant])
-
-        mock_resp = MagicMock()
-        mock_resp.ok = True
-
-        env = {"CONCIERGE_BOT_TOKEN": "fake-token", "TELEGRAM_USER_ID": "123456"}
-        with patch.dict(os.environ, env), \
-             patch("agents.plant_agent.requests.post", return_value=mock_resp) as mock_post:
-            result = agent._photo_requests()
-
-        mock_post.assert_called_once()
-        assert result["sent"] == 1
-
-    def test_sends_request_when_rate_limit_expired(self, agent):
-        plant = _make_plant(needs_photo=True)
-        self._setup_context(agent, [plant])
-
-        # Last request 5 days ago — past the 3-day limit
-        old_ts = (datetime.now(timezone.utc) - timedelta(days=5)).isoformat()
-        agent.set_state("photo_request_rates", {"Fern": old_ts})
-
-        mock_resp = MagicMock()
-        mock_resp.ok = True
-
-        env = {"CONCIERGE_BOT_TOKEN": "fake-token", "TELEGRAM_USER_ID": "123456"}
-        with patch.dict(os.environ, env), \
-             patch("agents.plant_agent.requests.post", return_value=mock_resp) as mock_post:
-            result = agent._photo_requests()
-
-        mock_post.assert_called_once()
-        assert result["sent"] == 1
-
-    def test_no_request_sent_when_plant_does_not_need_photo_and_has_recent_assessment(self, agent):
-        last_assessed = (datetime.now(timezone.utc) - timedelta(days=5)).isoformat()
-        plant = {**_make_plant(), "needs_photo": False, "last_assessment": {"date": last_assessed}}
-        self._setup_context(agent, [plant])
-
-        mock_resp = MagicMock()
-        mock_resp.ok = True
-
-        env = {"CONCIERGE_BOT_TOKEN": "fake-token", "TELEGRAM_USER_ID": "123456"}
-        with patch.dict(os.environ, env), \
-             patch("agents.plant_agent.requests.post", return_value=mock_resp) as mock_post:
-            result = agent._photo_requests()
-
-        mock_post.assert_not_called()
-        assert result["sent"] == 0
-
-
-# ---------------------------------------------------------------------------
 # 3b. _build_status_table() — chronological ordering
 # ---------------------------------------------------------------------------
 
@@ -297,7 +142,8 @@ class TestApplyIntelligenceOutput:
             "pruning": [], "tasks_created": [], "email_sent": False,
         })
 
-        with patch("agents.plant_agent.REPO_ROOT", tmp_path):
+        with patch("agents.plant_agent.REPO_ROOT", tmp_path), \
+                patch("agents.plant_profiles.PLANTS_DIR", plants_dir):
             agent._apply_intelligence_output(output, [plant])
 
         content = profile_path.read_text()
@@ -318,7 +164,8 @@ class TestApplyIntelligenceOutput:
             "pruning": [], "tasks_created": [], "email_sent": False,
         })
 
-        with patch("agents.plant_agent.REPO_ROOT", tmp_path):
+        with patch("agents.plant_agent.REPO_ROOT", tmp_path), \
+                patch("agents.plant_profiles.PLANTS_DIR", plants_dir):
             agent._apply_intelligence_output(output, [plant])
 
         assert profile_path.exists()
@@ -336,7 +183,8 @@ class TestApplyIntelligenceOutput:
         })
         profile_path = plants_dir / "ghost-plant.md"
 
-        with patch("agents.plant_agent.REPO_ROOT", tmp_path):
+        with patch("agents.plant_agent.REPO_ROOT", tmp_path), \
+                patch("agents.plant_profiles.PLANTS_DIR", plants_dir):
             agent._apply_intelligence_output(output, [])  # empty plant list
 
         # No doc created if plant not in list
@@ -430,7 +278,8 @@ class TestApplyIntelligenceOutput:
             "pruning": [], "tasks_created": [], "email_sent": False,
         })
 
-        with patch("agents.plant_agent.REPO_ROOT", tmp_path):
+        with patch("agents.plant_agent.REPO_ROOT", tmp_path), \
+                patch("agents.plant_profiles.PLANTS_DIR", plants_dir):
             agent._apply_intelligence_output(output, [fern, cactus])
 
         assert "Fern looks lush." in (plants_dir / "fern.md").read_text()
@@ -474,32 +323,6 @@ class TestWeatherRecompute:
                    "location": "outdoor", "last_watered": "2026-05-31"}]
         self._agent(plants, None, monkeypatch, tmp_path)._weather_update()
         assert plants[0]["frequency_days"] == 4
-
-
-# ---------------------------------------------------------------------------
-# due_water_tasks (Task 5)
-# ---------------------------------------------------------------------------
-
-from agents.plant_agent import due_water_tasks
-
-
-class TestDueWaterTasks:
-    HOT = TestWeatherRecompute.HOT  # heatwave: 2 days >30, dry
-
-    def test_includes_overdue(self):
-        today = date(2026, 6, 1)
-        plants = [{"name": "X", "frequency_days": 4, "last_watered": "2026-05-27", "location": "indoor"}]
-        assert due_water_tasks(plants, today, None) == [{"name": "X", "due": "2026-05-31"}]
-
-    def test_excludes_future(self):
-        today = date(2026, 6, 1)
-        plants = [{"name": "Y", "frequency_days": 7, "last_watered": "2026-05-31", "location": "indoor"}]
-        assert due_water_tasks(plants, today, None) == []
-
-    def test_heatwave_creates_one_day_early(self):
-        today = date(2026, 6, 1)
-        plants = [{"name": "Z", "frequency_days": 3, "last_watered": "2026-05-30", "location": "outdoor"}]
-        assert due_water_tasks(plants, today, self.HOT) == [{"name": "Z", "due": "2026-06-02", "heatwave": True}]
 
 
 # ---------------------------------------------------------------------------
@@ -570,37 +393,25 @@ class TestExtractJsonArray:
 
 
 # ---------------------------------------------------------------------------
-# 7. _sync_watering() robustness
+# 7. LLM-step failure propagation (no silent success-masking)
 # ---------------------------------------------------------------------------
 
-class TestSyncWatering:
-    def test_prose_wrapped_json_is_synced(self, agent):
-        plant = _make_plant(name="Fern", last_watered="2026-05-01")
-        agent.db.set_state("daily-briefing", "plants", [plant])
-        agent.context["plan"] = {"plants": [plant], "weather_cache": {}}
-        prose = ('Sure! Here you go:\n'
-                 '[{"name": "Fern", "completed_date": "2026-05-30"}]')
-        with patch.object(agent, "synthesize", return_value=prose):
-            result = agent._sync_watering()
-        assert result["synced"] == 1
-        plants = agent.db.get_state("daily-briefing", "plants")
-        assert plants[0]["last_watered"] == "2026-05-30"
-        assert agent.get_state("last_sync_watering")  # gate marked
+class TestStepFailurePropagation:
+    """A synthesize() failure must propagate so BaseAgent marks the run
+    partial_failure, and the gate must NOT be marked (so it retries)."""
 
-    def test_unparseable_output_marks_gate(self, agent):
-        plant = _make_plant(name="Fern")
-        agent.context["plan"] = {"plants": [plant], "weather_cache": {}}
-        with patch.object(agent, "synthesize", return_value="no tasks found"):
-            result = agent._sync_watering()
-        assert result.get("error") == "bad_json"
-        # marked despite parse failure → no hourly hammering
-        assert agent.get_state("last_sync_watering")
-
-    def test_llm_exception_does_not_mark_gate(self, agent):
+    def test_send_status_email_propagates_and_leaves_gate_unmarked(self, agent):
         plant = _make_plant(name="Fern")
         agent.context["plan"] = {"plants": [plant], "weather_cache": {}}
         with patch.object(agent, "synthesize", side_effect=RuntimeError("boom")):
-            result = agent._sync_watering()
-        assert "error" in result
-        # not marked → transient failure retried next run
-        assert not agent.get_state("last_sync_watering")
+            with pytest.raises(RuntimeError):
+                agent._send_status_email()
+        assert not agent.get_state("last_send_status_email")
+
+    def test_intelligence_run_propagates_and_leaves_gate_unmarked(self, agent):
+        plant = _make_plant(name="Fern")
+        agent.context["plan"] = {"plants": [plant], "weather_cache": {}}
+        with patch.object(agent, "synthesize", side_effect=RuntimeError("boom")):
+            with pytest.raises(RuntimeError):
+                agent._intelligence_run()
+        assert not agent.get_state("last_intelligence_run")

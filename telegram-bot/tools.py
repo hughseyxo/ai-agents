@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from agents.db import AgentDB
 from agents.plant_weather import weather_adjusted_frequency, MIN_FREQUENCY, MAX_FREQUENCY
 from agents.weather import fetch_weather
-from agents.plant_profiles import append_frequency_history
+from agents.plant_profiles import append_frequency_history, write_profile_atomic
 
 AGENTS = ["daily-briefing", "news-briefing", "security-audit", "travel-agent", "librarian", "plant-agent", "agent-health"]
 DB_PATH = Path(__file__).parent.parent / "data" / "agents.db"
@@ -498,8 +498,8 @@ def note_plant_observation(name: str, notes: str) -> str:
     profile_path = REPO_ROOT / "docs" / "plants" / f"{slug}.md"
     if not profile_path.exists():
         return f"No profile doc found for {name}"
-    with open(profile_path, "a") as f:
-        f.write(f"\n{notes}")
+    content = profile_path.read_text()
+    write_profile_atomic(profile_path, f"{content}\n{notes}")
     return f"Observation recorded for {name}"
 
 

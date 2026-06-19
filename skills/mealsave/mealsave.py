@@ -425,7 +425,8 @@ def llm_extract(text: str, source_hint: str = "") -> dict:
     try:
         print("[mealsave] Extracting recipe with Claude Sonnet...", file=sys.stderr)
         result = subprocess.run(
-            ["claude", "--dangerously-skip-permissions", "--model", "sonnet", "-p", prompt],
+            ["claude", "-p", "--dangerously-skip-permissions", "--model", "sonnet"],
+            input=prompt,
             capture_output=True,
             text=True,
             timeout=120,
@@ -440,7 +441,8 @@ def llm_extract(text: str, source_hint: str = "") -> dict:
     # Fallback to Antigravity
     try:
         result = subprocess.run(
-            ["agy", "-y", "-p", prompt, "-o", "text"],
+            ["agy", "-y", "-o", "text"],
+            input=prompt,
             capture_output=True,
             text=True,
             timeout=120,

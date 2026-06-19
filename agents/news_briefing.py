@@ -281,7 +281,8 @@ class NewsBriefingAgent(BaseAgent):
                     "category": category
                 })
             return items
-        except Exception:
+        except Exception as e:
+            print(f"[news-briefing] Failed to parse RSS from {source_name}: {e}", file=sys.stderr)
             return []
 
     def _parse_date(self, date_str: str) -> datetime:

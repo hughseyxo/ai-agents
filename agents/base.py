@@ -133,7 +133,7 @@ class BaseAgent:
         },
         {
             "name": "claude",
-            "cmd_prefix": ["claude", "--dangerously-skip-permissions"],
+            "cmd_prefix": ["claude", "-p", "--dangerously-skip-permissions"],
             "cmd_suffix": ["--output-format", "text"],
             "adapt_prompt": False,
         },

@@ -9,7 +9,7 @@ from pathlib import Path
 from .base import BaseAgent, REPO_ROOT
 from .plant_model import PlantIntelligenceResult
 from .plant_weather import weather_adjusted_frequency, apply_frequency_step
-from .plant_profiles import append_frequency_history, write_health_assessment, write_profile_atomic
+from .plant_profiles import append_frequency_history, append_intelligence_note, write_health_assessment, write_profile_atomic
 from .weather import fetch_weather
 
 
@@ -172,11 +172,10 @@ class PlantAgent(BaseAgent):
         prompt_path = REPO_ROOT / "agents" / "prompts" / "plant_status_email.md"
         prompt = prompt_path.read_text()
         prompt = prompt.replace("{{plant_table}}", plant_table).replace("{{today}}", today.isoformat())
-        try:
-            self.synthesize(prompt)
-        except Exception as e:
-            print(f"[{self.name}] Failed to send status email: {e}", file=sys.stderr)
-            return {"skipped": True, "error": str(e)}
+        # Let synthesize() failures propagate: BaseAgent._execute_step records the
+        # step error and marks the run partial_failure. Gate stays unmarked on
+        # failure (we never reach _mark_ran), so it retries next run.
+        self.synthesize(prompt)
         self._mark_ran("send_status_email")
         return {"sent": True, "plants": len(plants)}
 
@@ -217,12 +216,9 @@ class PlantAgent(BaseAgent):
             .replace("{{agent_notes}}", agent_notes)
             .replace("{{today}}", today.isoformat()))
 
-        try:
-            output = self.synthesize(prompt)
-        except Exception as e:
-            # Don't mark the gate — let it retry on the next hourly run
-            print(f"[{self.name}] Intelligence run LLM failed: {e}", file=sys.stderr)
-            return {"skipped": True, "error": str(e)}
+        # Let synthesize() failures propagate so the run is marked partial_failure.
+        # Gate stays unmarked on failure (we never reach _mark_ran) → retries next run.
+        output = self.synthesize(prompt)
         self._apply_intelligence_output(output, plants)
         self._mark_ran("intelligence_run")
         return {"ran": True}
@@ -248,22 +244,13 @@ class PlantAgent(BaseAgent):
 
             # Append intelligence notes to profile
             if entry.notes:
-                slug = plant_name.lower().replace(" ", "-").replace("/", "-")
-                profile_path = PLANTS_DIR / f"{slug}.md"
-                if not profile_path.exists() and plant:
-                    _create_profile_doc(profile_path, plant)
-                if profile_path.exists():
-                    notes_text = "\n".join(f"- {n}" for n in entry.notes)
-                    note_entry = f"\n### {today}\n{notes_text}\n"
-                    content = profile_path.read_text()
-                    if "## Intelligence Notes" in content:
-                        content = content.replace(
-                            "<!-- Appended by each intelligence run -->",
-                            f"<!-- Appended by each intelligence run -->{note_entry}",
-                        )
-                    else:
-                        content += f"\n## Intelligence Notes\n<!-- Appended by each intelligence run -->{note_entry}"
-                    write_profile_atomic(profile_path, content)
+                if plant:
+                    slug = plant_name.lower().replace(" ", "-").replace("/", "-")
+                    profile_path = PLANTS_DIR / f"{slug}.md"
+                    if not profile_path.exists():
+                        _create_profile_doc(profile_path, plant)
+                notes_text = "\n".join(f"- {n}" for n in entry.notes)
+                append_intelligence_note(plant_name, f"### {today}\n{notes_text}")
 
             # Apply frequency change
             if entry.frequency_change and plant:
@@ -296,22 +283,10 @@ class PlantAgent(BaseAgent):
                 for p in result.pruning
             ])
         for pruning in result.pruning:
-            slug = pruning.name.lower().replace(" ", "-").replace("/", "-")
-            profile_path = PLANTS_DIR / f"{slug}.md"
-            if profile_path.exists():
-                action_text = pruning.action
-                if pruning.reason:
-                    action_text += f" ({pruning.reason})"
-                pruning_entry = f"\n### {today} (pruning)\n- {action_text}\n"
-                content = profile_path.read_text()
-                if "## Intelligence Notes" in content:
-                    content = content.replace(
-                        "<!-- Appended by each intelligence run -->",
-                        f"<!-- Appended by each intelligence run -->{pruning_entry}",
-                    )
-                else:
-                    content += f"\n## Intelligence Notes\n<!-- Appended by each intelligence run -->{pruning_entry}"
-                write_profile_atomic(profile_path, content)
+            action_text = pruning.action
+            if pruning.reason:
+                action_text += f" ({pruning.reason})"
+            append_intelligence_note(pruning.name, f"### {today} (pruning)\n- {action_text}")
 
     def report(self) -> str:
         weather = self.context.get("weather_update", {})
