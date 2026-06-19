@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from agents.db import AgentDB
 from agents.plant_weather import weather_adjusted_frequency, MIN_FREQUENCY, MAX_FREQUENCY
 from agents.weather import fetch_weather
-from agents.plant_profiles import append_frequency_history, write_profile_atomic
+from agents.plant_profiles import append_frequency_history, write_profile_atomic, upsert_frontmatter, parse_frontmatter
 
 AGENTS = ["daily-briefing", "news-briefing", "security-audit", "travel-agent", "librarian", "plant-agent", "agent-health"]
 DB_PATH = Path(__file__).parent.parent / "data" / "agents.db"
@@ -485,9 +485,17 @@ def save_plant_assessment(plant_name: str, summary: str) -> str:
         if not match:
             db.close()
             return f"No plant named '{plant_name}' found — assessment not saved."
-        match["last_assessment"] = {"date": date.today().isoformat(), "summary": summary}
+        today = date.today().isoformat()
+        match["last_assessment"] = {"date": today, "summary": summary}
         db.set_state("daily-briefing", "plants", plants)
         db.close()
+        # Refresh latest_health in frontmatter projection (merge, preserve other fields)
+        from agents.plant_profiles import profile_path as _pp
+        path = _pp(match["name"])
+        if path.exists():
+            existing_meta, _ = parse_frontmatter(path.read_text())
+            existing_meta["latest_health"] = {"date": today, "summary": summary}
+            upsert_frontmatter(match["name"], existing_meta)
         return f"{match['name']} assessment saved."
     except Exception as e:
         return f"Failed to save assessment: {e}"

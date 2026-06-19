@@ -233,13 +233,6 @@ def _analyze_plant_image(image_bytes: bytes, plant: dict) -> tuple[str, dict | N
     except Exception:
         days_str = "unknown"
 
-    # Load plant profile doc for context
-    slug = plant["name"].lower().replace(" ", "-")
-    profile_path = PLANT_ASSESSMENT_DIR / f"{slug}.md"
-    profile_context = ""
-    if profile_path.exists():
-        profile_context = f"\n\nPlant profile history:\n{profile_path.read_text()}"
-
     # Load species reference for this plant
     species_context = _load_species_context(plant["name"])
     system_prompt = PLANT_ASSESSMENT_SYSTEM
@@ -248,12 +241,12 @@ def _analyze_plant_image(image_bytes: bytes, plant: dict) -> tuple[str, dict | N
 
     user_text = (
         f"This is a {plant['name']} ({plant.get('location', 'unknown location')}). "
-        f"Last watered {last_watered} ({days_str})."
+        f"Last watered {last_watered} ({days_str}). "
         f"Base watering frequency: every {plant.get('frequency_days', '?')} days."
-        f"{profile_context}"
     )
     with _temp_image(image_bytes) as path:
-        raw_response = assess_image(path, system_prompt, user_text)
+        # Profile context injected inside assess_image via read_profile_context
+        raw_response = assess_image(path, system_prompt, user_text, plant_name=plant["name"])
 
     if not raw_response:
         return "Plant assessment unavailable right now. Try again later.", None
