@@ -10,6 +10,9 @@
 
 ## Health Assessments
 <!-- Photo assessments appended here -->
+### 2026-06-18 — Healthy
+Gazania Orange healthy 2 days after last watering (2026-06-16), outdoor full sun on the 8-day cycle. Top-down view: dense deep-green lance-shaped foliage with silvery undersides, firm and filling the pot; spreading habit normal, no chlorosis/curl/crisping or heat-sun stress. Persistent flowering continues — several orange blooms (most furled, normal low-light closure not wilt) plus one rounded unopened bud centre-right and multiple developing buds. No spent/ragged flower obviously visible this frame (prior lower-rim deadheading task may have been actioned). Soil surface dark and uniformly moist consistent with recent watering — held to 'delay' (only 2 of 8 days elapsed). No frequency change warranted: tracks comfortably across all assessments to date with no recurring stress signal.
+
 ### 2026-06-04 — Healthy
 Gazania Orange healthy 7 days after last watering (2026-05-28), outdoor full sun. Foliage dense, deep green, upright — no chlorosis, curl, crisping or heat/sun stress. Persistent flowering continues: several orange blooms (most furled — normal low-light closure, not wilt), one spent/ragged flower at lower-right rim (normal senescence — deadhead to promote bloom), plus multiple developing buds. Soil surface dark and moist and surrounding pavement visibly wet, indicating recent rain — held watering to 'delay' (would otherwise be ~2 days from due on the 9-day baseline). No frequency change warranted: plant tracks comfortably across every assessment to date with no recurring stress signal.
 
@@ -20,6 +23,34 @@ Gazania Orange healthy 7 days after last watering (2026-05-28), outdoor full sun
 
 ## Intelligence Notes
 <!-- Appended by each intelligence run -->
+### 2026-06-17 (completed)
+- Deadhead spent flower at lower-right rim (marked done via PWA)
+
+### 2026-06-17 (pruning)
+- Deadhead spent flower at lower-right rim (Encourage further blooming and improve appearance; flagged since 2026-06-06 (11 days overdue))
+
+### 2026-06-17
+- Dense, deep green foliage upright and firm; persistent orange flowering with multiple developing buds
+- One spent/ragged flower at lower-right rim (normal senescence)
+- Last assessment 13 days old (2026-06-04) — due for photo check
+- Tracks comfortably on 7-day baseline with no recurring stress signal across all assessments
+
+### 2026-06-16 (pruning)
+- Deadhead spent flower at lower-right rim (Encourage further blooming and improve appearance; flagged since 2026-06-06 (10 days overdue))
+
+### 2026-06-16
+- Dense deep green foliage upright and firm; persistent flowering with several open orange blooms and multiple developing buds
+- 7-day baseline tracks comfortably across all assessments with no recurring stress signal
+- Last assessment 12 days old (2026-06-04) — due for photo check
+
+### 2026-06-15 (pruning)
+- Deadhead spent flower at lower-right rim (Encourage further blooming and improve appearance; flagged since 2026-06-06 (9 days overdue))
+
+### 2026-06-15
+- Dense deep green foliage upright and firm; persistent orange flowering with multiple developing buds
+- Tracks comfortably on 7-day baseline with no recurring stress signal across all assessments to date
+- Overdue for watering (adjusted 2026-06-13, 2 days past); deadheading spent flower flagged since 2026-06-06 (9 days overdue)
+
 ### 2026-06-14 (pruning)
 - Deadhead spent flower at lower-right rim (Encourage further blooming and improve appearance (task exists))
 

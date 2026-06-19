@@ -19,6 +19,15 @@ Multi-cane Yucca photographed on an indoor windowsill (bright/full-sun position,
 
 ## Intelligence Notes
 <!-- Appended by each intelligence run -->
+### 2026-06-16
+- Earlier overwatering concern (2026-05-28→06-04) fully unrealised; 2026-06-05 assessment found zero rot/yellowing/mushy tissue
+- All three rosettes firm, deep green, no trunk-base rot; current 14-day schedule working well
+- Intelligence was over-cautious; trend corrected
+
+### 2026-06-15
+- Earlier overwatering concern (pale bottom leaves, 2026-05-28–06-04) fully unrealised; 2026-06-05 assessment found zero rot/yellowing/mushy tissue
+- All three rosettes firm, deep green, no rot; current 14-day schedule working well post-correction
+
 ### 2026-06-14
 - On-schedule 14-day cycle; last watered 2026-06-04 (10 days ago), adjusted watering 2026-06-18
 - Earlier overwatering concern (pale bottom leaves, 2026-05-28→06-04) appears unrealised; 2026-06-05 assessment found zero rot/yellowing/mushy tissue

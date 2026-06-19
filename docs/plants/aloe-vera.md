@@ -30,6 +30,22 @@ IMPORTANT correction to history: prior intelligence/health notes repeatedly desc
 
 ## Intelligence Notes
 <!-- Appended by each intelligence run -->
+### 2026-06-18
+- Light stress (splaying rosette, etiolation), NOT drought—critical misdiagnosis corrected
+- Frequency reverted to 14 days from wrongly-cut 14→12→10 cycle
+- 2026-06-06 assessment confirms zero drought: leaves firm and plump, no wrinkling
+- Red/brown leaf tips are sun tinting; recommend repositioning away from direct window
+
+### 2026-06-16
+- Splaying rosette corrected as light stress, NOT drought (frequency wrongly cut 14→12→10 based on misdiagnosis)
+- Baseline reverted to 14 days post-2026-06-06; leaves firm and plump, zero drought signs confirmed
+- Red/brown leaf tips are sun tinting; recommend repositioning away from direct window to tighten rosette
+
+### 2026-06-15
+- Critical correction: light stress (splaying rosette) misdiagnosed as drought; frequency wrongly cut 14→12→10
+- 2026-06-05/06 assessments explicitly confirm no drought: leaves firm and plump, no deep wrinkling; reverted to 14-day baseline
+- Red/brown leaf tips are sun-tinting, not underwatering; recommend repositioning away from direct window to tighten rosette
+
 ### 2026-06-14
 - Light stress (splaying rosette, etiolation), NOT drought stress—critical misdiagnosis now corrected
 - Baseline wrongly cut 14→12→10 days based on false drought assessment; 2026-06-05/06 assessments explicitly confirm NO drought: leaves firm and plump, no deep wrinkling, no translucency

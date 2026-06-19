@@ -9,6 +9,9 @@
 
 ## Health Assessments
 <!-- Photo assessments appended here -->
+### 2026-06-18 — Healthy
+Potted outdoor oleander against fence; full vigorous mounded canopy of deep green lance-shaped leaves at full turgor. No yellowing, wilt, or bacterial leaf scorch — foliage health unchanged from the long healthy run since 2026-06-04. Active pink bloom flush: a cluster of open blooms lower-left, single blooms scattered right, and abundant developing bud trusses through the centre. The significant browned/dried spent flower trusses and dried bud clusters first flagged 2026-06-04 remain present throughout the centre of the canopy — interpreting again as normal post-bloom senescence given zero foliage stress, NOT underwatering. Watered 2 days ago (2026-06-16), base frequency 6 days — on schedule, no change warranted. Deadheading and post-bloom cut-back (top 1/3–1/2 into green wood) remain outstanding and overdue per intelligence notes; performing this would clear the dried trusses and redirect energy into the active flush (wear gloves — sap toxic). Watch next photo: if dried trusses keep accumulating without deadheading they're cosmetic, but if any leaf yellowing/drop appears alongside, reassess for stress.
+
 ### 2026-06-04 — Healthy
 Dense, vigorous canopy with deep green lance-shaped leaves at full turgor; no yellowing, wilt, or leaf scorch. Active flowering flush: several open pink blooms (centre/right) plus many developing buds. New observation vs. prior assessments: a significant number of browned, dried flower trusses and spent bud clusters distributed through the canopy (centre and lower areas). Interpreting these as spent blooms plus some buds that dried before opening rather than a watering fault, since foliage shows zero stress signs. Recommend deadheading spent blooms and lightly removing dried trusses to redirect energy into the current flush (wear gloves — sap toxic). Soil/pot not visible in frame; moisture inferred healthy from leaf turgor. Last watered 2026-05-31 (4 days ago), base frequency 5 days — on schedule, no change warranted. Watch next photo: if browning buds increase alongside any leaf yellowing/drop, reassess for underwatering or premature flower drop.
 
@@ -19,6 +22,45 @@ Dense, vigorous canopy with deep green lance-shaped leaves at full turgor; no ye
 
 ## Intelligence Notes
 <!-- Appended by each intelligence run -->
+### 2026-06-19 (completed)
+- deadhead spent blooms + post-bloom cut-back (top 1/3–1/2 into green wood only) (marked done via PWA)
+
+### 2026-06-18 (pruning)
+- deadhead spent blooms + post-bloom cut-back (top 1/3–1/2 into green wood only) (redirect energy into active pink bloom flush, promote bushier regrowth; flagged since 2026-06-06 (12 days overdue))
+
+### 2026-06-18
+- Vigorous potted growth, deep-green foliage at full turgor, active pink bloom flush opening
+- Significant spent/dried flower trusses present; interpreting as normal post-bloom senescence, not underwatering
+- 5-day baseline tracking excellently; no frequency change warranted
+
+### 2026-06-17 (completed)
+- Deadhead spent blooms and dried trusses; post-bloom cut-back (top 1/3–1/2 into green wood only) (marked done via PWA)
+
+### 2026-06-17 (pruning)
+- Deadhead spent blooms and dried trusses; post-bloom cut-back (top 1/3–1/2 into green wood only) (Redirect energy into active pink bloom flush; promote bushier regrowth; flagged since 2026-06-06 (11 days overdue))
+
+### 2026-06-17
+- Vigorous, deep green foliage, excellent turgor; active pink blooms and developing buds
+- Last assessment 13 days old (2026-06-04) — on schedule
+- Significant spent/dried flower trusses throughout canopy; interpreting as normal post-bloom senescence, not watering fault
+- 5-day baseline working excellently
+
+### 2026-06-16 (pruning)
+- Deadhead spent blooms and dried trusses; post-bloom cut-back (top 1/3–1/2 into green wood only) (Significant spent/dried flower trusses throughout canopy; redirect energy into active pink bloom flush; flagged since 2026-06-06 (10 days overdue))
+
+### 2026-06-16
+- Vigorous, deep green foliage, excellent turgor, active pink blooms and developing buds
+- Last assessment 12 days old (2026-06-04) — due for photo check
+- Significant spent/dried flower trusses throughout canopy; interpreting as normal post-bloom senescence, not watering fault
+
+### 2026-06-15 (pruning)
+- Deadhead spent blooms and dried trusses + post-bloom cut-back (top 1/3–1/2 into green wood only) (Redirect energy to active pink bloom flush; promote bushier regrowth; flagged since 2026-06-06 (9 days overdue))
+
+### 2026-06-15
+- Vigorous deep green foliage, excellent turgor; active pink bloom flush with developing buds
+- Significant spent/dried flower trusses throughout canopy (normal post-bloom senescence); 5-day baseline working excellently
+- Deadheading and post-bloom cut-back flagged since 2026-06-06 (9 days overdue); prioritize to redirect energy
+
 ### 2026-06-14 (pruning)
 - Deadhead spent flower trusses and dried buds (Redirect energy into active pink bloom flush; sap toxic—wear gloves (task exists))
 

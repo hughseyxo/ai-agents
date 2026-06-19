@@ -9,6 +9,9 @@
 
 ## Health Assessments
 <!-- Photo assessments appended here -->
+### 2026-06-16 — Healthy
+Outdoor full-sun Lantana against the wooden fence, photographed just after watering (0 days ago) with visible rain on the fence boards and wet paving. Plant is dense, compact and bushy with excellent turgor throughout — zero wilting, sustaining the recovered state first confirmed 2026-06-04 and consistent across every assessment since. Foliage uniformly deep green with the typical rough-textured leaves; no yellowing, no crispy edges, no leaf/flower drop. Bloom cycle is now starting: numerous bud clusters at stem tips, several opening into pale yellow/cream florets (the long-anticipated bloom onset). Soil surface dark and moist. No whitefly, spider mite, or mildew visible. A few minor bare twiggy stem ends low in the canopy but nothing dead or diseased. 5-day baseline + weather adjustment continues to work well — no frequency change warranted. Recommend deadheading spent clusters now that flowers are opening to sustain continuous bloom; continue monitoring that turgor holds through warmer spells.
+
 ### 2026-06-04 — Healthy
 Clear recovery confirmed. Photo (outdoor, against fence, full sun) shows a turgid, bushy plant with no wilting at all — a decisive improvement over the persistent wilted/droopy underwatering stress logged from 2026-05-25 through 2026-06-02. Foliage is uniformly deep green with strong turgor; no yellowing, no crispy edges, no leaf/flower drop. Many immature flower buds forming across stem tips (not yet open), indicating the plant is healthy and about to enter bloom. Soil surface looks dark/moist, consistent with watering 4 days ago. The reduced watering cadence (5 days, applied via prior assessments) appears to be working — drought stress has resolved. No pest signs (whitefly/spider mite/mildew) visible. Recommend holding current cadence and deadheading once buds open to sustain bloom. No frequency change warranted at this time; continue monitoring that turgor holds through warmer spells.
 
@@ -19,6 +22,34 @@ Clear recovery confirmed. Photo (outdoor, against fence, full sun) shows a turgi
 
 ## Intelligence Notes
 <!-- Appended by each intelligence run -->
+### 2026-06-17 (completed)
+- Deadhead spent clusters as pale yellow/cream florets open (marked done via PWA)
+
+### 2026-06-17 (pruning)
+- Deadhead spent clusters as pale yellow/cream florets open (Sustain continuous bloom and redirect energy to developing buds; bloom cycle just beginning)
+
+### 2026-06-17
+- Clear recovery from persistent late-May underwatering stress (wilting through 2026-06-02); now dense, bushy, fully turgid
+- Numerous bud clusters at stem tips beginning to open into pale yellow/cream florets (bloom cycle onset)
+- Just watered 2026-06-16; soil dark and moist
+- 5-day baseline + weather adjustment working excellently
+
+### 2026-06-16 (pruning)
+- Deadhead spent clusters as pale yellow/cream florets open (Sustain continuous bloom and redirect energy to developing buds; bloom cycle just beginning)
+
+### 2026-06-16
+- Clear recovery from persistent late-May underwatering stress (wilting through 2026-06-02); now dense, bushy, fully turgid
+- Numerous bud clusters at stem tips beginning to open into pale yellow/cream florets (bloom cycle onset)
+- 5-day baseline + weather adjustment working excellently post-recovery
+
+### 2026-06-15 (pruning)
+- Deadhead once buds open (Sustain flowering and redirect energy to developing buds)
+
+### 2026-06-15
+- Clear recovery from persistent late-May underwatering stress (wilting through 2026-06-02); now dense, bushy, turgid
+- Many immature flower buds forming; 5-day baseline + weather adjustment working excellently post-recovery
+- Overdue for watering: adjusted date 2026-06-11 is 4 days past due; catch-up needed today
+
 ### 2026-06-14 (pruning)
 - Deadhead spent blooms once buds open (Sustain flowering and redirect energy to developing buds (task exists))
 

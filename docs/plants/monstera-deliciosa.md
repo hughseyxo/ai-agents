@@ -9,6 +9,13 @@
 
 ## Health Assessments
 <!-- Photo assessments appended here -->
+### 2026-06-18 — Healthy
+- Photographed at day 10 of the 10-day cycle (last watered 2026-06-08); today's scheduled watering is appropriate — water on schedule.
+- Canopy remains large, vigorous and glossy with many deeply fenestrated mature leaves; firm turgor throughout, no wilt and no inward edge curl despite the full 10-day interval (no underwatering), and no lower-leaf yellowing, mushy stems, webbing or scale (no overwatering or pests).
+- Aerial/exposed roots remain prominent at the stem base and trailing — the same soil compaction / pot-outgrowth issue flagged on every run since 2026-05-28. The long-standing Todoist repot task is now well overdue (2–3+ weeks); repot into a slightly larger pot with fresh well-draining mix should be prioritised this week.
+- Minor cosmetic-only flecking/dried residue on a few leaf tips and some fibrous lint caught on lower leaves; monitor, no action.
+- Plant leans toward the window — rotate periodically and consider a stake/moss pole for support. 10-day base frequency continues to suit the plant; no frequency change indicated.
+
 ### 2026-06-06 — Healthy
 - Photographed at day 10 of the 10-day cycle (last watered 2026-05-27); today's scheduled watering is appropriate — water on schedule.
 - Canopy remains large, vigorous and glossy with many deeply fenestrated mature leaves; firm turgor throughout, no wilt, no inward edge curl (no underwatering despite full 10-day interval), no lower-leaf yellowing, no mushy stems, no webbing/scale.
@@ -31,6 +38,22 @@
 
 ## Intelligence Notes
 <!-- Appended by each intelligence run -->
+### 2026-06-17
+- On-schedule 10-day cycle; excellent turgor and vigor throughout
+- Last assessment 11 days old (2026-06-06) — due for photo check tomorrow (adjusted watering 2026-06-18)
+- Standing issue: exposed surface roots and soil compaction persistent across all assessments since 2026-05-28
+- Repot task active in Todoist but long-pending (2–3 weeks overdue); recommend prioritize within next week
+
+### 2026-06-16
+- On-schedule 10-day cycle; excellent turgor and vigor throughout
+- Last assessment 10 days old (2026-06-06) — due for photo check
+- Standing issue: exposed surface roots and soil compaction persistent; repot task overdue in Todoist (flagged since 2026-05-28)
+
+### 2026-06-15
+- On-schedule 10-day cycle; excellent turgor and vigor throughout
+- Standing maintenance issue: exposed surface roots and soil compaction persistent across all assessments
+- Repot task active in Todoist but long-pending (2–3 weeks overdue); recommend prioritize soon
+
 ### 2026-06-14
 - On-schedule 10-day cycle; last watered 2026-06-08 (6 days ago), adjusted watering 2026-06-18
 - Vigorous, robust growth with excellent turgor; large, glossy, deeply fenestrated foliage with no wilting, yellowing, or pest signs

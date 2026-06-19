@@ -10,6 +10,9 @@
 
 ## Health Assessments
 <!-- Photo assessments appended here -->
+### 2026-06-18 — Healthy
+Photo of a black/dark plastic pot (top-down) holding the Gazania on the left — strappy grey-green foliage, upright and turgid, with several orange/bronze daisy-form blooms plus one unopened bud. Flowers mostly closed/half-furled, consistent with overcast low light (normal gazania nyctinastic closure), not wilt or petal collapse. No sun scorch, marginal browning, leaf spotting, or pest signs. Soil surface dark and moist; surrounding pavement mostly dry. Last watered 2026-06-16 (2 days ago) on the 8-day baseline — only 2 days in and substrate clearly moist, so no watering need. NOTE: this frame does not match the profile's described setup — it shows a dark plastic pot with a broad-leaved, partly variegated companion plant on the right rather than the blue pot shared with strappy Marguerite daisies, and the blooms read orange rather than yellow. Possible re-pot, mislabelled photo, or different plant; worth confirming which plant/pot is being tracked. No spent drooping flower stalk visible this time (the long-flagged front-right deadheading target). Sustained Gazania health consistent with prior 2026-06-04 and earlier assessments — no deterioration or new symptoms.
+
 ### 2026-06-04 — Healthy
 Photo of the shared blue pot photographed against the wooden fence (Gazania Yellow front-right/lower-front + Marguerite daisies). Gazania foliage strappy, grey-green, upright and turgid; several open yellow daisy-form blooms in the lower-front with no petal collapse or wilt. One yellowing spent flower stalk drooping over the front-right rim — isolated, consistent with a finished bloom, not disease. No sun scorch, marginal browning, leaf spotting, or pest signs. Companion daisies (pink and white) flowering heavily and vigorous. Soil surface dark and clearly moist; surrounding pavement visibly wet from recent rain. Last watered 2026-05-28 (7 days ago) on the 9-day effective cadence; substrate moisture is ample, so watering should be delayed rather than done on the nominal schedule. Sustained health fully consistent with the 2026-05-30, 2026-06-01 and earlier 2026-06-04 observations — no deterioration or new symptoms. Suggest deadheading the spent front-right stalk.
 
@@ -32,6 +35,34 @@ Photo assessment of the shared blue pot (Gazania Yellow + Marguerite daisies). G
 
 ## Intelligence Notes
 <!-- Appended by each intelligence run -->
+### 2026-06-17 (completed)
+- Deadhead yellowing spent flower stalk drooping over pot rim (marked done via PWA)
+
+### 2026-06-17 (pruning)
+- Deadhead yellowing spent flower stalk drooping over pot rim (Encourage new blooms and improve appearance; flagged since 2026-06-06 (11 days overdue))
+
+### 2026-06-17
+- Strappy grey-green foliage upright and turgid; several open yellow daisy-form blooms
+- Shares blue pot with Marguerite daisies (front-right position); one yellowing spent stalk drooping over pot rim (normal senescence)
+- Last assessment 13 days old (2026-06-04) — due for photo check
+- Sustained health consistent with 2026-05-30, 2026-06-01, 2026-06-04 assessments; no stress signals
+
+### 2026-06-16 (pruning)
+- Deadhead yellowing spent flower stalk drooping over pot rim (Encourage new blooms and improve appearance; flagged since 2026-06-06 (10 days overdue))
+
+### 2026-06-16
+- Strappy grey-green foliage upright and turgid; several open yellow daisy-form blooms, one yellowing spent stalk (normal senescence)
+- Shares blue pot with Marguerite daisies (front-right position); on 9-day effective cycle (7-day baseline + 2-day rain adjustment)
+- Last assessment 12 days old (2026-06-04) — due for photo check
+
+### 2026-06-15 (pruning)
+- Deadhead yellowing spent flower stalk drooping over pot rim (Encourage new blooms and improve appearance; flagged since 2026-06-06 (9 days overdue))
+
+### 2026-06-15
+- Strappy grey-green foliage upright and turgid; several open yellow daisy-form blooms; sustained health across assessments
+- Shares blue pot with Marguerite daisies (front-right position); on 9-day effective cycle (7-day baseline + 2-day rain)
+- Overdue for watering (adjusted 2026-06-13, 2 days past); deadheading spent stalk flagged since 2026-06-06 (9 days overdue)
+
 ### 2026-06-14 (pruning)
 - Deadhead yellowing spent flower stalk (Encourage new blooms and improve appearance (task exists))
 

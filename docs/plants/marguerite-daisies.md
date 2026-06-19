@@ -9,6 +9,9 @@
 
 ## Health Assessments
 <!-- Photo assessments appended here -->
+### 2026-06-16 — Healthy
+Post-watering assessment (watered today, 0 days). All three Marguerites in the shared blue pot look healthy and well-hydrated — foliage is green, finely divided and turgid with no wilting, curl or marginal crisping. Soil is dark and visibly moist and the surrounding paving is wet, confirming today's watering. The dehydration-stress pattern flagged 2026-06-01→05 remains fully resolved; the 5-day baseline plus mulch is holding. White-double clump (right) is blooming heavily and the pink clump (left) carries open blooms alongside several browning/papery spent heads. The front clump is sparser and floppier than the other two and holds the most spent, brown faded heads at its base — consistent with prior notes naming it as the deadheading priority. Action: deadhead spent and browning heads across all three, priority on the front clump, to sustain flowering — this remains outstanding having been flagged since 2026-06-06. Hold watering until the soil surface dries back; reassess turgor mid-cycle during the next hot spell to confirm the 5-day cadence remains adequate. No frequency change warranted off this photo.
+
 ### 2026-06-06 — Healthy
 Second assessment today, post-watering (0 days). All three Marguerites in the shared blue pot are healthy and recovered — foliage across pink (left), white double (top-right) and yellow-centred (front) plants is green, finely divided and turgid with no wilting, curl or crisping. The dehydration-stress pattern flagged 2026-06-01 through 2026-06-05 is no longer visible; the 5-day baseline plus mulch continues to hold. Soil is dark, mulched and visibly moist and the surrounding paving is wet, confirming watering today. Blooming is strong on the pink and white plants; the front yellow-centred plant carries the most spent/browning heads, and a few faded/papery blooms are also present at the lower-left edge near the white plant. Action: deadhead spent and browning heads across all three (priority on the front yellow-centred plant) to sustain flowering. Hold watering — do not water again until the soil surface dries; reassess turgor during the next hot spell to confirm the 5-day cadence remains adequate.
 
@@ -25,6 +28,34 @@ Follow-up after watering today (0 days ago). All three Marguerites in the shared
 
 ## Intelligence Notes
 <!-- Appended by each intelligence run -->
+### 2026-06-17 (completed)
+- Deadhead spent and browning heads across all three; priority on front yellow-centred plant (marked done via PWA)
+
+### 2026-06-17 (pruning)
+- Deadhead spent and browning heads across all three; priority on front yellow-centred plant (Sustain flowering and redirect energy to new growth; flagged since 2026-06-06 (11 days overdue))
+
+### 2026-06-17
+- All three clumps (pink, white, yellow-centre) in shared blue pot fully recovered from 2026-06-01→06-05 dehydration stress
+- Green, finely divided, turgid foliage with no wilting/curl/crisping; just watered 2026-06-16
+- Pink and white blooming heavily; front yellow-centred plant carries most spent/browning heads
+- 5-day baseline + mulch holding excellently
+
+### 2026-06-16 (pruning)
+- Deadhead spent and browning heads across all three; priority on front yellow-centred plant (Sustain flowering and redirect energy to new growth; flagged since 2026-06-06 (10 days overdue))
+
+### 2026-06-16
+- All three clumps (pink, white, yellow-centre) in shared blue pot fully recovered from 2026-06-01→06-05 dehydration stress
+- Green, finely divided, turgid foliage with no wilting/curl/crisping; pink and white blooming heavily; soil dark and moist
+- 5-day baseline + mulch holding excellently; just watered today
+
+### 2026-06-15 (pruning)
+- Deadhead spent and browning heads across all three; priority on front yellow-centred plant (Sustain flowering and redirect energy to new growth; flagged since 2026-06-06 (9 days overdue))
+
+### 2026-06-15
+- All three clumps (pink, white, yellow-centre) fully recovered; 2026-06-06 post-watering assessment directly contradicts earlier dehydration-stress flags (2026-06-01→06-05)
+- Green, finely divided, turgid; 5-day baseline + mulch working excellently; pink and white blooming heavily
+- Overdue for watering (adjusted 2026-06-11, 4 days past); deadheading spent heads flagged since 2026-06-06 (9 days overdue, priority on yellow-centred)
+
 ### 2026-06-14 (pruning)
 - Deadhead spent and browning heads across all three (Priority on front yellow-centred plant; sustain flowering (task exists))
 

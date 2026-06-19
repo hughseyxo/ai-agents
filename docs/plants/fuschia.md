@@ -22,6 +22,39 @@ Vertical grow-bag fuchsia on the fence (partial shade) photographed 7 days after
 
 ## Intelligence Notes
 <!-- Appended by each intelligence run -->
+### 2026-06-18
+- Clear recovery from late-May/early-June underwatering stress; now uniformly green and turgid
+- Vigorous flowering with numerous open magenta blooms and heavy bud set
+- Last assessment 14 days old—due for photo check to confirm sustained recovery
+
+### 2026-06-17 (completed)
+- Deadhead spent magenta blooms (marked done via PWA)
+
+### 2026-06-17 (pruning)
+- Deadhead spent magenta blooms (Sustain flowering and redirect energy to developing buds; flagged since 2026-06-06 (11 days overdue))
+
+### 2026-06-17
+- Clear recovery from late-May/early-June underwatering stress (wilting, reddish-brown tissue through 2026-06-03); now uniformly green and turgid
+- Vigorous flowering with numerous open magenta blooms and heavy bud set
+- Last assessment 13 days old (2026-06-04) — due for photo check
+- 10-day effective cycle (7-day baseline + 3-day rain) working well
+
+### 2026-06-16 (pruning)
+- Deadhead spent magenta blooms (Sustain flowering and redirect energy to developing buds; flagged since 2026-06-06 (10 days overdue))
+
+### 2026-06-16
+- Clear recovery from late-May/early-June underwatering stress (wilting, reddish-brown tissue through 2026-06-03); now uniformly green and turgid
+- Vigorous flowering with numerous open magenta blooms and heavy bud set; 10-day effective cycle (7-day baseline + 3-day rain) working well
+- Last assessment 12 days old (2026-06-04) — due for photo check
+
+### 2026-06-15 (pruning)
+- Deadhead spent magenta blooms (Sustain flowering and redirect energy to developing buds; flagged since 2026-06-06 (9 days overdue))
+
+### 2026-06-15
+- Clear recovery from late-May/early-June underwatering stress (wilting, reddish-brown tissue through 2026-06-03); now uniformly green and turgid
+- Vigorous flowering with numerous open magenta blooms and heavy bud set; 10-day effective cycle working well
+- Overdue for watering (adjusted 2026-06-13, 2 days past); deadheading spent blooms flagged since 2026-06-06 (9 days overdue)
+
 ### 2026-06-14 (pruning)
 - Deadhead spent magenta blooms (Sustain flowering and redirect energy to developing buds (task exists))
 

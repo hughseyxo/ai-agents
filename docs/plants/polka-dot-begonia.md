@@ -9,6 +9,9 @@
 
 ## Health Assessments
 <!-- Photo assessments appended here -->
+### 2026-06-16 — Concerning
+Fourth photo assessment. Watered today (0 days). The light stress documented since 2026-06-04 has clearly worsened rather than stabilised: red/coral/bronze pigmentation is now near-universal across the whole canopy — upper-center, the entire far-left cascading cluster, and the right-outer leaves have lost their deep-green base almost entirely, with only one or two leaves (large lower-left-center spotted leaf) retaining green. The lower-left leaves are now yellowing-to-orange with crisped, curled, dry margins and a couple of near-dead tips (leaf burn + low humidity, not dehydration — soil is moist and turgor is fine). A cluster of dried brown dead leaves/spent stalks sits at the upper-center of the plant. Crucially, core health is still intact: stems are green, thick, firm and upright with no wilting, rot or pests. This remains a LIGHT/CULTURAL problem, not a watering one — do NOT water early. The plant is still on the dark side table right beside the bright blinded window; the repeatedly-flagged actions (move further from the glass / add a sheer diffuser; pinch the dried stalks and remove dead leaves; raise humidity) have STILL not been carried out, now ~19 days after first flagging on 2026-05-28. Escalating status to Concerning because the trend is downward across four assessments with no intervention. If new growth still emerges red after light is genuinely reduced, treat as cultivar colouration; given the near-total reddening and edge burn here, far more likely it is sustained light stress. Priority: physically relocate the plant out of direct window light NOW and clear the dead material.
+
 ### 2026-06-06 — Stressed
 Third assessment. Begonia maculata now relocated from the windowsill onto an adjacent dark side table, still beside the bright blinded window. Core health remains good: stems are green, firm and upright with no wilting, rot or pest signs, and several leaves keep their deep-green base with crisp silver spotting (notably the large lower-right leaf and left mid-cluster). However, the red/coral/bronze pigmentation is still very prominent — arguably more vivid than the 2026-06-04 baseline — across the upper-center, far-left and right outer leaves, indicating light stress persists despite the move; the table is still close to direct window light. A few outer leaves (lower-left coral leaf, lower-center spotted leaf) show brown crispy tips and dry margins (edge burn / low humidity). The cluster of dried spent flower stalks at the plant's center is still present and should be pinched off — repeatedly flagged but not yet done. Soil surface reads dark and moist (watered 2026-06-04, 2 days ago); turgor is good. Do NOT water early — delay until the 7-day schedule. Action: move the plant further back from the window or add a sheer diffuser to genuinely cut direct light; pinch the spent flower stalks; consider raising humidity to stop edge crisping. Re-photograph in ~1-2 weeks: if new growth emerges greener once light is reduced, the reddening was stress; if it stays red in diffused light, treat it as cultivar colouration rather than a problem.
 
@@ -22,6 +25,47 @@ First photo assessment on record. Plant is a Begonia maculata (angel-wing form) 
 
 ## Intelligence Notes
 <!-- Appended by each intelligence run -->
+### 2026-06-19 (completed)
+- URGENT: relocate away from direct window or add sheer diffuser; pinch dried flower stalks at centre; raise humidity (marked done via PWA)
+
+### 2026-06-18 (pruning)
+- URGENT: relocate away from direct window or add sheer diffuser; pinch dried flower stalks at centre; raise humidity (escalating light stress (red/coral pigmentation now 90%+ of canopy); standing action overdue 19 days since 2026-05-28; NOT a watering issue)
+
+### 2026-06-18
+- ESCALATING light stress: red/coral/bronze pigmentation now near-universal (90%+ of canopy; was 50% on 2026-06-06)
+- Outer leaves yellowing with crisped, curled dry margins and leaf burn (low humidity, NOT dehydration—soil moist, turgor fine)
+- Standing actions flagged since 2026-05-28 (19 days overdue!) remain unexecuted: relocate away from direct window, add sheer diffuser, pinch dried stalks, raise humidity
+- Core structure sound (green firm stems, no rot/wilting) but plant deteriorating visually. This is a LIGHT/CULTURAL problem, NOT a watering issue.
+
+### 2026-06-17 (completed)
+- Pinch dried flower stalks at centre; move plant further from direct window or add sheer diffuser; raise humidity (URGENT) (marked done via PWA)
+
+### 2026-06-17 (pruning)
+- Pinch dried flower stalks at centre; move plant further from direct window or add sheer diffuser; raise humidity (URGENT) (Cleanup of critical standing action (flagged since 2026-05-28, 19 days overdue); address intensifying light stress—reddening is light stress, NOT a watering issue)
+
+### 2026-06-17
+- ESCALATING light stress: red/coral/bronze pigmentation now near-universal (90%+ of canopy; was confined to outer/upper on 2026-06-06)
+- Outer leaves yellowing with crisped, curled dry margins and leaf burn (low humidity, NOT dehydration — soil moist, turgor fine)
+- Core structure sound (green firm stems, no rot/wilting) but plant deteriorating visually. This is a LIGHT/CULTURAL problem, NOT a watering issue.
+- Standing actions flagged since 2026-05-28 (19 days overdue!) remain unexecuted: move plant further from direct window / add sheer diffuser, pinch dried stalks, raise humidity. Plant relocated 2026-06-06 to side table but still too close to direct glass; reddening intensified rather than improved.
+
+### 2026-06-16 (pruning)
+- Pinch dried flower stalks at centre; move plant further from direct window or add sheer diffuser (URGENT) (Cleanup of critical standing action (flagged since 2026-05-28, 19 days overdue); address intensifying light stress — reddening is light stress, NOT watering issue)
+
+### 2026-06-16
+- ESCALATING: Light stress worsened markedly since 2026-06-06 relocation. Red/coral/bronze pigmentation now near-universal (90%+ of canopy; was confined to outer/upper on 2026-06-06)
+- Core structure sound (green firm stems, no rot/wilting) but outer leaves yellowing with crisped, curled dry margins and leaf burn (low humidity, NOT dehydration—soil moist, turgor fine)
+- Standing actions flagged since 2026-05-28 (19 days ago!!) remain UNEXECUTED: move plant further from direct window / add sheer diffuser; pinch dried flower stalks at centre
+- Plant relocated to side table 2026-06-06 but still too close to direct glass; reddening intensified rather than improved. This is LIGHT/CULTURAL problem, not watering
+
+### 2026-06-15 (pruning)
+- Pinch dried flower stalks at centre; move plant further from direct window or add sheer diffuser (Cleanup of standing action (flagged since 2026-05-28, 18 days overdue); address light stress—red pigmentation is light stress, not a watering issue)
+
+### 2026-06-15
+- Light stress from direct window sun (red/coral/bronze pigmentation MORE VIVID than 2026-06-04 baseline), NOT watering issue; core health good (green firm stems, no rot)
+- Relocated from windowsill to side table 2026-06-06 but still too close to direct glass; reddening intensified, not improved
+- Dried flower stalks flagged since 2026-05-28 (18 days overdue); overdue for watering (adjusted 2026-06-11, 4 days past); some outer leaves showing edge crisping from light burn and low humidity
+
 ### 2026-06-14 (pruning)
 - Pinch dried flower stalks at centre; move plant away from direct window or add sheer diffuser (Cleanup of standing action (flagged since 2026-05-28); address light stress—red pigmentation is light stress, NOT a watering issue (task exists))
 

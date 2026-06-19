@@ -9,6 +9,9 @@
 
 ## Health Assessments
 <!-- Photo assessments appended here -->
+### 2026-06-18 — Healthy
+Photographed on the metal grid trellis against the brick wall in the terracotta pot. Vigorous climbing growth covering the full trellis height with dense, deeply-lobed dark-green leaves, good turgor throughout, and active tendrils. No wilting, no interior yellowing, no overwatering signs. A few small dried/curled leaves at the lower stem base — normal lower-leaf senescence on an established climber, not systemic stress. No flowers/buds clearly visible in this frame (vs. the buds seen on 2026-06-04), but vegetative health is excellent. No spider-mite stippling/webbing, aphids, or caterpillar damage. Pot soil surface dark/moist (watered 2026-06-16, 2 days ago); surrounding pavement dry. Confirms recovery after the early-June overdue-watering catch-up is holding — plant is fully on track. 4-day baseline + ~2-day weather delta (≈6-day effective cycle) continues to work well; next watering can wait. Note: request header again cited a 5-day base while the profile lists 4 days — worth reconciling, but current cadence is clearly effective.
+
 ### 2026-06-04 — Healthy
 Plant photographed on its metal grid trellis against the brick wall, in the terracotta pot. Vigorous climbing growth covering the full trellis height with healthy deeply-lobed green leaves and active tendrils gripping the support. Several green flower buds developing (mid and lower-right) — confirms adequate full sun and hydration. Turgor good throughout; no wilting tendrils, no interior yellowing, no overwatering signs. A few upper leaves show pale grey undersides (normal orientation, not stress). No spider mite stippling/webbing or caterpillar chewing seen. Pot soil surface dark and surrounding pavement wet — substrate is moist (recent watering or rain), so next watering can be delayed slightly past the schedule. Continues the strong-health trend from the 2026-05-28 through 2026-06-01 assessments. Note: request header cited a 6-day base frequency while the profile lists 4 days — worth reconciling, but current cadence is clearly working.
 
@@ -19,6 +22,21 @@ Plant photographed on its metal grid trellis against the brick wall, in the terr
 
 ## Intelligence Notes
 <!-- Appended by each intelligence run -->
+### 2026-06-17
+- Vigorous climbing growth, deeply-lobed green foliage, active tendrils, developing flower buds
+- Catch-up watering completed 2026-06-16 (was 5 days overdue as of 2026-06-15); now on track
+- Last assessment 13 days old (2026-06-04) — due for photo check post-catch-up
+- 4-day baseline + weather adjustment (2d rain) = 6-day effective cycle working well
+
+### 2026-06-16
+- Vigorous climbing growth, deeply-lobed green foliage, active tendrils, developing flower buds
+- Last assessment 12 days old (2026-06-04) — due for photo check
+- URGENT catch-up: adjusted watering date 2026-06-10 was 5 days overdue as of 2026-06-15; caught up today
+
+### 2026-06-15
+- Vigorous climbing growth, deeply-lobed green foliage, active tendrils, developing flower buds (last assessment 2026-06-04)
+- URGENT: adjusted watering date 2026-06-10 is 5 days overdue as of today; catch-up watering needed immediately
+
 ### 2026-06-14
 - Last adjusted watering date 2026-06-10 (4 days overdue); urgent catch-up watering needed
 - Vigorous climbing growth with healthy deeply-lobed green foliage and active tendrils on trellis

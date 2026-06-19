@@ -9,6 +9,9 @@
 
 ## Health Assessments
 <!-- Photo assessments appended here -->
+### 2026-06-16 — Healthy
+First photo confirmation since 2026-05-28 (19-day assessment gap now closed). Day 12 of the 14-day cycle, last watered 2026-06-04. Large variegated clump showing firm, upright sword leaves with strong turgor — no wrinkling or loss of rigidity, so no underwatering despite being near the end of the cycle (consistent with this species' drought tolerance). Variegation is vivid: bright yellow margins and clear deep-green banding, no widespread yellowing. Soil surface dry, loose and bark-topped with no mushiness, mould, or soft/collapsing leaf bases — no overwatering or rot. Minor cosmetic dry brown tips on the two tallest leaves (trim to natural point if desired). A couple of lower leaves splay outward and one right-side leaf has a soft curl — normal habit for a maturing clump, not stress. Recommend continuing the 14-day schedule; water on schedule, no change to frequency warranted.
+
 
 ## Frequency History
 | Date | Change | Reason |
@@ -16,6 +19,15 @@
 
 ## Intelligence Notes
 <!-- Appended by each intelligence run -->
+### 2026-06-16
+- On-schedule 14-day cycle; firm upright leaves with vivid yellow margins and deep-green banding
+- First assessment in 19 days (2026-06-16 today) confirms sustained health across full interval
+- Dry friable soil, no overwatering or underwatering signs; continue current schedule
+
+### 2026-06-15
+- On-schedule 14-day cycle; last assessment 2026-05-28 (18 days ago) is stale despite good prior observations
+- No recent stress signals but long assessment gap warrants visual confirmation to keep profile current
+
 ### 2026-06-14
 - On-schedule 14-day cycle; last watered 2026-06-04 (10 days ago)
 - Last assessment 2026-05-28 (17 days ago) is overdue; on schedule but needs visual confirmation after extended assessment gap
