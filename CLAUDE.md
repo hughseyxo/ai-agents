@@ -13,6 +13,13 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
   - Any non-obvious context a fresh session would need
 - .antigravity.md defers to CLAUDE.md (do not duplicate rules there)
 
+# In-Progress: Obsidian Second-Brain Vault
+- **Status:** design approved, implementation pending. Spec: `docs/superpowers/specs/2026-06-19-obsidian-vault-backend-design.md`.
+- **What:** host an Obsidian vault on this server (Tailscale-only) over `docs/` + the Claude memory folder + `CLAUDE.md`, synced to native Obsidian on phone/PC via **CouchDB + livesync-bridge** (both Docker, systemd user service). Agents keep writing plain `.md`; the bridge mirrors disk ⇄ CouchDB.
+- **Why:** make agent intelligence navigable (graph/backlinks), queryable (Dataview), and **token-efficient/easy for Claude to parse** — notes get fed back into prompts, so curation cuts recurring token cost.
+- **Key restructure (token-efficiency principle):** plant profiles + librarian learnings get YAML frontmatter projections, curated `## Current Observations` (rewritten, not appended), `status:` fields (load only `active`), bounded history. Plant profiles become photo-assessment context; plant agent may web-research species (cited). Librarian learnings → atomic notes. SQLite stays canonical (markdown = intelligence layer only).
+- **Daily notes:** `docs/daily/YYYY-MM-DD.md`, one per Claude Code session, index-at-top for cheap parsing; hook-driven.
+
 # Token Efficiency Rules
 - **Be terse.** Short answers, no filler, no restating what I said.
 - **Don't explore what's documented here.** This file IS the map — don't glob/grep to rediscover project structure.
