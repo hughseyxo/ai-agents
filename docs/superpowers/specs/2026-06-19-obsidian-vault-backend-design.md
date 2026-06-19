@@ -64,8 +64,9 @@ Every structure optimizes for cheap parsing + minimal context tokens:
   maps storage paths → one CouchDB database; exact schema per upstream docs. Ignores
   `.obsidian/`, `.trash/`, `__pycache__/`.
 - **Devices** — native Obsidian + Self-hosted LiveSync plugin → `https://100.96.86.73:5984` over Tailscale.
-- **Service** — `docker compose` stack behind a systemd **user** unit (mirrors existing service
-  pattern); `loginctl enable-linger` required (see memory `project_user_systemd_linger`).
+- **Service** — added as two services to the **existing yopflix seedbox Docker stack**
+  (`~/git/yopflix/seedbox/docker-compose.yaml`, private repo), started by its `run-seedbox.sh`.
+  No standalone stack and no new systemd unit; they come up with the rest of the seedbox.
 
 ## Vault layout — one vault, multiple on-disk roots
 
@@ -192,7 +193,7 @@ tags: [daily]
 
 ## Component / file changes
 
-**New (infra):** `docker-compose.yml` (CouchDB + bridge), bridge config, systemd user unit, `.env` keys.
+**Infra (in the yopflix seedbox stack, `~/git/yopflix/seedbox/docker-compose.yaml`):** add `couchdb` + `livesync-bridge` services, `services/couchdb/local.ini`, `services/livesync-bridge/config.json`, seedbox env creds. No standalone stack or systemd unit.
 **New (notes):** `docs/_dashboards/*`, `docs/daily/`, per-folder `_index.md` MOCs.
 **Modified (plants):**
 - `agents/plant_profiles.py` — add `upsert_frontmatter()`, `rewrite_section()`, `read_profile_context()`; existing `## `-section helpers already preserve frontmatter (verified).
