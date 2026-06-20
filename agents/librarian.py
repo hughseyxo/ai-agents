@@ -11,7 +11,60 @@ import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import yaml
+
 from .base import BaseAgent, REPO_ROOT
+from .plant_profiles import parse_frontmatter as _parse_fm
+
+
+def _write_learning_note(
+    agent: str, entry: str, confidence: float, slug: str,
+    related: list, note_type: str = "learnings"
+) -> Path:
+    """Write an atomic status-tagged note for a librarian finding.
+    Returns the path written. Overwrites if the same slug already exists.
+    note_type='memory' → docs/librarian-memory/<date>-<slug>.md
+    note_type='learnings' → docs/agent-learnings/<agent>/<date>-<slug>.md
+    """
+    today = datetime.now(timezone.utc).date().isoformat()
+    if note_type == "memory":
+        parent = REPO_ROOT / "docs" / "librarian-memory"
+    else:
+        parent = REPO_ROOT / "docs" / "agent-learnings" / agent
+    parent.mkdir(parents=True, exist_ok=True)
+
+    filename = f"{today}-{slug}.md"
+    path = parent / filename
+
+    fm = yaml.safe_dump({
+        "type": note_type,
+        "agent": agent,
+        "confidence": confidence,
+        "status": "active",
+        "date": today,
+        "tags": [agent, note_type],
+        "related": related,
+    }, sort_keys=False, default_flow_style=False).strip()
+
+    path.write_text(f"---\n{fm}\n---\n\n## Note\n\n{entry}\n")
+    return path
+
+
+def _collect_learnings(learnings_dir: Path) -> dict:
+    """Glob `learnings_dir/**/*.md`, parse frontmatter, return {path_str: body}
+    for files where status == 'active' (missing status is treated as active for back-compat)."""
+    result = {}
+    if not learnings_dir.is_dir():
+        return result
+    for md in sorted(learnings_dir.glob("**/*.md")):
+        try:
+            meta, body = _parse_fm(md.read_text())
+        except Exception:
+            continue
+        status = meta.get("status", "active")
+        if status == "active":
+            result[str(md)] = body.strip()
+    return result
 
 AGENT_NAMES = ["daily-briefing", "news-briefing", "security-audit", "librarian", "telegram-bot", "plant-agent"]
 
@@ -202,29 +255,21 @@ class LibrarianAgent(BaseAgent):
 
     def _apply_learnings(self) -> dict:
         findings = self.context.get("findings") or []
-        ld = REPO_ROOT / "docs" / "agent-learnings"
-        ld.mkdir(parents=True, exist_ok=True)
-        mem_file = REPO_ROOT / "docs" / "librarian-memory.md"
-        
         applied = []
         for f in findings:
             conf = f.get("confidence", 0)
             ft = f.get("fix_type")
             entry = f.get("learnings_entry", "").strip()
-            
-            if conf >= 0.8 and ft == "learnings" and entry:
-                lf = ld / f"{f['agent']}.md"
-                existing = lf.read_text().strip() if lf.exists() else ""
-                if entry not in existing:
-                    lf.write_text((existing + "\n" + entry).strip() + "\n")
-                    applied.append({"agent": f["agent"], "entry": entry})
-            
-            elif conf >= 0.8 and ft == "memory_update" and entry:
-                existing = mem_file.read_text().strip() if mem_file.exists() else ""
-                if entry not in existing:
-                    mem_file.write_text((existing + "\n" + entry).strip() + "\n")
-                    applied.append({"agent": "global", "entry": entry})
-
+            if not entry or conf < 0.8:
+                continue
+            slug = f.get("slug") or re.sub(r"[^a-z0-9]+", "-", entry[:40].lower()).strip("-")
+            related = f.get("related", [])
+            if ft == "learnings":
+                _write_learning_note(f["agent"], entry, conf, slug, related, note_type="learnings")
+                applied.append({"agent": f["agent"], "entry": entry})
+            elif ft == "memory_update":
+                _write_learning_note("global", entry, conf, slug, related, note_type="memory")
+                applied.append({"agent": "global", "entry": entry})
         self.context["applied_learnings"] = applied
         return {"applied": len(applied)}
     def _propose_changes(self) -> dict:
