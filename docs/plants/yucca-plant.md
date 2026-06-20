@@ -6,7 +6,7 @@ water_sensitivity: medium
 baseline_frequency_days: 14
 effective_frequency_days: 14
 last_watered: '2026-06-18'
-needs_photo: false
+needs_photo: true
 latest_health:
   date: '2026-06-01'
   summary: 'The Yucca Plant is exhibiting no visible signs of stress or damage, with
@@ -40,6 +40,11 @@ Multi-cane Yucca photographed on an indoor windowsill (bright/full-sun position,
 
 ## Intelligence Notes
 <!-- Appended by each intelligence run -->
+### 2026-06-19
+- All three rosettes firm, deep green; earlier overwatering concern from May/early-Jun fully unrealised
+- Last assessment Jun 5 (14 days); at assessment-gap threshold—schedule photo if convenient
+- Baseline 14-day cycle working well; no frequency adjustment needed
+
 ### 2026-06-16
 - Earlier overwatering concern (2026-05-28→06-04) fully unrealised; 2026-06-05 assessment found zero rot/yellowing/mushy tissue
 - All three rosettes firm, deep green, no trunk-base rot; current 14-day schedule working well
@@ -117,3 +122,8 @@ The Yucca Plant appears healthy with green leaves and a consistent growth patter
 ### Frequency History |
 Date | Change | Reason |
 ---|---|---|
+
+## Current Observations
+- All three rosettes firm, deep green; earlier overwatering concern from May/early-Jun fully unrealised
+- Last assessment Jun 5 (14 days); at assessment-gap threshold—schedule photo if convenient
+- Baseline 14-day cycle working well; no frequency adjustment needed

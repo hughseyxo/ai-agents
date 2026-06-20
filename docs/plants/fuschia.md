@@ -4,7 +4,7 @@ location: outdoor
 sunlight: partial shade
 water_sensitivity: medium
 baseline_frequency_days: 7
-effective_frequency_days: 6
+effective_frequency_days: 9
 last_watered: '2026-06-16'
 needs_photo: true
 latest_health:
@@ -44,6 +44,11 @@ Vertical grow-bag fuchsia on the fence (partial shade) photographed 7 days after
 
 ## Intelligence Notes
 <!-- Appended by each intelligence run -->
+### 2026-06-19
+- Recovered from late-May/early-June underwatering stress (wilting through Jun 2); now uniformly green, turgid, vigorous magenta flowering
+- Last assessment Jun 4 (15 days old); photo check due to confirm sustained recovery trajectory
+- Tracking well on 10-day effective cycle (7-day baseline + 3-day rain); all deadheading completed Jun 17
+
 ### 2026-06-18
 - Clear recovery from late-May/early-June underwatering stress; now uniformly green and turgid
 - Vigorous flowering with numerous open magenta blooms and heavy bud set
@@ -195,3 +200,8 @@ Wilted areas and discoloration indicate insufficient moisture — water immediat
 ### 2026-06-03 — Concerning
 String lights may cast shadows affecting basket health; tangled vines show heterogeneous stress levels. Despite watering fresh on 2026-06-03, persistent wilted flowers and leaf asymmetry suggest either inconsistent water distribution or light limitation in outdoor partial shade. Prior assessments recommended pest checks and spent flower removal to balance resources. Immediate selective pruning of reddish-brown tissues and indirect pest inspection are advised to rebalance hydration focus without bypassing existing care tasks. ]
 [Validator: structured fields corrected for consistency with observations]
+
+## Current Observations
+- Recovered from late-May/early-June underwatering stress (wilting through Jun 2); now uniformly green, turgid, vigorous magenta flowering
+- Last assessment Jun 4 (15 days old); photo check due to confirm sustained recovery trajectory
+- Tracking well on 10-day effective cycle (7-day baseline + 3-day rain); all deadheading completed Jun 17

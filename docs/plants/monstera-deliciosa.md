@@ -60,6 +60,11 @@ tags:
 
 ## Intelligence Notes
 <!-- Appended by each intelligence run -->
+### 2026-06-19
+- Large, vigorous, excellent turgor; 10-day cycle tracking perfectly
+- Persistent maintenance: exposed surface roots and soil compaction since May 28; repot task in Todoist 19+ days overdue
+- Recommend prioritise repotting into slightly larger pot with fresh well-draining mix within this week
+
 ### 2026-06-17
 - On-schedule 10-day cycle; excellent turgor and vigor throughout
 - Last assessment 11 days old (2026-06-06) — due for photo check tomorrow (adjusted watering 2026-06-18)
@@ -139,3 +144,8 @@ tags:
 - Compacted soil composition evident through exposed root formation
 - Current 10-day watering interval effectively maintaining plant vigor
 - Pruning recommendation: Consider modifying root zone through repotting to enhance growth parameters
+
+## Current Observations
+- Large, vigorous, excellent turgor; 10-day cycle tracking perfectly
+- Persistent maintenance: exposed surface roots and soil compaction since May 28; repot task in Todoist 19+ days overdue
+- Recommend prioritise repotting into slightly larger pot with fresh well-draining mix within this week

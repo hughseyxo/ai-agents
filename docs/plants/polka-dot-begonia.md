@@ -50,6 +50,12 @@ First photo assessment on record. Plant is a Begonia maculata (angel-wing form) 
 
 ## Intelligence Notes
 <!-- Appended by each intelligence run -->
+### 2026-06-19
+- Light stress escalated: red/coral/bronze pigmentation 50% canopy (Jun 6) → 90%+ (Jun 16); outer leaves yellowing with crisped margins (leaf burn + low humidity, NOT dehydration—soil moist, turgor fine)
+- Standing cultural actions flagged since May 28 (21 days!) actioned Jun 19: relocated from direct window, added diffuser, raising humidity
+- Core structure sound (green firm stems, no rot/wilting); monitor recovery 1–2 weeks; new growth greener = stress resolved
+- Do NOT reduce watering frequency—this is light/cultural stress, not hydration issue
+
 ### 2026-06-19 (completed)
 - URGENT: relocate away from direct window or add sheer diffuser; pinch dried flower stalks at centre; raise humidity (marked done via PWA)
 
@@ -172,3 +178,8 @@ First photo assessment on record. Plant is a Begonia maculata (angel-wing form) 
 - Stem and core foliage health is fine; watering is appropriate
 - Recommendation: move back from direct window glass or add sheer diffuser; re-assess in ~1 week
 
+## Current Observations
+- Light stress escalated: red/coral/bronze pigmentation 50% canopy (Jun 6) → 90%+ (Jun 16); outer leaves yellowing with crisped margins (leaf burn + low humidity, NOT dehydration—soil moist, turgor fine)
+- Standing cultural actions flagged since May 28 (21 days!) actioned Jun 19: relocated from direct window, added diffuser, raising humidity
+- Core structure sound (green firm stems, no rot/wilting); monitor recovery 1–2 weeks; new growth greener = stress resolved
+- Do NOT reduce watering frequency—this is light/cultural stress, not hydration issue

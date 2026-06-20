@@ -53,6 +53,11 @@ IMPORTANT correction to history: prior intelligence/health notes repeatedly desc
 
 ## Intelligence Notes
 <!-- Appended by each intelligence run -->
+### 2026-06-19
+- Light stress (splaying rosette) misdiagnosed as drought; frequency corrected 14→12→10 then reverted to 14 days post-assessment verification
+- Last assessment Jun 6 (13 days); photo check recommended to verify baseline correction stable and light stress not worsened
+- Red/brown leaf tips are sun tinting, not underwatering; recommend repositioning away from direct window
+
 ### 2026-06-18
 - Light stress (splaying rosette, etiolation), NOT drought—critical misdiagnosis corrected
 - Frequency reverted to 14 days from wrongly-cut 14→12→10 cycle
@@ -150,3 +155,8 @@ IMPORTANT correction to history: prior intelligence/health notes repeatedly desc
 Update profile with observations, adjust watering schedule accordingly.
 [Validator: structured fields corrected for consistency with observations]
 # 2026-05-29 — Underwatered\nOur dry indoor Aloe Vera continues to show signs of drought stress. The most recent dry indication is the plant continuing to drop its leaves (as of 2026-05-28, leaves began dropping at approximately 7 days past its base 14-day watering cycle, now on 2026-05-29).\nDaily watering from now on is recommended. The next watering reminder will be set for tomorrow.
+
+## Current Observations
+- Light stress (splaying rosette) misdiagnosed as drought; frequency corrected 14→12→10 then reverted to 14 days post-assessment verification
+- Last assessment Jun 6 (13 days); photo check recommended to verify baseline correction stable and light stress not worsened
+- Red/brown leaf tips are sun tinting, not underwatering; recommend repositioning away from direct window

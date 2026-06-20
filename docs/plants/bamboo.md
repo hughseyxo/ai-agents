@@ -4,7 +4,7 @@ location: outdoor
 sunlight: ''
 water_sensitivity: medium
 baseline_frequency_days: 7
-effective_frequency_days: 6
+effective_frequency_days: 9
 last_watered: '2026-06-16'
 needs_photo: false
 latest_health:
@@ -42,6 +42,11 @@ First photo assessment with a clear full-plant view. Confirms the species has da
 
 ## Intelligence Notes
 <!-- Appended by each intelligence run -->
+### 2026-06-19
+- Dense, vigorous upper canopy; dark purple/black culms are natural pigmentation (Fargesia/Phyllostachys nigra), NOT dieback
+- Browning and leaf drop in shaded lower interior is normal self-thinning of inner culms, not disease or drought
+- Profile note: sunlight field blank; should record as 'partial shade' based on sheltered fence-corner location
+
 ### 2026-06-16
 - First full-plant photo assessment (2026-06-16 today); dark purple/black culms are natural pigmentation (Fargesia/Phyllostachys nigra), NOT dieback
 - Upper/mid canopy dense, deep green, firm, upright; browning in lower interior is normal self-thinning of shaded culms
@@ -94,3 +99,8 @@ First photo assessment with a clear full-plant view. Confirms the species has da
 ### 2026-06-01 — Healthy
 - Appended to the plant profile based on visual health assessment, showing vigorous growth and healthy foliage.
 [Validator: structured fields corrected for consistency with observations]
+
+## Current Observations
+- Dense, vigorous upper canopy; dark purple/black culms are natural pigmentation (Fargesia/Phyllostachys nigra), NOT dieback
+- Browning and leaf drop in shaded lower interior is normal self-thinning of inner culms, not disease or drought
+- Profile note: sunlight field blank; should record as 'partial shade' based on sheltered fence-corner location
