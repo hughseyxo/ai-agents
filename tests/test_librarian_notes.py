@@ -68,3 +68,17 @@ def test_collect_empty_dir_returns_empty(tmp_path):
     d = tmp_path / "no-learnings"
     d.mkdir()
     assert lib._collect_learnings(d) == {}
+
+
+def test_collect_skips_index_and_dashboard_notes(tmp_path, monkeypatch):
+    import agents.librarian as lib
+    monkeypatch.setattr(lib, "REPO_ROOT", tmp_path)
+    d = tmp_path / "docs" / "agent-learnings" / "plant-agent"
+    d.mkdir(parents=True)
+    (d / "learning.md").write_text("---\ntype: learnings\nstatus: active\n---\nKEEP\n")
+    (d / "_index.md").write_text("---\ntype: index\n---\nDROP-INDEX\n")
+    (d / "dash.md").write_text("---\ntype: dashboard\n---\nDROP-DASH\n")
+    blob = "\n".join(lib._collect_learnings(d).values())
+    assert "KEEP" in blob
+    assert "DROP-INDEX" not in blob
+    assert "DROP-DASH" not in blob

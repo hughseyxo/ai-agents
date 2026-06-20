@@ -50,9 +50,12 @@ def _write_learning_note(
     return path
 
 
+_LEARNING_TYPES = {"learnings", "memory"}
+
 def _collect_learnings(learnings_dir: Path) -> dict:
     """Glob `learnings_dir/**/*.md`, parse frontmatter, return {path_str: body}
-    for files where status == 'active' (missing status is treated as active for back-compat)."""
+    for files where status == 'active' (missing status treated as active for back-compat).
+    Index/dashboard notes (type: index, type: dashboard) are skipped."""
     result = {}
     if not learnings_dir.is_dir():
         return result
@@ -60,6 +63,9 @@ def _collect_learnings(learnings_dir: Path) -> dict:
         try:
             meta, body = _parse_fm(md.read_text())
         except Exception:
+            continue
+        note_type = meta.get("type", "learnings")
+        if note_type not in _LEARNING_TYPES:
             continue
         status = meta.get("status", "active")
         if status == "active":
