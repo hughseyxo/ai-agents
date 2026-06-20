@@ -3,10 +3,10 @@
 .antigravitycli/
 output/*
 !output/.gitkeep
-docs/agent-learnings/
 output/librarian/
-docs/librarian-memory.md
 docs/superpowers/plans/librarian-arch-*.md
+docs/.obsidian/
+docs/.trash/
 .env
 credentials.json
 mcp-servers/__pycache__/
