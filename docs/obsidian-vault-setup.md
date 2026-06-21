@@ -1,41 +1,58 @@
 # Obsidian Vault — Device Setup
 
-CouchDB + livesync-bridge run in the yopflix seedbox stack (started by `run-seedbox.sh`), Tailscale-only.
+CouchDB + livesync-bridge run in the yopflix seedbox stack (started by `run-seedbox.sh`),
+Tailscale-only (`100.96.86.73:5984`). Agents keep writing plain `.md`; the bridge mirrors
+disk ⇄ CouchDB, and Obsidian clients sync against CouchDB.
 
-## Before first run
+## Credential model (how it actually wires up)
 
-1. Set real credentials in `~/git/yopflix/seedbox/.env.custom`:
-   ```
-   COUCHDB_USER=<admin-username>
-   COUCHDB_PASSWORD=<strong-password>
-   ```
-2. Update `services/livesync-bridge/config.json` — replace `${COUCHDB_USER}` / `${COUCHDB_PASSWORD}` with the same values (or confirm the bridge supports env substitution — verify schema against https://github.com/vrtmrz/livesync-bridge README).
+The seedbox injects per-service secrets from **`~/git/yopflix/seedbox/.env.custom`**
+(gitignored) using `APPNAME_`-prefixed keys. `run-seedbox.sh` strips the prefix into
+`env/<service>.env` and attaches it to the container via a generated `env_file:` override.
+There is **no** secret material in any tracked file.
+
+`.env.custom` already contains (replace the password with your own strong value):
+
+```
+# CouchDB admin — entrypoint sets this admin on first boot
+COUCHDB_COUCHDB_USER=admin
+COUCHDB_COUCHDB_PASSWORD=<strong-password>
+
+# Bridge connects to CouchDB with the same creds
+LIVESYNC-BRIDGE_COUCHDB_USER=admin
+LIVESYNC-BRIDGE_COUCHDB_PASSWORD=<strong-password>
+```
+
+- `services/livesync-bridge/config.json` keeps `${COUCHDB_USER}` / `${COUCHDB_PASSWORD}`
+  literal placeholders — the bridge substitutes them at runtime from its own env
+  (`src/main.ts`), so they are filled from the `LIVESYNC-BRIDGE_` keys above.
+- **Do not** add `COUCHDB_USER=${COUCHDB_USER}` to the `environment:` block of
+  `livesync-bridge.yaml`. That interpolates from the compose `--env-file` (`.env`, which
+  has no COUCHDB keys) and overrides the working `env_file` value with an empty string,
+  breaking auth on a clean restart.
+- `services/couchdb/local.ini` holds only non-secret config (single_node, CORS,
+  require_valid_user, uuid). The admin lands in `services/couchdb/docker.ini`, which the
+  CouchDB entrypoint generates from the env at boot and is **gitignored**.
 
 ## Start
 
-```bash
-cd ~/git/yopflix/seedbox && ./run-seedbox.sh
-ss -tlnp | grep 5984   # must show 100.96.86.73:5984, NOT 0.0.0.0
-```
-
-## One-time CouchDB init
+The stack is run as root (traefik/container-owned files):
 
 ```bash
-# Enable single-node mode
-curl -X POST "http://100.96.86.73:5984/_cluster_setup" \
-  -H "Content-Type: application/json" -u "USER:PASS" \
-  -d '{"action":"enable_single_node","username":"USER","password":"PASS","bind_address":"100.96.86.73","port":5984,"singlenode":true}'
-
-# Create the vault database
-curl -X PUT "http://100.96.86.73:5984/obsidian-vault" -u "USER:PASS"
+cd ~/git/yopflix/seedbox && sudo ./run-seedbox.sh --no-pull
+sudo ss -tlnp | grep 5984      # MUST show 100.96.86.73:5984, never 0.0.0.0
 ```
+
+No `_cluster_setup` call is needed — `single_node=true` is preset in `local.ini`, and the
+`obsidian-vault` database already exists in the data volume. (To create it from scratch:
+`curl -X PUT http://100.96.86.73:5984/obsidian-vault -u admin:PASS`.)
 
 ## Obsidian device setup (phone/PC on Tailscale)
 
 1. Install Obsidian + **Self-hosted LiveSync** community plugin.
 2. Remote Database settings:
    - URI: `http://100.96.86.73:5984`
-   - Username/Password: as set above
+   - Username/Password: as set in `.env.custom`
    - Database name: `obsidian-vault`
 3. Initial sync direction: **Remote → Local**.
 4. Quick-setup guide: https://github.com/vrtmrz/obsidian-livesync/blob/main/docs/quickstart.md
@@ -45,8 +62,23 @@ curl -X PUT "http://100.96.86.73:5984/obsidian-vault" -u "USER:PASS"
 ```bash
 echo "sync test" > docs/daily/_synctest.md
 # wait ~30s, then check CouchDB:
-curl -s "http://100.96.86.73:5984/obsidian-vault/_all_docs" -u "USER:PASS" | grep synctest
+curl -s "http://100.96.86.73:5984/obsidian-vault/_all_docs" -u admin:PASS | grep synctest
 rm docs/daily/_synctest.md
 ```
 
 Create a note on phone → confirm it appears under `docs/` on disk within ~30s.
+
+## Known behaviour — deletions
+
+Creates and edits propagate **disk ⇄ CouchDB within ~30s** (chokidar watch). **On-disk
+deletions do not propagate live** — the bridge reconciles removals on its offline scan
+(container restart). To force a deletion through immediately, either restart the bridge
+(`sudo docker restart livesync-bridge`) or delete the doc directly in CouchDB:
+
+```bash
+rev=$(curl -s -u admin:PASS "http://100.96.86.73:5984/obsidian-vault/<docid>" | jq -r ._rev)
+curl -s -X DELETE -u admin:PASS "http://100.96.86.73:5984/obsidian-vault/<docid>?rev=$rev"
+```
+
+`<docid>` is the path relative to the peer baseDir (e.g. `daily/2026-06-21.md` for the
+docs root, `_memory/...` for memory, `_project/CLAUDE.md` for the project root).
