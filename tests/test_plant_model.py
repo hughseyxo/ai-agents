@@ -105,6 +105,18 @@ class TestPlantStoreMigrate:
         p = PlantStore._migrate(raw)
         assert p.last_assessment is None
 
+    def test_broken_assessment_is_logged(self, caplog):
+        """C1: a corrupt assessment must be logged (log-and-skip), not silently swallowed."""
+        raw = {
+            "name": "Fern", "frequency_days": 7, "last_watered": "2026-06-01",
+            "location": "indoor",
+            "last_assessment": {"date": "not-a-date"},
+        }
+        with caplog.at_level("WARNING", logger="agents.plant_model"):
+            p = PlantStore._migrate(raw)
+        assert p.last_assessment is None
+        assert any("Fern" in r.getMessage() for r in caplog.records)
+
 
 # --- PlantStore read/write ---
 

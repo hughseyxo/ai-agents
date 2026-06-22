@@ -13,9 +13,15 @@ Travel agent (on-demand, two modes):
 """
 
 import argparse
+import re
 import subprocess
 import sys
 from pathlib import Path
+
+# Cron schedules contain only digits, * / , - and spaces; agent names are
+# lowercase slugs. Anything else is a shell-injection vector into the crontab.
+_CRON_SCHEDULE_RE = re.compile(r"[\d\*/,\- ]+")
+_AGENT_NAME_RE = re.compile(r"[a-z0-9\-]+")
 
 from .db import AgentDB, DEFAULT_DB_PATH
 
@@ -111,21 +117,52 @@ def cmd_install_cron(args):
 
     lines = []
     for cls in agents:
-        if cls.schedule:
-            lines.append(
-                f"{cls.schedule} {run_agent} {cls.name} >> {log_file} 2>&1"
+        if not cls.schedule:
+            continue
+        # Sanitise the class-attr-derived fields before they become a crontab
+        # line — fail closed rather than emit an injectable entry.
+        if not _CRON_SCHEDULE_RE.fullmatch(cls.schedule):
+            print(
+                f"Refusing to install: agent '{cls.name}' has an invalid cron "
+                f"schedule {cls.schedule!r}",
+                file=sys.stderr,
             )
+            sys.exit(1)
+        if not _AGENT_NAME_RE.fullmatch(cls.name):
+            print(
+                f"Refusing to install: invalid agent name {cls.name!r}",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        lines.append(
+            f"{cls.schedule} {run_agent} {cls.name} >> {log_file} 2>&1"
+        )
 
     if not lines:
         print("No agents with schedules found.")
         return
 
-    # Read existing crontab, replace agent entries
+    # Read existing crontab. Distinguish the legitimate "no crontab yet" case
+    # (rc!=0 + 'no crontab' on stderr, or missing binary) from a real failure.
+    # On a real failure we must FAIL CLOSED: writing "" would wipe the user's
+    # existing entries.
     try:
         result = subprocess.run(["crontab", "-l"], capture_output=True, text=True)
-        existing = result.stdout if result.returncode == 0 else ""
     except FileNotFoundError:
         existing = ""
+    else:
+        if result.returncode == 0:
+            existing = result.stdout
+        elif "no crontab" in (result.stderr or "").lower():
+            existing = ""
+        else:
+            print(
+                f"Aborting: `crontab -l` failed (rc={result.returncode}); refusing "
+                f"to rewrite and risk wiping existing entries. stderr: "
+                f"{(result.stderr or '').strip()}",
+                file=sys.stderr,
+            )
+            sys.exit(1)
 
     # Remove old agent entries
     marker_start = "# --- ai-agents managed ---"

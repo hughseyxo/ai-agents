@@ -33,11 +33,19 @@ SAMPLE_API_RESPONSE = {
         "precipitation": 0.0,
     },
     "hourly": {
-        "time": [
-            # 24 hours of timestamps (only need the array length to matter)
-            f"2026-05-14T{h:02d}:00" for h in range(24)
-        ],
-        "precipitation": [0.0] * 20 + [1.2, 0.8, 0.0, 0.0],  # 2mm in last 4 hours
+        # With past_days=1 the hourly arrays cover the past 24h FIRST, then
+        # the forecast window. Past-24h precip here sums to 2.0mm; the forecast
+        # tail carries a deliberately different 9.0mm so a wrong slice is visible.
+        "time": [f"2026-05-13T{h:02d}:00" for h in range(24)]   # past day
+        + [f"2026-05-14T{h:02d}:00" for h in range(24)]          # forecast day 1
+        + [f"2026-05-15T{h:02d}:00" for h in range(24)]          # forecast day 2
+        + [f"2026-05-16T{h:02d}:00" for h in range(24)],         # forecast day 3
+        "precipitation": (
+            [0.0] * 20 + [1.2, 0.8, 0.0, 0.0]   # past 24h: 2.0mm
+            + [0.0] * 24                          # forecast day 1: dry
+            + [0.0] * 23 + [9.0]                  # forecast tail: 9.0mm (must NOT be counted)
+            + [0.0] * 24
+        ),
     },
     "daily": {
         "time": ["2026-05-14", "2026-05-15", "2026-05-16"],
@@ -76,8 +84,31 @@ class TestFetchWeather:
 
         result = fetch_weather()
 
-        # Last 24h of hourly precip: sum of all 24 values = 2.0mm
+        # PAST 24h precip (first 24 hourly points) = 2.0mm, NOT the 9.0mm
+        # sitting in the forecast tail.
         assert result["recent_precip_mm"] == pytest.approx(2.0)
+
+    @patch("agents.weather.urlopen")
+    def test_recent_precip_is_past_not_forecast(self, mock_urlopen):
+        """Regression: precipitation slice must read the PAST window, not the
+        forecast tail. The fixture puts 9.0mm at the end of the forecast; if the
+        slice were [-24:] the result would pick that up instead of the past 2.0mm.
+        """
+        mock_urlopen.return_value = _mock_response(SAMPLE_API_RESPONSE)
+
+        result = fetch_weather()
+
+        assert result["recent_precip_mm"] == pytest.approx(2.0)
+        assert result["recent_precip_mm"] != pytest.approx(9.0)
+
+    @patch("agents.weather.urlopen")
+    def test_requests_past_days(self, mock_urlopen):
+        mock_urlopen.return_value = _mock_response(SAMPLE_API_RESPONSE)
+
+        fetch_weather()
+
+        url = mock_urlopen.call_args[0][0]
+        assert "past_days=1" in url
 
     @patch("agents.weather.urlopen")
     def test_uses_default_leiden_coordinates(self, mock_urlopen):

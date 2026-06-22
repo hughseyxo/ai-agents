@@ -5,6 +5,7 @@ Intelligence models provide structured parsing of the LLM intelligence run outpu
 """
 from __future__ import annotations
 
+import logging
 import re
 from datetime import date
 from pathlib import Path
@@ -13,6 +14,8 @@ from typing import Literal, Optional
 from pydantic import BaseModel, field_validator
 
 from .db import AgentDB, DEFAULT_DB_PATH
+
+logger = logging.getLogger(__name__)
 
 _STATUS_VALUES = ("Healthy", "Stressed", "Overwatered", "Underwatered", "Concerning")
 _SENSITIVITY_VALUES = ("high", "medium", "low")
@@ -141,8 +144,11 @@ class PlantStore:
                     summary=a.get("summary", ""),
                     status=a.get("status", ""),
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(
+                    "bad last_assessment for plant %r, skipping: %s",
+                    raw.get("name"), e,
+                )
 
         return Plant(
             name=raw.get("name", "Unknown"),
