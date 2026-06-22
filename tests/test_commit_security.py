@@ -69,11 +69,19 @@ class TestRunHook:
         agent._get_diff = lambda r: SAMPLE_DIFF
         assert agent.run_hook() == 0
 
-    def test_returns_0_on_llm_failure(self, monkeypatch):
+    def test_returns_1_on_llm_failure_fail_closed(self, monkeypatch):
+        monkeypatch.delenv("COMMIT_SECURITY_ALLOW_ON_ERROR", raising=False)
         monkeypatch.setenv("GIT_PUSH_RANGE", "HEAD~1..HEAD")
         agent = _make_agent(synthesize_raises=RuntimeError("LLM timeout"))
         agent._get_diff = lambda r: SAMPLE_DIFF
-        assert agent.run_hook() == 0  # never block on LLM failure
+        assert agent.run_hook() == 1  # unscanned diff blocks (fail closed)
+
+    def test_llm_failure_allowed_with_override(self, monkeypatch):
+        monkeypatch.setenv("GIT_PUSH_RANGE", "HEAD~1..HEAD")
+        monkeypatch.setenv("COMMIT_SECURITY_ALLOW_ON_ERROR", "1")
+        agent = _make_agent(synthesize_raises=RuntimeError("LLM timeout"))
+        agent._get_diff = lambda r: SAMPLE_DIFF
+        assert agent.run_hook() == 0  # explicit override allows the push
 
     def test_returns_0_on_empty_diff(self, monkeypatch):
         monkeypatch.setenv("GIT_PUSH_RANGE", "HEAD~1..HEAD")
@@ -87,11 +95,12 @@ class TestRunHook:
         agent._get_diff = lambda r: "   \n  "
         assert agent.run_hook() == 0
 
-    def test_returns_0_on_bad_json(self, monkeypatch):
+    def test_returns_1_on_bad_json_fail_closed(self, monkeypatch):
+        monkeypatch.delenv("COMMIT_SECURITY_ALLOW_ON_ERROR", raising=False)
         monkeypatch.setenv("GIT_PUSH_RANGE", "HEAD~1..HEAD")
         agent = _make_agent(synthesize_return="not valid json at all")
         agent._get_diff = lambda r: SAMPLE_DIFF
-        assert agent.run_hook() == 0  # bad JSON → treat as no findings
+        assert agent.run_hook() == 1  # unparseable response → fail closed
 
     def test_strips_markdown_fences(self, monkeypatch):
         monkeypatch.setenv("GIT_PUSH_RANGE", "HEAD~1..HEAD")
