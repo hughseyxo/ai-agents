@@ -6,6 +6,7 @@ Cron (manual — uses --mode args not supported by install-cron):
 """
 import json
 import re
+import subprocess
 import uuid
 import sys
 from datetime import datetime, timedelta, timezone
@@ -15,6 +16,7 @@ import yaml
 
 from .base import BaseAgent, REPO_ROOT
 from .plant_profiles import parse_frontmatter as _parse_fm
+from .plant_profiles import write_profile_atomic as _write_atomic
 
 
 def _write_learning_note(
@@ -103,7 +105,105 @@ MCP_SERVER_FILES = [
     REPO_ROOT / "mcp-servers" / "calendar_server.py",
 ]
 
-BRIDGE_BASE = "http://yopflix.tailed77a8.ts.net:4242"
+_PROPOSAL_ID_RE = re.compile(r"^[a-f0-9-]{8,36}$")
+
+
+def _proposals_dir() -> Path:
+    return REPO_ROOT / "output" / "librarian" / "proposals"
+
+
+def _git_commit(rel_path: str, message: str) -> None:
+    """Stage and commit a single file. Raises CalledProcessError on failure."""
+    subprocess.run(["git", "add", rel_path], cwd=str(REPO_ROOT), check=True)
+    subprocess.run(["git", "commit", "-m", message], cwd=str(REPO_ROOT), check=True)
+
+
+def _load_proposal(proposal_id: str):
+    """Return (path, dict) for a pending-or-any proposal, or None if the id is
+    malformed or the file is missing. Validates the id shape before any I/O."""
+    if not _PROPOSAL_ID_RE.match(proposal_id):
+        print(f"[librarian] invalid proposal id: {proposal_id!r}", file=sys.stderr)
+        return None
+    pf = _proposals_dir() / f"{proposal_id}.json"
+    if not pf.exists():
+        print(f"[librarian] proposal not found: {proposal_id}", file=sys.stderr)
+        return None
+    return pf, json.loads(pf.read_text())
+
+
+def apply_proposal(proposal_id: str) -> int:
+    """Apply a pending prompt_edit proposal: write the proposed prompt to its file
+    (bounds-checked under REPO_ROOT), commit it, and mark the proposal approved.
+    Returns 0 on success, non-zero otherwise. Replaces the old bridge approve link."""
+    loaded = _load_proposal(proposal_id)
+    if loaded is None:
+        return 1
+    pf, proposal = loaded
+    if proposal.get("status") != "pending":
+        print(f"[librarian] proposal already {proposal.get('status')}", file=sys.stderr)
+        return 1
+    if proposal.get("fix_type") != "prompt_edit":
+        print(f"[librarian] apply only supports prompt_edit (got {proposal.get('fix_type')}); "
+              f"use create-plan for architecture_plan", file=sys.stderr)
+        return 1
+
+    rel = proposal.get("file", "")
+    target = (REPO_ROOT / rel).resolve()
+    try:
+        target.relative_to(REPO_ROOT.resolve())
+    except ValueError:
+        print(f"[librarian] proposal file escapes repo: {rel!r}", file=sys.stderr)
+        return 1
+
+    _write_atomic(target, proposal.get("proposed", ""))
+    try:
+        _git_commit(rel, f"librarian: apply proposal {proposal_id}")
+    except Exception as e:
+        print(f"[librarian] git commit failed: {e}", file=sys.stderr)
+        return 1
+    proposal["status"] = "approved"
+    _write_atomic(pf, json.dumps(proposal, indent=2))
+    print(f"[librarian] applied proposal {proposal_id} to {rel} and committed.")
+    return 0
+
+
+def reject_proposal(proposal_id: str) -> int:
+    """Mark a proposal rejected without changing any source file. Returns 0/1."""
+    loaded = _load_proposal(proposal_id)
+    if loaded is None:
+        return 1
+    pf, proposal = loaded
+    proposal["status"] = "rejected"
+    _write_atomic(pf, json.dumps(proposal, indent=2))
+    print(f"[librarian] rejected proposal {proposal_id}.")
+    return 0
+
+
+def create_plan_from_proposal(proposal_id: str) -> int:
+    """Materialise an architecture_plan proposal into docs/superpowers/plans/. Returns 0/1."""
+    loaded = _load_proposal(proposal_id)
+    if loaded is None:
+        return 1
+    pf, proposal = loaded
+    if proposal.get("status") != "pending":
+        print(f"[librarian] proposal already {proposal.get('status')}", file=sys.stderr)
+        return 1
+    plans_dir = REPO_ROOT / "docs" / "superpowers" / "plans"
+    plans_dir.mkdir(parents=True, exist_ok=True)
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    plan_file = plans_dir / f"{today}-librarian-arch-{proposal_id}.md"
+    content = (
+        f"# Architectural Plan: {proposal.get('agent', '')}\n\n"
+        f"**ID**: {proposal_id}\n"
+        f"**Finding**: {proposal.get('finding', '')}\n\n"
+        f"{proposal.get('proposed_plan', 'No plan provided.')}\n"
+    )
+    _write_atomic(plan_file, content)
+    proposal["status"] = "plan_created"
+    proposal["plan_file"] = str(plan_file.relative_to(REPO_ROOT))
+    _write_atomic(pf, json.dumps(proposal, indent=2))
+    print(f"[librarian] wrote plan {proposal['plan_file']}.")
+    return 0
 
 
 class LibrarianAgent(BaseAgent):
@@ -333,12 +433,10 @@ class LibrarianAgent(BaseAgent):
 
     def _build_html_report(self, today: str, mode: str) -> str:
         import html as hl
-        import os
         findings = self.context.get("findings") or []
         applied = self.context.get("applied_learnings") or []
         proposals = self.context.get("proposals") or []
         check = self.context.get("check_failures") or {}
-        token = os.environ.get("MCP_BRIDGE_TOKEN", "")
         sections = ""
 
         if mode == "watch":
@@ -384,25 +482,23 @@ class LibrarianAgent(BaseAgent):
             for p in proposals:
                 pid = hl.escape(p["id"])
                 ft = p.get("fix_type")
-                
+
                 if ft == "prompt_edit":
-                    approve = f"{BRIDGE_BASE}/librarian/approve?id={pid}&token={token}"
-                    reject = f"{BRIDGE_BASE}/librarian/reject?id={pid}&token={token}"
-                    label = "Approve Prompt Edit"
+                    apply_cmd = f"python3 -m agents librarian-apply {pid}"
                 elif ft == "architecture_plan":
-                    approve = f"{BRIDGE_BASE}/librarian/create_plan?id={pid}&token={token}"
-                    reject = f"{BRIDGE_BASE}/librarian/reject?id={pid}&token={token}"
-                    label = "Approve Plan Creation"
+                    apply_cmd = f"python3 -m agents librarian-plan {pid}"
                 else:
                     continue
+                reject_cmd = f"python3 -m agents librarian-reject {pid}"
 
+                # Approvals are now applied via a local CLI on the server (the MCP
+                # bridge that served one-click links was removed). Show the commands.
                 cards += (
                     f'<div style="border:1px solid #ccc;padding:12px;margin:8px 0">'
                     f'<b>{hl.escape(p["agent"])}</b>: {hl.escape(p.get("finding",""))}<br/>'
-                    f'<a href="{approve}" style="background:#2ecc71;color:#fff;padding:6px 12px;'
-                    f'text-decoration:none;margin-right:8px">{label}</a>'
-                    f'<a href="{reject}" style="background:#e74c3c;color:#fff;padding:6px 12px;'
-                    f'text-decoration:none">Reject</a></div>'
+                    f'<p style="margin:6px 0 2px">Apply: <code>{hl.escape(apply_cmd)}</code></p>'
+                    f'<p style="margin:2px 0">Reject: <code>{hl.escape(reject_cmd)}</code></p>'
+                    f'</div>'
                 )
             sections += f'<h2>Proposed Changes</h2>{cards}'
 

@@ -37,6 +37,18 @@ Clear recovery confirmed. Photo (outdoor, against fence, full sun) shows a turgi
 
 ## Intelligence Notes
 <!-- Appended by each intelligence run -->
+### 2026-06-21
+- Clear recovery from persistent late-May underwatering stress; now dense, bushy, fully turgid with pale yellow/cream bloom onset
+- 5-day baseline + weather adjustment tracking excellently post-recovery; deadheading completed 2026-06-17
+- **Data issue**: `last_watered` shows 2026-05-31 (corrupted; actual is 2026-06-16 per assessment). Fix data corruption.
+- **Profile issue**: Plant Info shows 7-day baseline but history uses 5 days; reconcile
+
+### 2026-06-20
+- Clear recovery from persistent late-May underwatering stress; dense, bushy, fully turgid with bloom onset (pale yellow/cream florets opening)
+- 5-day baseline + weather adjustment tracking excellently; no frequency change warranted
+- **Data issue**: last_watered shows 2026-05-31 (likely corruption); assessment 2026-06-16 confirms recent watering
+- **Profile issue**: Plant Info shows 7-day baseline but history uses 5 days; reconcile which is current
+
 ### 2026-06-17 (completed)
 - Deadhead spent clusters as pale yellow/cream florets open (marked done via PWA)
 

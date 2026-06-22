@@ -4,8 +4,8 @@ location: outdoor
 sunlight: full sun
 water_sensitivity: medium
 baseline_frequency_days: 7
-effective_frequency_days: 5
-last_watered: '2026-06-16'
+effective_frequency_days: 4
+last_watered: '2026-06-21'
 needs_photo: false
 latest_health:
   date: '2026-06-18'
@@ -58,6 +58,16 @@ Photo assessment of the shared blue pot (Gazania Yellow + Marguerite daisies). G
 
 ## Intelligence Notes
 <!-- Appended by each intelligence run -->
+### 2026-06-21
+- Strappy grey-green foliage upright and turgid; several open yellow blooms; healthy on 7-day baseline
+- Soil dark and moist 2 days post-watering; no stress or sun damage signs
+- **Photo identity issue**: 2026-06-18 frame shows dark plastic pot with different companion plant, NOT the blue pot shared with Marguerite daisies. Verify plant/pot assignment.
+
+### 2026-06-20
+- Strappy grey-green foliage upright and turgid; several open yellow blooms, one spent stalk (deadheading completed 2026-06-17)
+- Soil dark and moist 2 days post-watering; no watering need
+- **Photo identity issue**: 2026-06-18 frame shows dark plastic pot with different companion plant, NOT the blue pot shared with Marguerite daisies. Verify plant identity and pot assignment
+
 ### 2026-06-17 (completed)
 - Deadhead yellowing spent flower stalk drooping over pot rim (marked done via PWA)
 
@@ -176,3 +186,8 @@ Healthy with persistent flowering
 |---|---|---| 
 | 2026-05-28 | Watered on 2026-05-28 on a 7-day cycle. | No changes initiated. | 
 | 2026-06-04 | Regular observation showing sustained health. | Maintain 7-day schedule. |
+
+## Current Observations
+- Strappy grey-green foliage upright and turgid; several open yellow blooms; healthy on 7-day baseline
+- Soil dark and moist 2 days post-watering; no stress or sun damage signs
+- **Photo identity issue**: 2026-06-18 frame shows dark plastic pot with different companion plant, NOT the blue pot shared with Marguerite daisies. Verify plant/pot assignment.

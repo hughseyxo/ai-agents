@@ -24,6 +24,9 @@ CRITICAL_FINDING = {"severity": "critical", "file": "app.py", "issue": "Hardcode
 HIGH_FINDING = {"severity": "high", "file": "app.py", "issue": "SQL injection risk", "recommendation": "Use parameterised queries"}
 MEDIUM_FINDING = {"severity": "medium", "file": "app.py", "issue": "Bare except clause", "recommendation": "Catch specific exceptions"}
 LOW_FINDING = {"severity": "low", "file": "app.py", "issue": "Missing input validation", "recommendation": "Validate user input"}
+# Mixed-case severities — the LLM may title-case or upper-case these; the gate must still block (C6).
+TITLECASE_CRITICAL_FINDING = {"severity": "Critical", "file": "app.py", "issue": "Hardcoded API key", "recommendation": "Use env var"}
+UPPERCASE_HIGH_FINDING = {"severity": "HIGH", "file": "app.py", "issue": "SQL injection risk", "recommendation": "Use parameterised queries"}
 
 
 def _make_agent(synthesize_return=None, synthesize_raises=None):
@@ -101,6 +104,20 @@ class TestRunHook:
         monkeypatch.setenv("GIT_PUSH_RANGE", "HEAD~1..HEAD")
         findings = [MEDIUM_FINDING, CRITICAL_FINDING, LOW_FINDING]
         agent = _make_agent(synthesize_return=_findings_json(findings))
+        agent._get_diff = lambda r: SAMPLE_DIFF
+        assert agent.run_hook() == 1
+
+    def test_returns_1_on_titlecase_critical(self, monkeypatch):
+        # C6: case-sensitive compare would let "Critical" bypass the gate.
+        monkeypatch.setenv("GIT_PUSH_RANGE", "HEAD~1..HEAD")
+        agent = _make_agent(synthesize_return=_findings_json([TITLECASE_CRITICAL_FINDING]))
+        agent._get_diff = lambda r: SAMPLE_DIFF
+        assert agent.run_hook() == 1
+
+    def test_returns_1_on_uppercase_high(self, monkeypatch):
+        # C6: "HIGH" must also block.
+        monkeypatch.setenv("GIT_PUSH_RANGE", "HEAD~1..HEAD")
+        agent = _make_agent(synthesize_return=_findings_json([UPPERCASE_HIGH_FINDING]))
         agent._get_diff = lambda r: SAMPLE_DIFF
         assert agent.run_hook() == 1
 

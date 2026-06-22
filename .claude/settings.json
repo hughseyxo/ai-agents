@@ -15,7 +15,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/home/cian/git/ai-agents/.venv/bin/python -m scripts.daily_note append"
+            "command": "/home/cian/git/ai-agents/.venv/bin/python -m scripts.daily_note stop"
           }
         ]
       }

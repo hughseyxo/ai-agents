@@ -40,6 +40,16 @@ Multi-cane Yucca photographed on an indoor windowsill (bright/full-sun position,
 
 ## Intelligence Notes
 <!-- Appended by each intelligence run -->
+### 2026-06-21
+- All three rosettes firm, deep green; earlier overwatering concern fully unrealised
+- 14-day baseline tracking well with no stress signs
+- Last assessment 16 days old (2026-06-05) — at photo-gap threshold; schedule check soon
+
+### 2026-06-20
+- All three rosettes firm, deep green; earlier overwatering concern fully unrealised
+- 14-day baseline tracking well; no frequency change warranted
+- Last assessment 15 days old (2026-06-05) — at assessment-gap threshold; schedule photo check
+
 ### 2026-06-19
 - All three rosettes firm, deep green; earlier overwatering concern from May/early-Jun fully unrealised
 - Last assessment Jun 5 (14 days); at assessment-gap threshold—schedule photo if convenient
@@ -124,6 +134,6 @@ Date | Change | Reason |
 ---|---|---|
 
 ## Current Observations
-- All three rosettes firm, deep green; earlier overwatering concern from May/early-Jun fully unrealised
-- Last assessment Jun 5 (14 days); at assessment-gap threshold—schedule photo if convenient
-- Baseline 14-day cycle working well; no frequency adjustment needed
+- All three rosettes firm, deep green; earlier overwatering concern fully unrealised
+- 14-day baseline tracking well with no stress signs
+- Last assessment 16 days old (2026-06-05) — at photo-gap threshold; schedule check soon

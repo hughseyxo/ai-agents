@@ -120,10 +120,29 @@ def profile_path(plant_name: str) -> Path:
     return PLANTS_DIR / f"{slug}.md"
 
 
+def safe_profile_path(plant_name: str) -> Path:
+    """Canonical, bounds-checked resolver for a plant profile doc.
+
+    Slugs the name, resolves it, and asserts the result stays within PLANTS_DIR.
+    Raises ValueError on any path-traversal escape. All callers that build a path
+    from an LLM/user-supplied plant name should route through this (closes the
+    traversal class across agents, the concierge bot, and the PWA)."""
+    base = PLANTS_DIR.resolve()
+    resolved = (PLANTS_DIR / f"{_slug(plant_name)}.md").resolve()
+    try:
+        resolved.relative_to(base)
+    except ValueError:
+        raise ValueError(f"profile path escapes PLANTS_DIR: {plant_name!r}")
+    return resolved
+
+
 def write_health_assessment(plant_name: str, profile_notes: str) -> bool:
     """Append profile_notes to the ## Health Assessments section of a plant profile.
-    Returns False if the profile doc does not exist."""
-    path = profile_path(plant_name)
+    Returns False if the profile doc does not exist or the name escapes PLANTS_DIR."""
+    try:
+        path = safe_profile_path(plant_name)
+    except ValueError:
+        return False
     if not path.exists():
         return False
     content = path.read_text()
@@ -141,9 +160,8 @@ def write_health_assessment(plant_name: str, profile_notes: str) -> bool:
 def append_intelligence_note(plant_name: str, note: str) -> bool:
     """Prepend a timestamped note to the ## Intelligence Notes section of a plant profile.
     Returns False if the profile doc does not exist or the resolved path escapes PLANTS_DIR."""
-    path = profile_path(plant_name)
     try:
-        path.resolve().relative_to(PLANTS_DIR.resolve())
+        path = safe_profile_path(plant_name)
     except ValueError:
         return False
     if not path.exists():
@@ -162,8 +180,11 @@ def append_intelligence_note(plant_name: str, note: str) -> bool:
 
 def append_frequency_history(plant_name: str, old: int, new: int, reason: str) -> bool:
     """Insert a row into the plant profile's Frequency History table.
-    Returns False if the profile doc does not exist."""
-    path = profile_path(plant_name)
+    Returns False if the profile doc does not exist or the name escapes PLANTS_DIR."""
+    try:
+        path = safe_profile_path(plant_name)
+    except ValueError:
+        return False
     if not path.exists():
         return False
     content = path.read_text()

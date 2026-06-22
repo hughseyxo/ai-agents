@@ -6,7 +6,7 @@ water_sensitivity: medium
 baseline_frequency_days: 7
 effective_frequency_days: 7
 last_watered: '2026-06-16'
-needs_photo: false
+needs_photo: true
 latest_health:
   date: '2026-06-16'
   summary: "The Begonia maculata's light stress has progressed markedly since the\
@@ -50,6 +50,18 @@ First photo assessment on record. Plant is a Begonia maculata (angel-wing form) 
 
 ## Intelligence Notes
 <!-- Appended by each intelligence run -->
+### 2026-06-21
+- **Light stress ESCALATED from 50% to 90%+ red pigmentation (Jun 6 → Jun 16)**; yellow outer leaves with crisped, curled dry margins (leaf burn + low humidity, NOT dehydration — soil moist)
+- Core structure sound (green firm stems, no rot/wilting); this is LIGHT/CULTURAL stress, NOT a watering issue
+- Intervention completed 2026-06-19: relocated away from direct window, added sheer diffuser, raising humidity. **Monitor new growth colour over 1–2 weeks** to verify recovery
+- Do NOT reduce watering; soil moist and turgor fine
+
+### 2026-06-20
+- **Light stress escalated to 90%+ red pigmentation + yellowing outer leaves** (was 50% on 2026-06-06); leaf crisping indicates low humidity, not dehydration
+- **Intervention completed 2026-06-19**: relocated away from direct window, added sheer diffuser, raising humidity. Monitor new growth colour over 1–2 weeks.
+- **Do NOT reduce watering** — this is light/cultural stress, not hydration issue. Soil moist; core structure sound (green firm stems, no rot).
+- Standing actions flagged since 2026-05-28 (19 days) finally completed; follow-up photo within 1 week to verify recovery
+
 ### 2026-06-19
 - Light stress escalated: red/coral/bronze pigmentation 50% canopy (Jun 6) → 90%+ (Jun 16); outer leaves yellowing with crisped margins (leaf burn + low humidity, NOT dehydration—soil moist, turgor fine)
 - Standing cultural actions flagged since May 28 (21 days!) actioned Jun 19: relocated from direct window, added diffuser, raising humidity
@@ -179,7 +191,7 @@ First photo assessment on record. Plant is a Begonia maculata (angel-wing form) 
 - Recommendation: move back from direct window glass or add sheer diffuser; re-assess in ~1 week
 
 ## Current Observations
-- Light stress escalated: red/coral/bronze pigmentation 50% canopy (Jun 6) → 90%+ (Jun 16); outer leaves yellowing with crisped margins (leaf burn + low humidity, NOT dehydration—soil moist, turgor fine)
-- Standing cultural actions flagged since May 28 (21 days!) actioned Jun 19: relocated from direct window, added diffuser, raising humidity
-- Core structure sound (green firm stems, no rot/wilting); monitor recovery 1–2 weeks; new growth greener = stress resolved
-- Do NOT reduce watering frequency—this is light/cultural stress, not hydration issue
+- **Light stress ESCALATED from 50% to 90%+ red pigmentation (Jun 6 → Jun 16)**; yellow outer leaves with crisped, curled dry margins (leaf burn + low humidity, NOT dehydration — soil moist)
+- Core structure sound (green firm stems, no rot/wilting); this is LIGHT/CULTURAL stress, NOT a watering issue
+- Intervention completed 2026-06-19: relocated away from direct window, added sheer diffuser, raising humidity. **Monitor new growth colour over 1–2 weeks** to verify recovery
+- Do NOT reduce watering; soil moist and turgor fine

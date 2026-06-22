@@ -60,6 +60,16 @@ tags:
 
 ## Intelligence Notes
 <!-- Appended by each intelligence run -->
+### 2026-06-21
+- Perfect 10-day watering cycle; foliage vigorous with excellent turgor; no stress signs
+- **URGENT: Repot task 19+ days overdue** — exposed surface roots and compacted soil since 2026-05-28 blocking healthy growth
+- Prioritize repotting into slightly larger pot with fresh well-draining mix within this week; not a watering issue
+
+### 2026-06-20
+- Perfect 10-day watering cycle; foliage vigorous with excellent turgor
+- **URGENT: Repot task 19+ days overdue** — exposed surface roots and compacted soil since 2026-05-28
+- Aerial roots now trailing down pot exterior; repot into slightly larger container with fresh well-draining mix within this week
+
 ### 2026-06-19
 - Large, vigorous, excellent turgor; 10-day cycle tracking perfectly
 - Persistent maintenance: exposed surface roots and soil compaction since May 28; repot task in Todoist 19+ days overdue
@@ -146,6 +156,6 @@ tags:
 - Pruning recommendation: Consider modifying root zone through repotting to enhance growth parameters
 
 ## Current Observations
-- Large, vigorous, excellent turgor; 10-day cycle tracking perfectly
-- Persistent maintenance: exposed surface roots and soil compaction since May 28; repot task in Todoist 19+ days overdue
-- Recommend prioritise repotting into slightly larger pot with fresh well-draining mix within this week
+- Perfect 10-day watering cycle; foliage vigorous with excellent turgor; no stress signs
+- **URGENT: Repot task 19+ days overdue** — exposed surface roots and compacted soil since 2026-05-28 blocking healthy growth
+- Prioritize repotting into slightly larger pot with fresh well-draining mix within this week; not a watering issue

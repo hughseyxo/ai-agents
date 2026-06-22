@@ -1,6 +1,40 @@
 """Tests for agents.plant_profiles — profile-doc file I/O helpers."""
 
+import pytest
+
 import agents.plant_profiles as pp
+
+
+# --- safe_profile_path (path-traversal guard) ---
+
+def test_safe_profile_path_normal_name_inside_dir(tmp_path, monkeypatch):
+    monkeypatch.setattr(pp, "PLANTS_DIR", tmp_path)
+    path = pp.safe_profile_path("Monstera Deliciosa")
+    assert path == (tmp_path / "monstera-deliciosa.md").resolve()
+    assert path.parent == tmp_path.resolve()
+
+
+@pytest.mark.parametrize("hostile", [
+    "../../etc/passwd",
+    "../../../root/.ssh/authorized_keys",
+    "..",
+    "/etc/passwd",
+    "a/../../b",
+])
+def test_safe_profile_path_hostile_names_stay_inside(tmp_path, monkeypatch, hostile):
+    monkeypatch.setattr(pp, "PLANTS_DIR", tmp_path)
+    path = pp.safe_profile_path(hostile)
+    # Whatever the input, the resolved path must remain directly inside PLANTS_DIR.
+    assert path.parent == tmp_path.resolve()
+
+
+def test_safe_profile_path_rejects_escape(tmp_path, monkeypatch):
+    # If a name ever resolves outside PLANTS_DIR, the guard must raise.
+    monkeypatch.setattr(pp, "PLANTS_DIR", tmp_path)
+    # Monkeypatch _slug to a passthrough so a real separator survives → escape attempt.
+    monkeypatch.setattr(pp, "_slug", lambda n: n)
+    with pytest.raises(ValueError):
+        pp.safe_profile_path("../../escape")
 
 
 # --- frontmatter parse/upsert ---

@@ -2,6 +2,7 @@
 
 import json
 import sqlite3
+import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -62,118 +63,139 @@ class AgentDB:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
+        # The connection is shared across threads (agents + bot + PWA + servers),
+        # so serialise all access with a reentrant lock and let SQLite use WAL +
+        # a busy timeout so concurrent writers wait rather than raising
+        # "database is locked" / corrupting via torn writes.
+        self._lock = threading.RLock()
+        self._conn.execute("PRAGMA journal_mode=WAL")
+        self._conn.execute("PRAGMA busy_timeout=5000")
         self._conn.executescript(SCHEMA)
 
     def close(self):
-        self._conn.close()
+        with self._lock:
+            self._conn.close()
 
     # --- Run tracking ---
 
     def start_run(self, agent: str) -> int:
-        cur = self._conn.execute(
-            "INSERT INTO runs (agent) VALUES (?)", (agent,)
-        )
-        self._conn.commit()
-        return cur.lastrowid
+        with self._lock:
+            cur = self._conn.execute(
+                "INSERT INTO runs (agent) VALUES (?)", (agent,)
+            )
+            self._conn.commit()
+            return cur.lastrowid
 
     def complete_run(self, run_id: int, status: str, output_summary: str = None, error: str = None):
-        self._conn.execute(
-            "UPDATE runs SET finished_at = datetime('now'), status = ?, output_summary = ?, error = ? WHERE id = ?",
-            (status, output_summary, error, run_id),
-        )
-        self._conn.commit()
+        with self._lock:
+            self._conn.execute(
+                "UPDATE runs SET finished_at = datetime('now'), status = ?, output_summary = ?, error = ? WHERE id = ?",
+                (status, output_summary, error, run_id),
+            )
+            self._conn.commit()
 
     def record_step(self, run_id: int, step: str, status: str, error: str = None):
-        self._conn.execute(
-            "INSERT INTO steps (run_id, step, status, error) VALUES (?, ?, ?, ?)",
-            (run_id, step, status, error),
-        )
-        self._conn.commit()
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO steps (run_id, step, status, error) VALUES (?, ?, ?, ?)",
+                (run_id, step, status, error),
+            )
+            self._conn.commit()
 
     def get_last_run(self, agent: str) -> dict | None:
-        row = self._conn.execute(
-            "SELECT * FROM runs WHERE agent = ? ORDER BY started_at DESC LIMIT 1",
-            (agent,),
-        ).fetchone()
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT * FROM runs WHERE agent = ? ORDER BY started_at DESC LIMIT 1",
+                (agent,),
+            ).fetchone()
         return dict(row) if row else None
 
     def get_run_history(self, agent: str, limit: int = 10) -> list[dict]:
-        rows = self._conn.execute(
-            "SELECT * FROM runs WHERE agent = ? ORDER BY started_at DESC LIMIT ?",
-            (agent, limit),
-        ).fetchall()
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM runs WHERE agent = ? ORDER BY started_at DESC LIMIT ?",
+                (agent, limit),
+            ).fetchall()
         return [dict(r) for r in rows]
 
     def get_step_results(self, run_id: int) -> list[dict]:
-        rows = self._conn.execute(
-            "SELECT * FROM steps WHERE run_id = ? ORDER BY ts", (run_id,)
-        ).fetchall()
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM steps WHERE run_id = ? ORDER BY ts", (run_id,)
+            ).fetchall()
         return [dict(r) for r in rows]
 
     # --- Key-value state ---
 
     def get_state(self, agent: str, key: str, default=None):
-        row = self._conn.execute(
-            "SELECT value FROM state WHERE agent = ? AND key = ?",
-            (agent, key),
-        ).fetchone()
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT value FROM state WHERE agent = ? AND key = ?",
+                (agent, key),
+            ).fetchone()
         if row is None:
             return default
         return json.loads(row["value"])
 
     def set_state(self, agent: str, key: str, value):
-        self._conn.execute(
-            "INSERT INTO state (agent, key, value, updated) VALUES (?, ?, ?, datetime('now')) "
-            "ON CONFLICT(agent, key) DO UPDATE SET value = excluded.value, updated = excluded.updated",
-            (agent, key, json.dumps(value)),
-        )
-        self._conn.commit()
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO state (agent, key, value, updated) VALUES (?, ?, ?, datetime('now')) "
+                "ON CONFLICT(agent, key) DO UPDATE SET value = excluded.value, updated = excluded.updated",
+                (agent, key, json.dumps(value)),
+            )
+            self._conn.commit()
 
     # --- Dedup ---
 
     def check_dedup(self, agent: str, category: str, identifier: str) -> bool:
-        row = self._conn.execute(
-            "SELECT 1 FROM seen WHERE agent = ? AND category = ? AND identifier = ?",
-            (agent, category, identifier),
-        ).fetchone()
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT 1 FROM seen WHERE agent = ? AND category = ? AND identifier = ?",
+                (agent, category, identifier),
+            ).fetchone()
         return row is not None
 
     def mark_seen(self, agent: str, category: str, identifier: str):
-        self._conn.execute(
-            "INSERT OR IGNORE INTO seen (agent, category, identifier) VALUES (?, ?, ?)",
-            (agent, category, identifier),
-        )
-        self._conn.commit()
-
-    def delete_seen(self, category: str, identifier: str, agent: str = ""):
-        if agent:
+        with self._lock:
             self._conn.execute(
-                "DELETE FROM seen WHERE agent=? AND category=? AND identifier=?",
+                "INSERT OR IGNORE INTO seen (agent, category, identifier) VALUES (?, ?, ?)",
                 (agent, category, identifier),
             )
-        else:
-            self._conn.execute(
-                "DELETE FROM seen WHERE category=? AND identifier=?",
-                (category, identifier),
-            )
-        self._conn.commit()
+            self._conn.commit()
+
+    def delete_seen(self, category: str, identifier: str, agent: str = ""):
+        with self._lock:
+            if agent:
+                self._conn.execute(
+                    "DELETE FROM seen WHERE agent=? AND category=? AND identifier=?",
+                    (agent, category, identifier),
+                )
+            else:
+                self._conn.execute(
+                    "DELETE FROM seen WHERE category=? AND identifier=?",
+                    (category, identifier),
+                )
+            self._conn.commit()
 
     # --- Plant weather cache ---
 
     def upsert_plant_weather_cache(self, plant_name: str, adjusted_date: str, adjustment_reason: str):
-        self._conn.execute(
-            "INSERT INTO plant_weather_cache (plant_name, adjusted_date, adjustment_reason, updated_at) "
-            "VALUES (?, ?, ?, datetime('now')) "
-            "ON CONFLICT(plant_name) DO UPDATE SET "
-            "adjusted_date = excluded.adjusted_date, "
-            "adjustment_reason = excluded.adjustment_reason, "
-            "updated_at = excluded.updated_at",
-            (plant_name, adjusted_date, adjustment_reason),
-        )
-        self._conn.commit()
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO plant_weather_cache (plant_name, adjusted_date, adjustment_reason, updated_at) "
+                "VALUES (?, ?, ?, datetime('now')) "
+                "ON CONFLICT(plant_name) DO UPDATE SET "
+                "adjusted_date = excluded.adjusted_date, "
+                "adjustment_reason = excluded.adjustment_reason, "
+                "updated_at = excluded.updated_at",
+                (plant_name, adjusted_date, adjustment_reason),
+            )
+            self._conn.commit()
 
     def get_plant_weather_cache(self) -> list[dict]:
-        rows = self._conn.execute(
-            "SELECT plant_name, adjusted_date, adjustment_reason, updated_at FROM plant_weather_cache"
-        ).fetchall()
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT plant_name, adjusted_date, adjustment_reason, updated_at FROM plant_weather_cache"
+            ).fetchall()
         return [dict(r) for r in rows]
