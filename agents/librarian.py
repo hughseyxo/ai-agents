@@ -5,6 +5,7 @@ Cron (manual — uses --mode args not supported by install-cron):
   0 6 * * 1-6  run-agent.sh librarian --mode watch   # Mon-Sat failure check
 """
 import json
+import logging
 import re
 import subprocess
 import uuid
@@ -17,6 +18,40 @@ import yaml
 from .base import BaseAgent, REPO_ROOT
 from .plant_profiles import parse_frontmatter as _parse_fm
 from .plant_profiles import write_profile_atomic as _write_atomic
+
+logger = logging.getLogger(__name__)
+
+
+def _safe_component(name: str) -> str:
+    """Slugify an untrusted name into a single safe path component ([a-z0-9-]),
+    rejecting path-traversal (C3). Raises ValueError if nothing usable remains."""
+    slug = re.sub(r"[^a-z0-9]+", "-", str(name).lower()).strip("-")
+    if not slug or slug in (".", ".."):
+        raise ValueError(f"unsafe path component: {name!r}")
+    return slug
+
+
+def _coerce_conf(value) -> float:
+    """Coerce an LLM-supplied confidence to float (C5); non-numeric → 0.0 so it
+    never auto-applies and never raises on a `< threshold` comparison."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _parse_findings_json(text: str) -> list:
+    """Parse an LLM findings response into a list (C4). On malformed JSON or a
+    non-list payload, log and return [] so the audit fails safe instead of raising."""
+    try:
+        data = json.loads(text)
+    except (json.JSONDecodeError, ValueError) as e:
+        logger.error("librarian: failed to parse findings JSON: %s", e)
+        return []
+    if not isinstance(data, list):
+        logger.error("librarian: findings JSON is not a list (got %s)", type(data).__name__)
+        return []
+    return data
 
 
 def _write_learning_note(
@@ -32,11 +67,16 @@ def _write_learning_note(
     if note_type == "memory":
         parent = REPO_ROOT / "docs" / "librarian-memory"
     else:
-        parent = REPO_ROOT / "docs" / "agent-learnings" / agent
+        # C3: agent comes from untrusted LLM findings — bound it to a single
+        # safe path component so it cannot escape docs/agent-learnings/.
+        parent = REPO_ROOT / "docs" / "agent-learnings" / _safe_component(agent)
     parent.mkdir(parents=True, exist_ok=True)
 
-    filename = f"{today}-{slug}.md"
+    filename = f"{today}-{_safe_component(slug)}.md"
     path = parent / filename
+    # Defence in depth: the sanitised components can't escape, but verify anyway.
+    if parent.resolve() not in path.resolve().parents:
+        raise ValueError(f"learning-note path escapes {parent}")
 
     fm = yaml.safe_dump({
         "type": note_type,
@@ -48,7 +88,7 @@ def _write_learning_note(
         "related": related,
     }, sort_keys=False, default_flow_style=False).strip()
 
-    path.write_text(f"---\n{fm}\n---\n\n## Note\n\n{entry}\n")
+    _write_atomic(path, f"---\n{fm}\n---\n\n## Note\n\n{entry}\n")
     return path
 
 
@@ -354,7 +394,7 @@ class LibrarianAgent(BaseAgent):
             match = re.search(r'\[[\s\S]*\]', text)
             if match:
                 text = match.group(0)
-        findings = json.loads(text)
+        findings = _parse_findings_json(text)  # C4: fail safe on bad LLM JSON
         self.context["findings"] = findings
         return {"findings": len(findings)}
 
@@ -363,19 +403,28 @@ class LibrarianAgent(BaseAgent):
         findings = self.context.get("findings") or []
         applied = []
         for f in findings:
-            conf = f.get("confidence", 0)
+            conf = _coerce_conf(f.get("confidence", 0))  # C5: never raise on non-numeric
             ft = f.get("fix_type")
             entry = f.get("learnings_entry", "").strip()
-            if not entry or conf < 0.8:
+            # C5: only auto-apply known low-risk fix types at high confidence.
+            if not entry or conf < 0.8 or ft not in ("learnings", "memory_update"):
                 continue
             slug = f.get("slug") or re.sub(r"[^a-z0-9]+", "-", entry[:40].lower()).strip("-")
             related = f.get("related", [])
-            if ft == "learnings":
-                _write_learning_note(f["agent"], entry, conf, slug, related, note_type="learnings")
-                applied.append({"agent": f["agent"], "entry": entry})
-            elif ft == "memory_update":
-                _write_learning_note("global", entry, conf, slug, related, note_type="memory")
-                applied.append({"agent": "global", "entry": entry})
+            try:
+                if ft == "learnings":
+                    agent = f.get("agent")
+                    if not agent:
+                        continue
+                    _write_learning_note(agent, entry, conf, slug, related, note_type="learnings")
+                    applied.append({"agent": agent, "entry": entry})
+                else:  # memory_update
+                    _write_learning_note("global", entry, conf, slug, related, note_type="memory")
+                    applied.append({"agent": "global", "entry": entry})
+            except ValueError as e:
+                # C3: hostile agent/slug name — skip this finding, keep going.
+                logger.warning("librarian: skipping learning note: %s", e)
+                continue
         self.context["applied_learnings"] = applied
         return {"applied": len(applied)}
     def _propose_changes(self) -> dict:
@@ -384,7 +433,7 @@ class LibrarianAgent(BaseAgent):
         proposals_dir.mkdir(parents=True, exist_ok=True)
         proposals = []
         for f in findings:
-            conf = f.get("confidence", 0)
+            conf = _coerce_conf(f.get("confidence", 0))  # C5
             ft = f.get("fix_type")
 
             # prompt_edit and architecture_plan always need human review regardless of confidence.
@@ -411,7 +460,7 @@ class LibrarianAgent(BaseAgent):
                     "proposed": f.get("proposed_prompt_section", ""),
                     "status": "pending",
                 }
-                (proposals_dir / f"{pid}.json").write_text(json.dumps(proposal, indent=2))
+                _write_atomic(proposals_dir / f"{pid}.json", json.dumps(proposal, indent=2))
                 proposals.append(proposal)
             
             elif ft == "architecture_plan":
@@ -425,7 +474,7 @@ class LibrarianAgent(BaseAgent):
                     "proposed_plan": f.get("suggested_plan", ""),
                     "status": "pending",
                 }
-                (proposals_dir / f"{pid}.json").write_text(json.dumps(proposal, indent=2))
+                _write_atomic(proposals_dir / f"{pid}.json", json.dumps(proposal, indent=2))
                 proposals.append(proposal)
 
         self.context["proposals"] = proposals
@@ -566,7 +615,7 @@ class LibrarianAgent(BaseAgent):
             match = re.search(r'\[[\s\S]*\]', text)
             if match:
                 text = match.group(0)
-        findings = json.loads(text)
+        findings = _parse_findings_json(text)  # C4: fail safe on bad LLM JSON
         self.context["findings"] = findings
         return {"findings": len(findings)}
 

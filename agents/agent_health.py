@@ -138,7 +138,7 @@ class AgentHealthAgent(BaseAgent):
         previously = self.get_state("alerted") or []
         new_alerts, recovered = diff_alerts(stale, previously)
 
-        sent = 0
+        sent_names = []
         for name in new_alerts:
             schedule, last = monitored[name]
             if last is None:
@@ -150,13 +150,17 @@ class AgentHealthAgent(BaseAgent):
                 f"(schedule `{schedule}`). Check its cron entry / logs."
             )
             if self._send_telegram(msg):
-                sent += 1
+                sent_names.append(name)
 
         for name in recovered:
             self._send_telegram(f"✅ Agent `{name}` is healthy again.")
 
-        self.set_state("alerted", stale)
-        return {"checked": len(monitored), "stale": stale, "alerts_sent": sent}
+        # Only record what we actually notified: still-stale agents already alerted,
+        # plus newly-alerted agents whose Telegram send succeeded. A failed new alert
+        # is left unrecorded so the next run retries it instead of going silent.
+        still_alerted = [n for n in stale if n in previously] + sent_names
+        self.set_state("alerted", still_alerted)
+        return {"checked": len(monitored), "stale": stale, "alerts_sent": len(sent_names)}
 
     # --- telegram ---
 

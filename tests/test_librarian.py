@@ -1,7 +1,13 @@
 import argparse
 import pytest
 from unittest.mock import patch
-from agents.librarian import LibrarianAgent, AGENT_NAMES
+from agents.librarian import (
+    LibrarianAgent,
+    AGENT_NAMES,
+    _write_learning_note,
+    _coerce_conf,
+    _parse_findings_json,
+)
 
 
 def make_agent(tmp_path):
@@ -189,6 +195,62 @@ def test_apply_learnings_writes_high_confidence_entry(tmp_path):
     notes = list((tmp_path / "docs" / "agent-learnings" / "news-briefing").glob("*.md"))
     assert len(notes) == 1
     assert "Keep HTML under 50KB" in notes[0].read_text()
+
+
+def test_coerce_conf_handles_nonnumeric():
+    # C5: LLM may emit a string/None confidence; must coerce, never raise.
+    assert _coerce_conf(0.9) == 0.9
+    assert _coerce_conf("high") == 0.0
+    assert _coerce_conf(None) == 0.0
+    assert _coerce_conf("0.85") == 0.85
+
+
+def test_parse_findings_json_returns_empty_on_bad_input():
+    # C4: a bad/non-list LLM response must yield [] (logged), not raise.
+    assert _parse_findings_json("not json at all") == []
+    assert _parse_findings_json('{"not": "a list"}') == []
+    assert _parse_findings_json('[{"agent": "x"}]') == [{"agent": "x"}]
+
+
+def test_write_learning_note_bounds_hostile_agent(tmp_path):
+    # C3: a traversal-y agent name is sanitised to a bounded component, never escapes.
+    with patch("agents.librarian.REPO_ROOT", tmp_path):
+        path = _write_learning_note("../../etc", "entry", 0.9, "slug", [], note_type="learnings")
+    base = (tmp_path / "docs" / "agent-learnings").resolve()
+    assert base in path.resolve().parents
+    assert not (tmp_path / "etc").exists()  # nothing created outside the tree
+
+
+def test_write_learning_note_rejects_empty_component(tmp_path):
+    # C3: a name that sanitises to nothing must be refused, not silently joined.
+    with patch("agents.librarian.REPO_ROOT", tmp_path):
+        with pytest.raises(ValueError):
+            _write_learning_note("../..", "entry", 0.9, "slug", [], note_type="learnings")
+
+
+def test_apply_learnings_hostile_agent_stays_bounded(tmp_path):
+    # C3+C5: a finding with a path-traversal agent name writes only under the tree.
+    agent = make_agent(tmp_path)
+    agent.context["findings"] = [{"agent": "../../../tmp/evil", "confidence": 0.9,
+                                  "fix_type": "learnings", "learnings_entry": "x",
+                                  "slug": "x"}]
+    with patch("agents.librarian.REPO_ROOT", tmp_path):
+        agent._apply_learnings()
+    base = (tmp_path / "docs" / "agent-learnings").resolve()
+    written = list((tmp_path / "docs" / "agent-learnings").glob("**/*.md"))
+    assert written
+    for p in written:
+        assert base in p.resolve().parents
+    assert not (tmp_path / "tmp" / "evil").exists()
+
+
+def test_apply_learnings_nonnumeric_confidence_does_not_raise(tmp_path):
+    agent = make_agent(tmp_path)
+    agent.context["findings"] = [{"agent": "news-briefing", "confidence": "high",
+                                  "fix_type": "learnings", "learnings_entry": "x", "slug": "x"}]
+    with patch("agents.librarian.REPO_ROOT", tmp_path):
+        result = agent._apply_learnings()
+    assert result["applied"] == 0
 
 
 def test_apply_learnings_skips_below_threshold(tmp_path):

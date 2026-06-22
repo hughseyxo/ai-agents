@@ -17,6 +17,15 @@ from .plant_profiles import (
 from .weather import fetch_weather
 
 
+def _safe_date(value):
+    """Parse a YYYY-MM-DD date; return None on a missing/malformed value so one
+    bad plant record doesn't abort the whole step."""
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").date()
+    except (ValueError, TypeError):
+        return None
+
+
 def _build_status_table(plants: list, weather_cache: dict, today) -> str:
     """Build the markdown plant-status table, ordered chronologically by next water date."""
     entries = []
@@ -26,10 +35,13 @@ def _build_status_table(plants: list, weather_cache: dict, today) -> str:
         reason = cache.get("adjustment_reason", "") or "—"
 
         if adjusted_str:
-            next_water = datetime.strptime(adjusted_str, "%Y-%m-%d").date()
+            next_water = _safe_date(adjusted_str)
         else:
-            last_watered = datetime.strptime(plant["last_watered"], "%Y-%m-%d").date()
-            next_water = last_watered + timedelta(days=plant["frequency_days"])
+            last_watered = _safe_date(plant.get("last_watered"))
+            next_water = (last_watered + timedelta(days=plant["frequency_days"])
+                          if last_watered else None)
+        if next_water is None:
+            continue  # unparseable date — skip this plant rather than crash the table
 
         days_until = (next_water - today).days
         if days_until < 0:
@@ -156,7 +168,9 @@ class PlantAgent(BaseAgent):
             if new_freq != plant.get("frequency_days"):
                 plant["frequency_days"] = new_freq
                 changed = True
-            last_watered = datetime.strptime(plant["last_watered"], "%Y-%m-%d").date()
+            last_watered = _safe_date(plant.get("last_watered"))
+            if last_watered is None:
+                continue  # bad date on this plant; skip rather than abort the run
             next_date = last_watered + timedelta(days=plant["frequency_days"])
             self.db.upsert_plant_weather_cache(plant["name"], next_date.isoformat(), reason)
         if changed:

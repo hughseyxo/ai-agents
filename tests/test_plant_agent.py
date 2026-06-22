@@ -110,6 +110,16 @@ class TestBuildStatusTable:
         table = _build_status_table(plants, {}, self.today)
         assert self._rows(table) == ["Aster", "Zinnia"]
 
+    def test_bad_last_watered_skips_plant_not_crash(self):
+        # One malformed date must not abort the whole table (per-plant guard).
+        from agents.plant_agent import _build_status_table
+        plants = [
+            _make_plant(name="Good", frequency_days=3, last_watered="2026-05-30"),
+            _make_plant(name="Bad", frequency_days=3, last_watered="not-a-date"),
+        ]
+        table = _build_status_table(plants, {}, self.today)
+        assert self._rows(table) == ["Good"]
+
     def test_no_plants_returns_placeholder(self):
         from agents.plant_agent import _build_status_table
         assert _build_status_table([], {}, self.today) == "No plants tracked."
