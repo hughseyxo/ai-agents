@@ -23,6 +23,10 @@ Findings object:
 - "fix_type": "learnings" | "report_only"
 - "suggested_fix": plain English
 - "learnings_entry": (required if fix_type="learnings") one bullet point
+- "slug": kebab-case identifier for this finding (e.g. "retry-on-cli-failure"). Keep under 40 chars.
+- "tags": array of topic strings (e.g. ["reliability", "news-briefing"])
+- "related": array of [[wikilink]] strings for related notes. Use [] if none.
+- "status": "active" (default) or "superseded" if this replaces an existing finding on the same topic.
 
 Data:
 <data>

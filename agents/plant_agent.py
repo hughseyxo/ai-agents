@@ -9,7 +9,11 @@ from pathlib import Path
 from .base import BaseAgent, REPO_ROOT
 from .plant_model import PlantIntelligenceResult
 from .plant_weather import weather_adjusted_frequency, apply_frequency_step
-from .plant_profiles import append_frequency_history, append_intelligence_note, write_health_assessment, write_profile_atomic
+from .plant_profiles import (
+    append_frequency_history, append_intelligence_note,
+    write_health_assessment, write_profile_atomic,
+    upsert_frontmatter, rewrite_section,
+)
 from .weather import fetch_weather
 
 
@@ -272,6 +276,29 @@ class PlantAgent(BaseAgent):
             if plant and entry.needs_photo != plant.get("needs_photo", False):
                 plant["needs_photo"] = entry.needs_photo
                 needs_photo_changed = True
+
+            # Regenerate frontmatter projection + curate Current Observations
+            if plant:
+                fm_fields = {
+                    "type": "plant",
+                    "location": plant.get("location", "indoor"),
+                    "sunlight": plant.get("sunlight", "unknown"),
+                    "water_sensitivity": plant.get("water_sensitivity", "medium"),
+                    "baseline_frequency_days": plant.get("baseline_frequency_days", plant["frequency_days"]),
+                    "effective_frequency_days": plant["frequency_days"],
+                    "last_watered": plant.get("last_watered"),
+                    "needs_photo": plant.get("needs_photo", False),
+                    "latest_health": plant.get("last_assessment"),
+                    "tags": [
+                        "plant",
+                        plant.get("location", "indoor"),
+                        f"sensitivity/{plant.get('water_sensitivity', 'medium')}",
+                    ],
+                }
+                upsert_frontmatter(plant_name, fm_fields)
+                if entry.notes:
+                    obs_body = "".join(f"- {n}\n" for n in entry.notes)
+                    rewrite_section(plant_name, "Current Observations", obs_body)
 
         if freq_changed or needs_photo_changed:
             self.db.set_state("daily-briefing", "plants", plants)

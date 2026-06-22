@@ -1,3 +1,27 @@
+---
+type: plant
+location: outdoor
+sunlight: full sun
+water_sensitivity: medium
+baseline_frequency_days: 12
+effective_frequency_days: 9
+last_watered: '2026-06-21'
+needs_photo: false
+latest_health:
+  date: '2026-06-16'
+  summary: "Full-sun outdoor potted lavender in good health \u2014 abundant purple\
+    \ flower spikes over dense, upright grey-green foliage with firm turgor and a\
+    \ lightly mounded form. Just watered today (0 days ago): soil surface is dark/moist\
+    \ and the patio is visibly wet, so the plant is at the very start of its cycle\
+    \ and needs no further water. No drought signs (no wilting, silvering, or flower-spike\
+    \ droop) and no overwatering signs (no basal grey/black stem rot, yellowing, or\
+    \ mushy wood), consistent with the run of healthy assessments from 2026-06-05/06."
+  status: Healthy
+tags:
+- plant
+- outdoor
+- sensitivity/medium
+---
 # Lavender
 
 ## Plant Info
@@ -26,6 +50,18 @@ Photo shows the lavender in full bloom with dense purple flower spikes and a hea
 
 ## Intelligence Notes
 <!-- Appended by each intelligence run -->
+### 2026-06-21
+- Full bloom with dense purple spikes, firm grey-green foliage; 12-day baseline tracking excellently
+- Earlier intelligence (2026-05-28→06-05) falsely asserted heat stress; current assessments confirm vigorous health — do NOT drop toward 7 days
+- Post-bloom prune completed 2026-06-19
+- **Data issue**: Plant Info shows 14-day baseline but history/assessments use 12 days (changed 2026-06-04); reconcile which is current
+
+### 2026-06-20
+- Full bloom with dense purple spikes, firm grey-green foliage; 12-day baseline tracking excellently
+- Earlier intelligence (2026-05-28→06-05) falsely asserted heat stress; current assessments confirm vigorous health—do NOT drop toward 7 days
+- Post-bloom prune completed 2026-06-19
+- **Profile issue**: Plant Info shows 14-day baseline but history uses 12 days; reconcile which is current
+
 ### 2026-06-19 (completed)
 - post-bloom cut-back (remove top 1/3 to 1/2 into green wood only, never into bare old wood) (marked done via PWA)
 
@@ -200,3 +236,9 @@ Overwatering exacerbated by poor drainage, stress likely from insufficient air c
 ### 2026-07-01 — Healthy Lavender exhibits vigorous growth with luxurious purple blooms and robust green foliage. Fully hydrated with no signs of stress. Sunlight is robust and consistent with outdoor, full-sun requirements.
 ### 2026-06-05 — Concerning Lavender Despite recent watering on 2026-06-01, foliage shows signs of heat stress: wilting and greyish tint. While the purple blooms are vibrant, recommends a shift to a 7-day watering cycle due to late May outdoor conditions and potential sensitivity to long intervals. Pruning top growth post-flowering is recommended to promote bushier growth and improve air circulation.
 [Validator: structured fields corrected for consistency with observations]
+
+## Current Observations
+- Full bloom with dense purple spikes, firm grey-green foliage; 12-day baseline tracking excellently
+- Earlier intelligence (2026-05-28→06-05) falsely asserted heat stress; current assessments confirm vigorous health — do NOT drop toward 7 days
+- Post-bloom prune completed 2026-06-19
+- **Data issue**: Plant Info shows 14-day baseline but history/assessments use 12 days (changed 2026-06-04); reconcile which is current

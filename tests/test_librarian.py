@@ -180,20 +180,22 @@ def test_analyze_strips_markdown_fences(tmp_path):
 def test_apply_learnings_writes_high_confidence_entry(tmp_path):
     agent = make_agent(tmp_path)
     agent.context["findings"] = [{"agent": "news-briefing", "confidence": 0.9,
-                                   "fix_type": "learnings", "learnings_entry": "- Keep HTML under 50KB"}]
-    (tmp_path / "docs" / "agent-learnings").mkdir(parents=True)
+                                   "fix_type": "learnings", "learnings_entry": "Keep HTML under 50KB",
+                                   "slug": "keep-html-under-50kb"}]
+    (tmp_path / "docs" / "agent-learnings" / "news-briefing").mkdir(parents=True)
     with patch("agents.librarian.REPO_ROOT", tmp_path):
         result = agent._apply_learnings()
     assert result["applied"] == 1
-    lf = tmp_path / "docs" / "agent-learnings" / "news-briefing.md"
-    assert "Keep HTML under 50KB" in lf.read_text()
+    notes = list((tmp_path / "docs" / "agent-learnings" / "news-briefing").glob("*.md"))
+    assert len(notes) == 1
+    assert "Keep HTML under 50KB" in notes[0].read_text()
 
 
 def test_apply_learnings_skips_below_threshold(tmp_path):
     agent = make_agent(tmp_path)
     agent.context["findings"] = [{"agent": "news-briefing", "confidence": 0.4,
-                                   "fix_type": "learnings", "learnings_entry": "- Some tip"}]
-    (tmp_path / "docs" / "agent-learnings").mkdir(parents=True)
+                                   "fix_type": "learnings", "learnings_entry": "Some tip"}]
+    (tmp_path / "docs" / "agent-learnings" / "news-briefing").mkdir(parents=True)
     with patch("agents.librarian.REPO_ROOT", tmp_path):
         result = agent._apply_learnings()
     assert result["applied"] == 0
@@ -202,13 +204,14 @@ def test_apply_learnings_skips_below_threshold(tmp_path):
 def test_apply_learnings_does_not_duplicate(tmp_path):
     agent = make_agent(tmp_path)
     agent.context["findings"] = [{"agent": "news-briefing", "confidence": 0.9,
-                                   "fix_type": "learnings", "learnings_entry": "- Keep HTML under 50KB"}]
-    ld = tmp_path / "docs" / "agent-learnings"
-    ld.mkdir(parents=True)
-    (ld / "news-briefing.md").write_text("- Keep HTML under 50KB\n")
+                                   "fix_type": "learnings", "learnings_entry": "Keep HTML under 50KB",
+                                   "slug": "keep-html-under-50kb"}]
     with patch("agents.librarian.REPO_ROOT", tmp_path):
         agent._apply_learnings()
-    assert (ld / "news-briefing.md").read_text().count("Keep HTML under 50KB") == 1
+        agent._apply_learnings()  # same slug overwrites, not appends
+    notes = list((tmp_path / "docs" / "agent-learnings" / "news-briefing").glob("*.md"))
+    assert len(notes) == 1
+    assert notes[0].read_text().count("Keep HTML under 50KB") == 1
 
 
 def test_analyze_failures_calls_llm_when_failures_exist(tmp_path):

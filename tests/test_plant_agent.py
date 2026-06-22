@@ -353,6 +353,67 @@ class TestIntelligenceFrequency:
         assert "7→5 days" in (tmp_path / "lantana.md").read_text()
 
 
+class TestIntelligenceFrontmatterCuration:
+    """Task 5: _apply_intelligence_output regenerates frontmatter + curates Current Observations."""
+
+    def test_refreshes_frontmatter_and_curates_observations(self, agent, tmp_path):
+        plants_dir = tmp_path / "docs" / "plants"
+        plants_dir.mkdir(parents=True)
+        profile = plants_dir / "fern.md"
+        profile.write_text(
+            "# Fern\n\n## Current Observations\n- old stale note\n\n"
+            "## Health Assessments\n<!-- Photo assessments appended here -->\n"
+        )
+        plant = {
+            "name": "Fern", "frequency_days": 7, "baseline_frequency_days": 7,
+            "last_watered": "2026-06-18", "location": "indoor",
+            "sunlight": "indirect", "water_sensitivity": "medium",
+            "needs_photo": False, "last_assessment": None,
+        }
+        output = json.dumps({
+            "plants": [{"name": "Fern", "status": "Healthy",
+                        "notes": ["vigorous growth", "no signs of stress"],
+                        "needs_photo": False, "frequency_change": None}],
+            "pruning": [], "tasks_created": [], "email_sent": False,
+        })
+        with patch("agents.plant_agent.REPO_ROOT", tmp_path), \
+                patch("agents.plant_profiles.PLANTS_DIR", plants_dir), \
+                patch("agents.plant_profiles.PROFILES_DIR", plants_dir):
+            agent._apply_intelligence_output(output, [plant])
+
+        text = profile.read_text()
+        assert text.startswith("---\n")
+        assert "effective_frequency_days" in text
+        assert "vigorous growth" in text
+        assert "no signs of stress" in text
+        assert "old stale note" not in text
+        assert text.count("## Current Observations") == 1
+
+    def test_no_notes_skips_section_rewrite(self, agent, tmp_path):
+        """Empty notes list must not wipe out an existing Current Observations section."""
+        plants_dir = tmp_path / "docs" / "plants"
+        plants_dir.mkdir(parents=True)
+        profile = plants_dir / "fern.md"
+        profile.write_text("# Fern\n\n## Current Observations\n- existing note\n")
+        plant = {
+            "name": "Fern", "frequency_days": 7, "baseline_frequency_days": 7,
+            "last_watered": "2026-06-18", "location": "indoor",
+            "sunlight": "indirect", "water_sensitivity": "medium",
+            "needs_photo": False, "last_assessment": None,
+        }
+        output = json.dumps({
+            "plants": [{"name": "Fern", "status": "Healthy",
+                        "notes": [], "needs_photo": False, "frequency_change": None}],
+            "pruning": [], "tasks_created": [], "email_sent": False,
+        })
+        with patch("agents.plant_agent.REPO_ROOT", tmp_path), \
+                patch("agents.plant_profiles.PLANTS_DIR", plants_dir), \
+                patch("agents.plant_profiles.PROFILES_DIR", plants_dir):
+            agent._apply_intelligence_output(output, [plant])
+
+        assert "existing note" in profile.read_text()
+
+
 def test_intelligence_prompt_documents_frequency_marker():
     import agents.plant_agent as mod
     text = (mod.REPO_ROOT / "agents" / "prompts" / "plant_intelligence.md").read_text()

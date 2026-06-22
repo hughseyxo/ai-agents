@@ -8,11 +8,18 @@ resume. Returns None on any failure so the caller can fall back to OpenRouter.
 import json
 import logging
 import subprocess
+import sys
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+
+# Make agents/ importable from within the telegram-bot/ directory
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from agents import plant_profiles
 CONCIERGE_MD = Path(__file__).parent / "CONCIERGE.md"
 MCP_CONFIG = "telegram-bot/concierge_mcp.json"  # relative to REPO_ROOT (cwd)
 
@@ -90,10 +97,16 @@ def ask_claude(chat_id: int, user_message: str) -> str | None:
 
 
 def assess_image(image_path: str, system_prompt: str, user_text: str,
-                 model: str = VISION_MODEL) -> str | None:
+                 model: str = VISION_MODEL,
+                 plant_name: str | None = None) -> str | None:
     """One-shot plant image analysis via the claude CLI's Read tool (Pro
     subscription, no API billing). Stateless — no MCP, no session resume.
+    If plant_name is given, injects a token-lean profile context slice.
     Returns the reply text, or None on any failure."""
+    if plant_name:
+        ctx = plant_profiles.read_profile_context(plant_name)
+        if ctx:
+            user_text = f"{user_text}\n\nPlant profile context:\n{ctx}"
     img_dir = str(Path(image_path).parent)
     cmd = [
         "claude", "-p",

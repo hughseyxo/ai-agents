@@ -1,3 +1,26 @@
+---
+type: plant
+location: outdoor
+sunlight: ''
+water_sensitivity: medium
+baseline_frequency_days: 7
+effective_frequency_days: 5
+last_watered: '2026-06-21'
+needs_photo: false
+latest_health:
+  date: '2026-06-16'
+  summary: "This potted black-caned bamboo (likely Fargesia or Phyllostachys nigra)\
+    \ shows a dense, vigorous upper canopy of healthy green foliage with good turgor\
+    \ \u2014 consistent with the prior 2026-06-01 'vibrant lush foliage' assessment.\
+    \ There is some expected browning and leaf drop in the shaded lower interior,\
+    \ which is normal self-thinning rather than disease. Watered today, so it is well\
+    \ hydrated."
+  status: Healthy
+tags:
+- plant
+- outdoor
+- sensitivity/medium
+---
 # Bamboo
 
 ## Plant Info
@@ -19,6 +42,23 @@ First photo assessment with a clear full-plant view. Confirms the species has da
 
 ## Intelligence Notes
 <!-- Appended by each intelligence run -->
+### 2026-06-21
+- Dense, vigorous upper canopy; dark purple/black culms are natural pigmentation (Fargesia/Phyllostachys nigra), NOT dieback — do not flag as stress in future
+- Browning in shaded lower interior is normal self-thinning of inner culms, not disease or drought
+- 7-day baseline tracking well; no frequency change warranted
+- **Profile issue**: Sunlight field blank; should record as 'partial shade' (sheltered fence-corner location)
+
+### 2026-06-20
+- Dense, vigorous upper canopy; dark purple/black culms are natural pigmentation (Fargesia/Phyllostachys nigra), NOT dieback
+- Browning in shaded lower interior is normal self-thinning, not disease or drought
+- 7-day baseline tracking well; no frequency change warranted
+- **Profile issue**: Sunlight field blank; should record as 'partial shade' (sheltered fence-corner location)
+
+### 2026-06-19
+- Dense, vigorous upper canopy; dark purple/black culms are natural pigmentation (Fargesia/Phyllostachys nigra), NOT dieback
+- Browning and leaf drop in shaded lower interior is normal self-thinning of inner culms, not disease or drought
+- Profile note: sunlight field blank; should record as 'partial shade' based on sheltered fence-corner location
+
 ### 2026-06-16
 - First full-plant photo assessment (2026-06-16 today); dark purple/black culms are natural pigmentation (Fargesia/Phyllostachys nigra), NOT dieback
 - Upper/mid canopy dense, deep green, firm, upright; browning in lower interior is normal self-thinning of shaded culms
@@ -71,3 +111,9 @@ First photo assessment with a clear full-plant view. Confirms the species has da
 ### 2026-06-01 — Healthy
 - Appended to the plant profile based on visual health assessment, showing vigorous growth and healthy foliage.
 [Validator: structured fields corrected for consistency with observations]
+
+## Current Observations
+- Dense, vigorous upper canopy; dark purple/black culms are natural pigmentation (Fargesia/Phyllostachys nigra), NOT dieback — do not flag as stress in future
+- Browning in shaded lower interior is normal self-thinning of inner culms, not disease or drought
+- 7-day baseline tracking well; no frequency change warranted
+- **Profile issue**: Sunlight field blank; should record as 'partial shade' (sheltered fence-corner location)

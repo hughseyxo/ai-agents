@@ -159,6 +159,21 @@ def cmd_install_cron(args):
         sys.exit(1)
 
 
+def cmd_librarian_apply(args):
+    from .librarian import apply_proposal
+    sys.exit(apply_proposal(args.id))
+
+
+def cmd_librarian_reject(args):
+    from .librarian import reject_proposal
+    sys.exit(reject_proposal(args.id))
+
+
+def cmd_librarian_plan(args):
+    from .librarian import create_plan_from_proposal
+    sys.exit(create_plan_from_proposal(args.id))
+
+
 def main():
     parser = argparse.ArgumentParser(description="Agent runner")
     subparsers = parser.add_subparsers(dest="command")
@@ -193,8 +208,19 @@ def main():
     # Install cron
     subparsers.add_parser("install-cron", help="Write crontab entries for all agents")
 
+    # Librarian proposal actions (replace the removed MCP bridge approve/reject links)
+    for action, helptext in (
+        ("librarian-apply", "Apply a pending librarian prompt_edit proposal by id"),
+        ("librarian-reject", "Reject a librarian proposal by id"),
+        ("librarian-plan", "Materialise a librarian architecture_plan proposal by id"),
+    ):
+        p = subparsers.add_parser(action, help=helptext)
+        p.add_argument("id", help="Proposal id")
+
+    _KNOWN = ("run", "list", "history", "install-cron",
+              "librarian-apply", "librarian-reject", "librarian-plan", "-h", "--help")
     # Allow `python -m agents daily-briefing` as shorthand for `run`
-    if len(sys.argv) > 1 and sys.argv[1] not in ("run", "list", "history", "install-cron", "-h", "--help"):
+    if len(sys.argv) > 1 and sys.argv[1] not in _KNOWN:
         sys.argv.insert(1, "run")
 
     args = parser.parse_args()
@@ -208,6 +234,9 @@ def main():
         "list": cmd_list,
         "history": cmd_history,
         "install-cron": cmd_install_cron,
+        "librarian-apply": cmd_librarian_apply,
+        "librarian-reject": cmd_librarian_reject,
+        "librarian-plan": cmd_librarian_plan,
     }
     cmds[args.command](args)
 

@@ -1,3 +1,24 @@
+---
+type: plant
+location: indoor
+sunlight: full sun
+water_sensitivity: medium
+baseline_frequency_days: 14
+effective_frequency_days: 14
+last_watered: '2026-06-18'
+needs_photo: true
+latest_health:
+  date: '2026-06-01'
+  summary: 'The Yucca Plant is exhibiting no visible signs of stress or damage, with
+    healthy green leaves and a consistent growth pattern. Overwatering is a potential
+    concern, particularly at the root level, and requires monitoring before the next
+    watering task on 2026-06-04. '
+  status: ''
+tags:
+- plant
+- indoor
+- sensitivity/medium
+---
 # Yucca Plant
 
 ## Plant Info
@@ -19,6 +40,21 @@ Multi-cane Yucca photographed on an indoor windowsill (bright/full-sun position,
 
 ## Intelligence Notes
 <!-- Appended by each intelligence run -->
+### 2026-06-21
+- All three rosettes firm, deep green; earlier overwatering concern fully unrealised
+- 14-day baseline tracking well with no stress signs
+- Last assessment 16 days old (2026-06-05) — at photo-gap threshold; schedule check soon
+
+### 2026-06-20
+- All three rosettes firm, deep green; earlier overwatering concern fully unrealised
+- 14-day baseline tracking well; no frequency change warranted
+- Last assessment 15 days old (2026-06-05) — at assessment-gap threshold; schedule photo check
+
+### 2026-06-19
+- All three rosettes firm, deep green; earlier overwatering concern from May/early-Jun fully unrealised
+- Last assessment Jun 5 (14 days); at assessment-gap threshold—schedule photo if convenient
+- Baseline 14-day cycle working well; no frequency adjustment needed
+
 ### 2026-06-16
 - Earlier overwatering concern (2026-05-28→06-04) fully unrealised; 2026-06-05 assessment found zero rot/yellowing/mushy tissue
 - All three rosettes firm, deep green, no trunk-base rot; current 14-day schedule working well
@@ -96,3 +132,8 @@ The Yucca Plant appears healthy with green leaves and a consistent growth patter
 ### Frequency History |
 Date | Change | Reason |
 ---|---|---|
+
+## Current Observations
+- All three rosettes firm, deep green; earlier overwatering concern fully unrealised
+- 14-day baseline tracking well with no stress signs
+- Last assessment 16 days old (2026-06-05) — at photo-gap threshold; schedule check soon

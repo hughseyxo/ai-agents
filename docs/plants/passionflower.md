@@ -1,3 +1,25 @@
+---
+type: plant
+location: outdoor
+sunlight: full sun
+water_sensitivity: medium
+baseline_frequency_days: 4
+effective_frequency_days: 2
+last_watered: '2026-06-16'
+needs_photo: false
+latest_health:
+  date: '2026-06-18'
+  summary: Passionflower remains vigorous, climbing the full height of the metal grid
+    trellis against the brick wall with dense, deeply-lobed dark-green foliage and
+    active tendrils gripping the support. Turgor is good throughout with no wilting,
+    interior yellowing, or overwatering signs. Continues the consistent strong-health
+    trend running from late May through mid-June.
+  status: Healthy
+tags:
+- plant
+- outdoor
+- sensitivity/medium
+---
 # Passionflower
 
 ## Plant Info

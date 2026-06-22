@@ -138,3 +138,38 @@ def test_assess_image_returns_none_on_timeout():
 def test_assess_image_returns_none_on_bad_json():
     with patch("claude_backend.subprocess.run", return_value=MagicMock(returncode=0, stdout="not json", stderr="")):
         assert assess_image("/tmp/plant.jpg", "s", "c") is None
+
+
+# ---------------------------------------------------------------------------
+# assess_image — profile context injection (Task 6)
+# ---------------------------------------------------------------------------
+
+def test_assess_image_includes_profile_context():
+    import claude_backend as cb
+
+    captured = {}
+
+    def _fake_run_claude(cmd, input_text, **kwargs):
+        captured["input"] = input_text
+        return {"result": "ok"}
+
+    with patch.object(cb.plant_profiles, "read_profile_context", return_value="KNOWN: repot overdue"), \
+         patch("claude_backend._run_claude", _fake_run_claude):
+        result = assess_image("/tmp/x.jpg", "sys prompt", "user ctx", plant_name="Monstera")
+
+    assert result == "ok"
+    assert "KNOWN: repot overdue" in captured["input"]
+
+
+def test_assess_image_no_plant_name_skips_profile():
+    import claude_backend as cb
+    captured = {}
+
+    def _fake_run_claude(cmd, input_text, **kwargs):
+        captured["input"] = input_text
+        return {"result": "ok"}
+
+    with patch("claude_backend._run_claude", _fake_run_claude):
+        assess_image("/tmp/x.jpg", "sys", "user text without plant", plant_name=None)
+
+    assert "KNOWN" not in captured.get("input", "")

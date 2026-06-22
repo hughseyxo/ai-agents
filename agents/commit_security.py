@@ -16,6 +16,14 @@ from .base import BaseAgent, REPO_ROOT
 
 MAX_DIFF_BYTES = 80 * 1024  # 80KB cap to stay within LLM context
 
+BLOCKING_SEVERITIES = ("critical", "high")
+
+
+def _is_blocking(finding: dict) -> bool:
+    """True if a finding's severity blocks the push. Case-insensitive: the LLM
+    may emit "Critical"/"HIGH" etc., and a case-sensitive compare would fail open."""
+    return str(finding.get("severity", "")).strip().lower() in BLOCKING_SEVERITIES
+
 
 class CommitSecurityAgent(BaseAgent):
     name = "commit-security"
@@ -34,7 +42,7 @@ class CommitSecurityAgent(BaseAgent):
             return 0
         findings = self._analyze(diff)
         self._print_report(findings)
-        blocked = any(f.get("severity") in ("critical", "high") for f in findings)
+        blocked = any(_is_blocking(f) for f in findings)
         return 1 if blocked else 0
 
     # --- Core logic (shared by hook and agent step) ---
@@ -129,9 +137,9 @@ class CommitSecurityAgent(BaseAgent):
         if scan.get("empty"):
             return "commit-security: no diff to scan"
         findings = scan.get("findings", [])
-        blocked = any(f.get("severity") in ("critical", "high") for f in findings)
+        blocked = any(_is_blocking(f) for f in findings)
         self._print_report(findings)
         if blocked:
-            critical_high = [f for f in findings if f.get("severity") in ("critical", "high")]
+            critical_high = [f for f in findings if _is_blocking(f)]
             return f"BLOCKED: {len(critical_high)} critical/high finding(s)"
         return f"OK: {len(findings)} finding(s) (none critical/high)"

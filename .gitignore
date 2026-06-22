@@ -1,12 +1,13 @@
-.claude/
+.claude/*
+!.claude/settings.json
 .gemini/
 .antigravitycli/
 output/*
 !output/.gitkeep
-docs/agent-learnings/
 output/librarian/
-docs/librarian-memory.md
 docs/superpowers/plans/librarian-arch-*.md
+docs/.obsidian/
+docs/.trash/
 .env
 credentials.json
 mcp-servers/__pycache__/
@@ -21,6 +22,7 @@ docs/security-audit-agent.md
 __pycache__/
 skills/mealsave/pot-provider/
 skills/vidqueue/.venv/
+.venv/
 mcp-servers/.env.bridge
 
 # Antigravity CLI per-repo conversation cache

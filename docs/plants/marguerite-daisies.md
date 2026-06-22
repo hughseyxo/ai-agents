@@ -1,3 +1,25 @@
+---
+type: plant
+location: outdoor
+sunlight: full sun
+water_sensitivity: medium
+baseline_frequency_days: 5
+effective_frequency_days: 2
+last_watered: '2026-06-21'
+needs_photo: false
+latest_health:
+  date: '2026-06-16'
+  summary: "All three Marguerite clumps in the shared blue pot are healthy post-watering\
+    \ (0 days). Foliage is green, finely divided and turgid across the pink (left),\
+    \ white-double (right) and front clumps, with no wilting, curl or marginal crisping.\
+    \ The dehydration-stress pattern from 2026-06-01\u219205 remains fully resolved;\
+    \ the 5-day baseline plus mulch continues to hold."
+  status: Healthy
+tags:
+- plant
+- outdoor
+- sensitivity/medium
+---
 # Marguerite daisies
 
 ## Plant Info
@@ -28,6 +50,18 @@ Follow-up after watering today (0 days ago). All three Marguerites in the shared
 
 ## Intelligence Notes
 <!-- Appended by each intelligence run -->
+### 2026-06-21
+- All three clumps fully recovered from early-June dehydration stress (Jun 1–5); 5-day baseline + mulch holding excellently
+- Pink and white clumps blooming heavily; front yellow-centred carrying fewer blooms; deadheading completed 2026-06-17
+- Green, finely divided, turgid foliage; soil dark and moist; no stress signals
+- **Data issue**: Plant Info shows 7-day baseline but changed to 5 days on 2026-06-01; reconcile which is current
+
+### 2026-06-20
+- All three clumps fully recovered from early-June dehydration stress; 5-day baseline + mulch holding excellently
+- Pink and white blooming heavily; deadheading completed 2026-06-17
+- Green, finely divided, turgid foliage; soil dark and moist
+- **Profile issue**: Plant Info shows 7-day baseline but history uses 5 days (changed 2026-06-01); reconcile which is current
+
 ### 2026-06-17 (completed)
 - Deadhead spent and browning heads across all three; priority on front yellow-centred plant (marked done via PWA)
 
@@ -186,3 +220,9 @@ Apply a layer of mulch around the soil to reduce evaporation and conserve moistu
 Plant continues to show signs of stress due to high evaporation in full sun exposure, even with mulch application. The current 7-day watering schedule is insufficient under these conditions. Mulch has effectively reduced evaporation, but soil moisture levels are not adequate to support healthy growth. After immediate watering, consider reducing the watering interval to every 5 days to address the increased evaporation risk. Continue deadheading spent blooms to promote new growth and maintain plant health. Monitor soil moisture daily during hot periods.
 [Validator: structured fields corrected for consistency with observations]
 | 2026-06-01 | ?→5 days | Applied via Telegram photo assessment |
+
+## Current Observations
+- All three clumps fully recovered from early-June dehydration stress (Jun 1–5); 5-day baseline + mulch holding excellently
+- Pink and white clumps blooming heavily; front yellow-centred carrying fewer blooms; deadheading completed 2026-06-17
+- Green, finely divided, turgid foliage; soil dark and moist; no stress signals
+- **Data issue**: Plant Info shows 7-day baseline but changed to 5 days on 2026-06-01; reconcile which is current

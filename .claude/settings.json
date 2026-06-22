@@ -1,0 +1,24 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/home/cian/git/ai-agents/.venv/bin/python -m scripts.daily_note ensure"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/home/cian/git/ai-agents/.venv/bin/python -m scripts.daily_note stop"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,3 +1,25 @@
+---
+type: plant
+location: indoor
+sunlight: partial shade
+water_sensitivity: medium
+baseline_frequency_days: 14
+effective_frequency_days: 14
+last_watered: '2026-06-18'
+needs_photo: false
+latest_health:
+  date: '2026-06-16'
+  summary: This variegated Dracaena trifasciata is in robust health at day 12 of its
+    14-day cycle. Leaves are firm, upright, and well-coloured with crisp yellow margins
+    and strong deep-green banding, and the soil surface is dry and friable. This is
+    the first visual confirmation since 2026-05-28, and it matches the healthy state
+    recorded then.
+  status: Healthy
+tags:
+- plant
+- indoor
+- sensitivity/medium
+---
 # Dracaena Trifasciata
 
 ## Plant Info

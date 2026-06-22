@@ -1,3 +1,25 @@
+---
+type: plant
+location: indoor
+sunlight: partial shade
+water_sensitivity: medium
+baseline_frequency_days: 10
+effective_frequency_days: 10
+last_watered: '2026-06-18'
+needs_photo: false
+latest_health:
+  date: '2026-06-18'
+  summary: "Large, vigorous Monstera at day 10 of its 10-day cycle and due for watering\
+    \ today. Foliage is glossy dark-green with many deeply fenestrated mature leaves\
+    \ and firm turgor throughout \u2014 no underwatering stress despite the full interval,\
+    \ and no overwatering signs. Consistent with every prior assessment since late\
+    \ May."
+  status: Healthy
+tags:
+- plant
+- indoor
+- sensitivity/medium
+---
 # Monstera Deliciosa
 
 ## Plant Info
@@ -38,6 +60,21 @@
 
 ## Intelligence Notes
 <!-- Appended by each intelligence run -->
+### 2026-06-21
+- Perfect 10-day watering cycle; foliage vigorous with excellent turgor; no stress signs
+- **URGENT: Repot task 19+ days overdue** — exposed surface roots and compacted soil since 2026-05-28 blocking healthy growth
+- Prioritize repotting into slightly larger pot with fresh well-draining mix within this week; not a watering issue
+
+### 2026-06-20
+- Perfect 10-day watering cycle; foliage vigorous with excellent turgor
+- **URGENT: Repot task 19+ days overdue** — exposed surface roots and compacted soil since 2026-05-28
+- Aerial roots now trailing down pot exterior; repot into slightly larger container with fresh well-draining mix within this week
+
+### 2026-06-19
+- Large, vigorous, excellent turgor; 10-day cycle tracking perfectly
+- Persistent maintenance: exposed surface roots and soil compaction since May 28; repot task in Todoist 19+ days overdue
+- Recommend prioritise repotting into slightly larger pot with fresh well-draining mix within this week
+
 ### 2026-06-17
 - On-schedule 10-day cycle; excellent turgor and vigor throughout
 - Last assessment 11 days old (2026-06-06) — due for photo check tomorrow (adjusted watering 2026-06-18)
@@ -117,3 +154,8 @@
 - Compacted soil composition evident through exposed root formation
 - Current 10-day watering interval effectively maintaining plant vigor
 - Pruning recommendation: Consider modifying root zone through repotting to enhance growth parameters
+
+## Current Observations
+- Perfect 10-day watering cycle; foliage vigorous with excellent turgor; no stress signs
+- **URGENT: Repot task 19+ days overdue** — exposed surface roots and compacted soil since 2026-05-28 blocking healthy growth
+- Prioritize repotting into slightly larger pot with fresh well-draining mix within this week; not a watering issue

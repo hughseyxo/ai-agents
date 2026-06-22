@@ -98,6 +98,10 @@ Each finding object must include:
 - `"learnings_entry"`: (required if `fix_type="learnings"`) one bullet point
 - `"proposed_prompt_section"`: (required if `fix_type="prompt_edit"`) full replacement text for the relevant section
 - `"suggested_plan"`: (required if `fix_type="architecture_plan"`) 3-5 bullet implementation steps
+- `"slug"`: kebab-case identifier for this finding (e.g. `"retry-on-cli-failure"`, `"truncation-not-a-defect"`). Used as the atomic note filename. Derive from the key concept; keep under 40 chars.
+- `"tags"`: array of topic strings (e.g. `["reliability", "news-briefing", "retry"]`)
+- `"related"`: array of `[[wikilink]]` strings for related notes in the vault (e.g. `["[[librarian]]", "[[news-briefing]]"]`). Use `[]` if none.
+- `"status"`: `"active"` (default) or `"superseded"` — set `"superseded"` when this finding explicitly replaces an earlier one on the same topic (prevents stale rules accumulating).
 
 Data:
 <data>
