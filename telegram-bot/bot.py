@@ -342,7 +342,8 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         image_bytes = buf.getvalue()
 
         all_plants = get_all_plants()
-        plant = _identify_plant_from_image(image_bytes, all_plants)
+        # C12: assess_image runs a blocking subprocess — keep it off the event loop.
+        plant = await asyncio.to_thread(_identify_plant_from_image, image_bytes, all_plants)
         if not plant:
             await update.message.reply_text(
                 "Couldn't identify the plant from the photo. Send it again with the plant name as caption."
@@ -367,7 +368,8 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await file.download_to_memory(buf)
         image_bytes = buf.getvalue()
 
-    display_text, parsed = _analyze_plant_image(image_bytes, plant)
+    # C12: assess_image runs a blocking subprocess — keep it off the event loop.
+    display_text, parsed = await asyncio.to_thread(_analyze_plant_image, image_bytes, plant)
 
     if parsed:
         # Save structured notes to plant profile doc (## Health Assessments section)
@@ -420,6 +422,10 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle inline keyboard callbacks for plant frequency change proposals."""
     query = update.callback_query
+    # C10: callbacks were ungated — enforce the same allowlist as message/photo
+    # so a stranger's button press can't mutate plant state.
+    if ALLOWED_USER_ID and str(update.effective_user.id) != ALLOWED_USER_ID:
+        return
     await query.answer()
 
     data = query.data or ""
@@ -441,15 +447,19 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             await query.edit_message_text("Invalid frequency value.")
             return
 
-        update_plant(plant_name, {"frequency_days": new_days})
+        # C13: update_plant's 2nd positional arg is `location`; a dict here silently
+        # no-ops the frequency change. Pass frequency_days as a keyword.
+        update_plant(plant_name, frequency_days=new_days)
 
         # Append to plant profile doc
         from datetime import date as _date
         today = _date.today().isoformat()
         freq_note = f"\n| {today} | ?→{new_days} days | Applied via Telegram photo assessment |"
-        slug = plant_name.lower().replace(" ", "-")
+        # C11: bound the untrusted plant name to a safe slug ([a-z0-9-]) so it
+        # cannot traverse out of the plants directory.
+        slug = "".join(c for c in plant_name.lower().replace(" ", "-") if c.isalnum() or c == "-")
         profile_path = PLANT_ASSESSMENT_DIR / f"{slug}.md"
-        if profile_path.exists():
+        if slug and profile_path.exists():
             existing = profile_path.read_text()
             if "## Frequency History" in existing:
                 existing = existing.rstrip() + freq_note + "\n"
