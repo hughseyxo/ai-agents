@@ -28,6 +28,7 @@ from tools import (
     get_plant,
     get_all_plants,
     save_plant_assessment,
+    note_plant_observation,
 )
 
 _EMPTY = {"type": "object", "properties": {}, "required": []}
@@ -272,6 +273,19 @@ SPECS = [
             "required": ["plant_name", "summary"],
         },
         "func": save_plant_assessment,
+    },
+    {
+        "name": "note_plant_observation",
+        "description": "Append a free-text observation note to a plant's profile document. Use to record something the user observed about a plant (new growth, pests, drooping, etc.).",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Name of the plant (e.g. 'Monstera')."},
+                "notes": {"type": "string", "description": "The observation text to record."},
+            },
+            "required": ["name", "notes"],
+        },
+        "func": note_plant_observation,
     },
 ]
 
