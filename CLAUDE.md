@@ -54,7 +54,7 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 │   ├── security_audit.py       # Security audit agent — 18 checks: 12 system + 4 seedbox + 2 web (Cloudflare IP validation, Shodan InternetDB). Schedule: Sunday 06:00 UTC / 08:00 CEST. Seedbox configs live in ~/git/yopflix (private repo).
 │   ├── commit_security.py      # Commit security agent (on-demand) — LLM-based scan of git diff for secrets/vulnerabilities. run_hook() used by .git/hooks/pre-push; blocks push on Critical/High. Also runnable via CLI.
 │   ├── travel_agent.py         # Travel agent (on-demand) — search mode: finds flights/hotels/activities; plan mode: itinerary from existing bookings. model: claude-sonnet-4-6. Design doc: docs/travel-agent.md
-│   ├── librarian.py            # Librarian agent (on-demand, cron-managed: audit Sun 06:00 UTC, watch Mon-Sat 06:00 UTC). Reads agent run history + output files, calls LLM to produce findings. Auto-applies learnings (confidence ≥0.8), emails prompt proposals (0.5-0.79) with approve/reject links via bridge server.
+│   ├── librarian.py            # Librarian agent (on-demand, cron-managed: audit Sun 06:00 UTC, watch Mon-Sat 06:00 UTC). Reads agent run history + output files, calls LLM to produce findings. Auto-applies learnings (confidence ≥0.8), emails prompt proposals (0.5-0.79) for review — approve/reject/plan via `python3 -m agents librarian-apply|librarian-reject|librarian-plan <id>` CLI.
 │   ├── plant_agent.py          # Master Plant Agent (schedule: 0 * * * * / hourly, model: claude-haiku-4-5). Steps (all frequency-gated): weather_update (every run, deterministic) → send_status_email (24h, LLM sends plant status table email) → intelligence_run (24h, LLM analyses plant profiles, flags needs_photo, appends notes to docs/plants/<slug>.md). (sync_watering/create_tasks/photo_requests were removed — the FloraPulse PWA is now the task source of truth.) Design doc: docs/superpowers/specs/2026-05-26-plant-sensitivity-and-underwatering-design.md
 │   ├── agent_health.py         # Agent Health monitor (schedule: 0 * * * * / hourly, deterministic, no LLM). Flags any scheduled agent whose last healthy run is older than 2× its cron interval; pushes Telegram alert (CONCIERGE_BOT_TOKEN) with dedup + recovery messages. Catches silently-dropped cron entries. Design doc: docs/agent-health-staleness-monitor.md
 │   └── prompts/                # LLM CLI synthesis prompt templates
@@ -93,8 +93,8 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 │   │   ├── mealsave_bot.py     # Telegram bot for remote saving
 │   │   └── check-yt-auth.sh    # YouTube cookie expiry check
 │   └── free-time/              # Suggest best tasks for a free time window
-├── mcp-servers/        # Custom MCP servers (calendar, gmail auth) + bridge_server.py (HTTP MCP over Tailscale for laptop access). GET /librarian/approve?id=&token= and /librarian/reject?id=&token= for one-click proposal approval. concierge_server.py exposes the concierge bot's tools (from telegram-bot/tool_specs.py) to the claude CLI.
-├── triggers/           # Agent operation docs — how to run agents on demand via the MCP bridge from laptop Claude Code. See triggers/README.md.
+├── mcp-servers/        # Custom MCP servers (calendar, gmail auth). concierge_server.py exposes the concierge bot's tools (from telegram-bot/tool_specs.py) to the claude CLI. (The MCP bridge_server.py + laptop/server auth were deleted 2026-06-22 — see Phase 0 of the code-review remediation.)
+├── triggers/           # Agent operation docs — how to run agents on demand directly on the server. See triggers/README.md.
 ├── tests/              # pytest test suite (run: pytest tests/)
 │   ├── test_synthesize.py      # Failover + prompt adaptation + providers override tests
 │   ├── test_news_briefing.py   # RSS parsing, dedup, Dutch translation, HTML/markdown builder tests
@@ -113,7 +113,7 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 │   ├── hermes-evaluation.md    # Summary of failed CLI-proxy/local-inference efforts
 │   ├── openrouter-telegram-bot.md # OpenRouter bot architecture (superseded by concierge)
 │   ├── telegram-bots.md        # Overview of all Telegram bots, status, failure history
-│   ├── mcp-bridge.md           # MCP bridge server design (Tailscale HTTP, 7 tools)
+│   ├── mcp-bridge.md           # SUPERSEDED (bridge deleted 2026-06-22) — kept for historical context only
 │   ├── travel-agent.md         # Travel agent design (search + plan modes, no API keys)
 │   ├── agent-health-staleness-monitor.md  # Agent Health monitor design (cron-interval staleness, Telegram alerts)
 │   └── superpowers/

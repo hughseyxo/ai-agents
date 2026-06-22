@@ -1,4 +1,12 @@
-# MCP Bridge Server
+# MCP Bridge Server — SUPERSEDED (deleted 2026-06-22)
+
+> **This design is no longer in use.** The MCP bridge (`mcp-servers/bridge_server.py`,
+> `laptop_auth.py`, `server_auth.py`, `mcp-bridge.service`) was deleted in the code-review
+> remediation (Phase 0) as the repo's highest-risk untested surface (token-in-URL, replayable
+> approvals, `exec_shell` RCE, write-anywhere). Its only real consumer — the librarian's email
+> approve/reject links — is now a local CLI: `python3 -m agents librarian-apply|librarian-reject|librarian-plan <id>`.
+> Run agents directly on the server (SSH + `run-agent.sh <agent>`). This file is kept for
+> historical context only.
 
 **Problem:** Laptop Claude Code has no access to server-side tools — AI agents, files, shell commands — so work that requires the server must be done manually or via SSH.
 
