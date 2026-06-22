@@ -1,6 +1,24 @@
+import html as _html  # aliased: the `html` name is reused below as the email-body accumulator
 import json
 import os
 from datetime import datetime
+from urllib.parse import urlparse
+
+
+def esc(value) -> str:
+    """HTML-escape an untrusted RSS field (titles/descriptions/sources)."""
+    return _html.escape(str(value or ""), quote=True)
+
+
+def safe_link(value) -> str:
+    """Return the URL only if it is an http(s) link, else '#' — blocks
+    javascript:/data: URIs smuggled in via a feed item's link."""
+    try:
+        scheme = urlparse(str(value or "")).scheme.lower()
+    except ValueError:
+        return "#"
+    return str(value) if scheme in ("http", "https") else "#"
+
 
 # Load report data
 with open('/tmp/news-briefing-data.json', 'r') as f:
@@ -78,10 +96,10 @@ for key, title in sections.items():
     else:
         for a in articles:
             breaking_text = "[BREAKING] " if a.get('breaking') else ""
-            source_html = f' <span style="color:{border};font-size:11px;font-weight:700;"> {a["source"]}</span>' if a.get('source') else ""
+            source_html = f' <span style="color:{border};font-size:11px;font-weight:700;"> {esc(a["source"])}</span>' if a.get('source') else ""
             html += f"""          <p style="margin:0 0 10px;padding:10px 14px;background:{bg};border-left:3px solid {border};border-radius:4px;font-size:14px;color:#333;">
-            <a href="{a['link']}" style="color:#1a1a2e;text-decoration:none;font-weight:700;">{breaking_text}{a['title']}</a>{source_html}<br/>
-            <span style="color:#666;font-size:13px;">{a['description']}</span>
+            <a href="{esc(safe_link(a.get('link')))}" style="color:#1a1a2e;text-decoration:none;font-weight:700;">{breaking_text}{esc(a['title'])}</a>{source_html}<br/>
+            <span style="color:#666;font-size:13px;">{esc(a['description'])}</span>
           </p>
 """
     html += "        </td></tr>"

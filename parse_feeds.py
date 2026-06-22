@@ -1,5 +1,6 @@
 import xml.etree.ElementTree as ET
 import os
+import sys
 import json
 import re
 from datetime import datetime, timezone, timedelta
@@ -44,7 +45,7 @@ def parse_rss(file_path, source_name):
                         if pub_date.tzinfo is None:
                             pub_date = pub_date.replace(tzinfo=timezone.utc)
                         break
-                    except:
+                    except (ValueError, TypeError):
                         continue
 
             items.append({
@@ -56,7 +57,8 @@ def parse_rss(file_path, source_name):
                 "source": source_name
             })
         return items
-    except Exception as e:
+    except (ET.ParseError, OSError) as e:
+        print(f"[parse_feeds] failed to parse {source_name} ({file_path}): {e}", file=sys.stderr)
         return []
 
 feeds = {
