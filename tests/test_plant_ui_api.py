@@ -290,7 +290,9 @@ def test_photo_assessment(client, mock_store_db):
     with patch("plant_ui.server.assess_image", return_value=mock_llm_response) as mock_assess:
         # Create a dummy image upload
         from io import BytesIO
-        file_data = {"file": ("aloe.jpg", BytesIO(b"dummy image bytes"), "image/jpeg")}
+        # Must start with the JPEG magic bytes — the endpoint validates uploads.
+        jpeg_bytes = b"\xff\xd8\xff\xe0" + b"dummy image bytes"
+        file_data = {"file": ("aloe.jpg", BytesIO(jpeg_bytes), "image/jpeg")}
         
         response = client.post("/api/plants/Aloe Vera/photo", files=file_data)
         assert response.status_code == 200

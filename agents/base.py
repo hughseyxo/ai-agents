@@ -176,6 +176,14 @@ class BaseAgent:
                         return result.stdout
 
                     stderr = result.stderr or ""
+                    # rc==0 but empty/whitespace stdout: surface the full stderr so a
+                    # silent "successful exit, no output" is diagnosable, not just retried.
+                    if result.returncode == 0:
+                        print(
+                            f"[synthesize] {provider['name']} returned rc=0 with empty stdout; "
+                            f"stderr: {stderr}",
+                            file=sys.stderr,
+                        )
                     # Non-retriable errors (e.g. context length) — move to next provider immediately
                     if any(s in stderr.lower() for s in self._NON_RETRIABLE):
                         print(f"[synthesize] {provider['name']} failed (non-retriable): {stderr[:200]}", file=sys.stderr)
@@ -193,7 +201,19 @@ class BaseAgent:
                         # Exhausted attempts for this provider
                         break
 
-                except subprocess.TimeoutExpired:
+                except subprocess.TimeoutExpired as e:
+                    # Kill + reap the child so a timed-out CLI doesn't linger
+                    # holding MCP sockets in long-running executors (e.g. the bot).
+                    proc = getattr(e, "process", None)
+                    if proc is not None:
+                        try:
+                            proc.kill()
+                            proc.wait()
+                        except Exception as kill_err:
+                            print(
+                                f"[synthesize] failed to reap timed-out child: {kill_err}",
+                                file=sys.stderr,
+                            )
                     msg = f"{provider['name']} timed out after 600s"
                     print(f"[synthesize] {msg}", file=sys.stderr)
                     raise LLMTimeoutError(msg)

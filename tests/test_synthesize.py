@@ -5,7 +5,7 @@ not the actual CLI binaries.
 """
 
 import subprocess
-from unittest.mock import patch, call
+from unittest.mock import patch, call, MagicMock
 
 import pytest
 
@@ -161,6 +161,39 @@ class TestSynthesize:
         result = agent.synthesize("test prompt")
 
         assert result == "claude output"
+
+    @patch("agents.base.subprocess.run")
+    @patch("time.sleep", return_value=None)
+    def test_empty_stdout_rc0_logs_stderr(self, mock_sleep, mock_run, capsys):
+        """rc==0 with empty stdout must log the provider's stderr, not silently retry."""
+        mock_run.side_effect = [
+            mock_result(returncode=0, stdout="", stderr="some diagnostic from the CLI"),
+            mock_result(returncode=0, stdout="", stderr="some diagnostic from the CLI"),
+            mock_result(returncode=0, stdout="", stderr="some diagnostic from the CLI"),
+            mock_result(stdout="claude output"),
+        ]
+        agent = make_agent()
+
+        result = agent.synthesize("test prompt")
+
+        assert result == "claude output"
+        captured = capsys.readouterr()
+        assert "some diagnostic from the CLI" in captured.err
+
+    @patch("agents.base.subprocess.run")
+    def test_timeout_kills_and_reaps_child(self, mock_run):
+        """The TimeoutExpired path must kill + reap the child process to free resources."""
+        proc = MagicMock()
+        exc = subprocess.TimeoutExpired(cmd="agy", timeout=600)
+        exc.process = proc  # simulate an exception carrying the child handle
+        mock_run.side_effect = exc
+        agent = make_agent()
+
+        with pytest.raises(RuntimeError, match="timed out"):
+            agent.synthesize("test prompt")
+
+        proc.kill.assert_called_once()
+        proc.wait.assert_called_once()
 
     @patch("agents.base.subprocess.run")
     def test_agy_timeout_is_terminal_no_failover(self, mock_run):

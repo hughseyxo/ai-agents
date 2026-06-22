@@ -5,10 +5,36 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from agents.agent_health import (
+    AgentHealthAgent,
     cron_interval_seconds,
     evaluate_staleness,
     diff_alerts,
 )
+
+
+class TestAlertPersistence:
+    """The 'alerted' state must only record agents we actually notified."""
+
+    def _agent(self, tmp_path):
+        return AgentHealthAgent(db_path=tmp_path / "h.db")
+
+    def test_failed_send_not_persisted(self, tmp_path, monkeypatch):
+        agent = self._agent(tmp_path)
+        monkeypatch.setattr(agent, "_monitored", lambda: {"plant-agent": ("0 * * * *", None)})
+        monkeypatch.setattr(agent, "_send_telegram", lambda msg: False)
+        result = agent._check()
+        assert "plant-agent" in result["stale"]
+        assert result["alerts_sent"] == 0
+        # Failed send is NOT recorded, so the next run retries instead of going silent.
+        assert agent.get_state("alerted") == []
+
+    def test_successful_send_persisted(self, tmp_path, monkeypatch):
+        agent = self._agent(tmp_path)
+        monkeypatch.setattr(agent, "_monitored", lambda: {"plant-agent": ("0 * * * *", None)})
+        monkeypatch.setattr(agent, "_send_telegram", lambda msg: True)
+        result = agent._check()
+        assert result["alerts_sent"] == 1
+        assert agent.get_state("alerted") == ["plant-agent"]
 
 
 class TestCronInterval:

@@ -11,6 +11,7 @@ import tempfile
 import time
 import urllib.request
 import urllib.parse
+import urllib.error
 from datetime import datetime, timezone
 
 TOKEN_FILE = os.path.expanduser("~/.google_tokens.json")
@@ -47,6 +48,8 @@ def get_access_token():
     expires_in = tokens.get("expires_in", 3600)
     # Refresh if within 5 minutes of expiry
     if time.time() > obtained_at + expires_in - 300:
+        if "refresh_token" not in tokens:
+            raise RuntimeError("No refresh_token in token file; re-authentication required.")
         data = urllib.parse.urlencode({
             "client_id": CLIENT_ID,
             "client_secret": CLIENT_SECRET,
@@ -58,12 +61,20 @@ def get_access_token():
             data=data,
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
-        with urllib.request.urlopen(req) as resp:
-            new_tokens = json.loads(resp.read())
-            tokens["access_token"] = new_tokens["access_token"]
-            tokens["expires_in"] = new_tokens.get("expires_in", 3600)
-            tokens["obtained_at"] = time.time()
-            save_tokens(tokens)
+        try:
+            with urllib.request.urlopen(req) as resp:
+                new_tokens = json.loads(resp.read())
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode(errors="replace")[:200] if hasattr(e, "read") else ""
+            raise RuntimeError(f"OAuth token refresh failed (HTTP {e.code}): {detail}")
+        except urllib.error.URLError as e:
+            raise RuntimeError(f"OAuth token refresh failed (network): {e.reason}")
+        if "access_token" not in new_tokens:
+            raise RuntimeError(f"OAuth refresh response missing access_token: {new_tokens}")
+        tokens["access_token"] = new_tokens["access_token"]
+        tokens["expires_in"] = new_tokens.get("expires_in", 3600)
+        tokens["obtained_at"] = time.time()
+        save_tokens(tokens)
     return tokens["access_token"]
 
 

@@ -23,6 +23,7 @@ def fetch_weather(lat: float = 52.16, lon: float = 4.49) -> dict | None:
         f"&hourly=precipitation"
         f"&daily=temperature_2m_max,precipitation_sum"
         f"&forecast_days=3"
+        f"&past_days=1"
         f"&timezone=Europe%2FAmsterdam"
     )
     url = f"{BASE_URL}?{params}"
@@ -39,7 +40,10 @@ def fetch_weather(lat: float = 52.16, lon: float = 4.49) -> dict | None:
         hourly = data["hourly"]
         daily = data["daily"]
 
-        recent_precip = sum(hourly["precipitation"][-24:])
+        # With past_days=1 the hourly arrays start at the PAST 24h window,
+        # followed by the forecast. Sum the leading 24 points (past day),
+        # NOT the trailing tail (which is future forecast rain).
+        recent_precip = sum(hourly["precipitation"][:24])
 
         forecast = []
         for i in range(len(daily["time"])):

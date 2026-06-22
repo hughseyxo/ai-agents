@@ -5,6 +5,7 @@ a prioritized markdown report. All checks are deterministic system command
 parsing — no Claude CLI or MCP tools.
 """
 
+import ipaddress
 import json
 import os
 import re
@@ -591,32 +592,60 @@ class SecurityAuditAgent(BaseAgent):
         le_path = Path("/etc/letsencrypt/live")
         if le_path.is_dir():
             try:
-                for domain_dir in le_path.iterdir():
-                    cert = domain_dir / "fullchain.pem"
-                    if cert.exists():
-                        result = _run(["openssl", "x509", "-in", str(cert), "-noout", "-enddate"])
-                        if result.returncode == 0:
-                            date_str = result.stdout.strip().split("=", 1)[-1]
-                            try:
-                                expiry = datetime.strptime(date_str, "%b %d %H:%M:%S %Y %Z")
-                                days_left = (expiry - datetime.utcnow()).days
-                                if days_left < 14:
-                                    self._finding(
-                                        severity="Critical" if days_left < 0 else "High",
-                                        check="SSL/TLS certificate expiry",
-                                        detail=f"{domain_dir.name}: {'EXPIRED' if days_left < 0 else f'expires in {days_left} days'}",
-                                        context="Expired certificates cause browser warnings and break HTTPS entirely",
-                                        risk="Users see security warnings; HSTS-enabled sites become completely inaccessible",
-                                        impact="Renewal requires port 80/443 briefly; no downtime for most setups",
-                                        fix_commands=["sudo certbot renew --force-renewal"],
-                                    )
-                                    return
-                            except ValueError:
-                                pass
-                self._pass("SSL/TLS: certificates valid with >14 days remaining")
-                return
+                domain_dirs = list(le_path.iterdir())
             except PermissionError:
-                pass
+                # C9: can't read the cert dir — surface it, never fall through to PASS.
+                self._finding(
+                    severity="Medium",
+                    check="SSL/TLS certificate expiry",
+                    detail="cannot read /etc/letsencrypt/live (permission denied); cert expiry unverified",
+                    context="The audit needs privilege to read Let's Encrypt certs",
+                    risk="An expired certificate could go unnoticed because the check could not run",
+                    impact="Re-run the audit with sudo to verify certificate expiry",
+                )
+                return
+
+            checked = 0
+            findings_made = False
+            now = datetime.now(timezone.utc).replace(tzinfo=None)  # certs parse as naive UTC
+            for domain_dir in domain_dirs:  # C9: evaluate every cert, not just the first
+                cert = domain_dir / "fullchain.pem"
+                if not cert.exists():
+                    continue
+                result = _run(["openssl", "x509", "-in", str(cert), "-noout", "-enddate"])
+                if result.returncode != 0:
+                    continue
+                date_str = result.stdout.strip().split("=", 1)[-1]
+                try:
+                    expiry = datetime.strptime(date_str, "%b %d %H:%M:%S %Y %Z")
+                except ValueError:
+                    # C9: don't silently swallow an unparseable date — report it.
+                    self._finding(
+                        severity="Low",
+                        check="SSL/TLS certificate expiry",
+                        detail=f"{domain_dir.name}: could not parse cert end date {date_str!r}",
+                        context="openssl returned an unexpected date format",
+                        risk="Expiry for this certificate could not be evaluated",
+                        impact="Inspect the certificate manually",
+                    )
+                    findings_made = True
+                    continue
+                checked += 1
+                days_left = (expiry - now).days
+                if days_left < 14:
+                    self._finding(
+                        severity="Critical" if days_left < 0 else "High",
+                        check="SSL/TLS certificate expiry",
+                        detail=f"{domain_dir.name}: {'EXPIRED' if days_left < 0 else f'expires in {days_left} days'}",
+                        context="Expired certificates cause browser warnings and break HTTPS entirely",
+                        risk="Users see security warnings; HSTS-enabled sites become completely inaccessible",
+                        impact="Renewal requires port 80/443 briefly; no downtime for most setups",
+                        fix_commands=["sudo certbot renew --force-renewal"],
+                    )
+                    findings_made = True
+            if checked and not findings_made:
+                self._pass(f"SSL/TLS: {checked} certificate(s) valid with >14 days remaining")
+            return
 
         # Check Traefik acme.json for Let's Encrypt certs
         acme_json = SERVER_CONTEXT["traefik_config"] / "acme.json"
@@ -1117,8 +1146,25 @@ class SecurityAuditAgent(BaseAgent):
             self._pass("Cloudflare IPs: API returned error")
             return
 
-        cf_ipv4 = data["result"]["ipv4_cidrs"]
-        cf_ipv6 = data["result"]["ipv6_cidrs"]
+        # C8: every CIDR comes from a remote API and later flows into a shell
+        # fix-command — validate each as a real network and drop anything that
+        # isn't, so a malformed/hostile entry can't be smuggled into a command.
+        def _valid_cidrs(items):
+            out = []
+            for c in items or []:
+                try:
+                    ipaddress.ip_network(c, strict=False)
+                except (ValueError, TypeError):
+                    continue
+                out.append(c)
+            return out
+
+        result = data.get("result") or {}
+        cf_ipv4 = _valid_cidrs(result.get("ipv4_cidrs"))
+        cf_ipv6 = _valid_cidrs(result.get("ipv6_cidrs"))
+        if not cf_ipv4:
+            self._pass("Cloudflare IPs: no valid IPv4 ranges returned")
+            return
 
         # Get UFW rules
         ufw = _run(["sudo", "ufw", "status", "numbered"])
@@ -1285,7 +1331,16 @@ class SecurityAuditAgent(BaseAgent):
             if answer == "y":
                 for cmd in f["fix_commands"]:
                     print(f"  Running: {cmd}")
-                    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+                    # fix_commands are developer-authored constants (some use shell
+                    # operators like && / pipes), reviewed interactively above before
+                    # running. shell=True is intentional here; a timeout prevents hangs.
+                    try:
+                        result = subprocess.run(
+                            cmd, shell=True, capture_output=True, text=True, timeout=120
+                        )
+                    except subprocess.TimeoutExpired:
+                        print("  FAILED: command timed out after 120s")
+                        continue
                     if result.returncode != 0:
                         print(f"  FAILED: {result.stderr.strip()}")
                     else:

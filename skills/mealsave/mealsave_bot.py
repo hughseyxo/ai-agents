@@ -5,6 +5,8 @@ Forward a recipe URL and get it saved to Mealie.
 Locked to a single Telegram user ID for security.
 """
 
+import asyncio
+import logging
 import os
 import re
 import subprocess
@@ -19,6 +21,10 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 
 # Load config from .env
 def load_bot_config():
@@ -81,10 +87,25 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         status_msg = await update.message.reply_text(f"Processing: {url}...")
         
         try:
-            # Run mealsave.py as a subprocess
+            # Run mealsave.py as an async subprocess so the bot's event loop
+            # keeps serving other chats while extraction runs.
             cmd = [str(VENV_PYTHON), str(MEALSAVE_PY), url]
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-            
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            try:
+                stdout_b, stderr_b = await asyncio.wait_for(proc.communicate(), timeout=300)
+            except asyncio.TimeoutError:
+                proc.kill()
+                await proc.wait()
+                raise subprocess.TimeoutExpired(cmd, 300)
+            result = subprocess.CompletedProcess(
+                cmd, proc.returncode,
+                stdout_b.decode(errors="replace"), stderr_b.decode(errors="replace"),
+            )
+
             if result.returncode == 0:
                 output = result.stdout.strip()
                 # Find the URL in the output
@@ -110,8 +131,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         except subprocess.TimeoutExpired:
             await status_msg.edit_text("❌ Error: Extraction timed out (took > 5 minutes).")
-        except Exception as e:
-            await status_msg.edit_text(f"❌ Unexpected error: {str(e)}")
+        except Exception:
+            # Don't leak internal exception detail (paths, tracebacks) to the chat.
+            logger.exception("mealsave bot failed processing %s", url)
+            await status_msg.edit_text("❌ Unexpected error saving that recipe. Try again later.")
 
 def main():
     app = Application.builder().token(TOKEN).build()

@@ -6,6 +6,7 @@ Locked to a single Telegram user ID for security.
 """
 
 import json
+import logging
 import os
 import re
 import subprocess
@@ -19,6 +20,9 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 TELEGRAM_BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 ALLOWED_USER_ID = int(os.environ["TELEGRAM_USER_ID"])
@@ -100,12 +104,16 @@ def fetch_inbox_tasks() -> list[dict]:
         '"id" (string), "content" (string), "priority" (integer 1-4 where 4=highest), '
         '"due_date" (ISO date string or null), "is_overdue" (boolean).'
     )
-    result = subprocess.run(
-        ["claude", "--dangerously-skip-permissions", "-p", prompt, "--output-format", "text"],
-        capture_output=True,
-        text=True,
-        cwd=REPO_ROOT,
-    )
+    try:
+        result = subprocess.run(
+            ["claude", "--dangerously-skip-permissions", "-p", prompt, "--output-format", "text"],
+            capture_output=True,
+            text=True,
+            cwd=REPO_ROOT,
+            timeout=120,
+        )
+    except subprocess.TimeoutExpired:
+        raise RuntimeError("Claude CLI timed out fetching tasks.")
     if result.returncode != 0:
         raise RuntimeError(f"Claude CLI failed: {result.stderr[:300]}")
 
@@ -175,8 +183,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         tasks = fetch_inbox_tasks()
         ranked = rank_and_filter(tasks, minutes)
         await update.message.reply_text(format_results(ranked, minutes))
-    except Exception as e:
-        await update.message.reply_text(f"Error fetching tasks: {e}")
+    except Exception:
+        # Don't leak internal error detail (CLI stderr, paths) to the chat.
+        logger.exception("free-time task fetch failed")
+        await update.message.reply_text(
+            "Sorry — I couldn't fetch your tasks just now. Try again in a moment."
+        )
 
 
 def main():

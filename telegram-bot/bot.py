@@ -13,7 +13,7 @@ from telegram.ext import ApplicationBuilder, CallbackQueryHandler, CommandHandle
 
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from agents.plant_profiles import write_health_assessment
+from agents.plant_profiles import write_health_assessment, write_profile_atomic, safe_profile_path
 from tools import (
     update_plant,
     get_plant,
@@ -21,7 +21,7 @@ from tools import (
     save_plant_assessment,
 )
 from claude_backend import ask_claude, assess_image
-from antigravity_backend import ask_antigravity, _run_agy
+from antigravity_backend import ask_antigravity, query_agy
 
 load_dotenv()
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -60,7 +60,7 @@ def _resolve_plant_name(caption: str, plants: list[dict]) -> dict | None:
         "Which plant are they referring to? Reply with the exact name from the list, "
         "or NONE if no match is likely. Reply with only the plant name or NONE."
     )
-    answer = _run_agy(prompt)
+    answer = query_agy(prompt)
     if answer:
         answer = answer.strip()
         if answer.upper() != "NONE":
@@ -342,7 +342,8 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         image_bytes = buf.getvalue()
 
         all_plants = get_all_plants()
-        plant = _identify_plant_from_image(image_bytes, all_plants)
+        # C12: assess_image runs a blocking subprocess — keep it off the event loop.
+        plant = await asyncio.to_thread(_identify_plant_from_image, image_bytes, all_plants)
         if not plant:
             await update.message.reply_text(
                 "Couldn't identify the plant from the photo. Send it again with the plant name as caption."
@@ -367,7 +368,8 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await file.download_to_memory(buf)
         image_bytes = buf.getvalue()
 
-    display_text, parsed = _analyze_plant_image(image_bytes, plant)
+    # C12: assess_image runs a blocking subprocess — keep it off the event loop.
+    display_text, parsed = await asyncio.to_thread(_analyze_plant_image, image_bytes, plant)
 
     if parsed:
         # Save structured notes to plant profile doc (## Health Assessments section)
@@ -420,6 +422,10 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle inline keyboard callbacks for plant frequency change proposals."""
     query = update.callback_query
+    # C10: callbacks were ungated — enforce the same allowlist as message/photo
+    # so a stranger's button press can't mutate plant state.
+    if ALLOWED_USER_ID and str(update.effective_user.id) != ALLOWED_USER_ID:
+        return
     await query.answer()
 
     data = query.data or ""
@@ -430,30 +436,39 @@ async def _handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         return
 
     if data.startswith("plant_freq:"):
-        parts = data.split(":")
-        if len(parts) != 3:
+        # Format is plant_freq:<name>:<days>. The name may itself contain a colon,
+        # so split off the trailing days field with rpartition rather than a fixed
+        # 3-way split (which would reject or mangle such names).
+        payload = data[len("plant_freq:"):]
+        plant_name, sep, new_days_str = payload.rpartition(":")
+        if not sep or not plant_name:
             await query.edit_message_text("Invalid callback data.")
             return
-        _, plant_name, new_days_str = parts
         try:
             new_days = int(new_days_str)
         except ValueError:
             await query.edit_message_text("Invalid frequency value.")
             return
 
-        update_plant(plant_name, {"frequency_days": new_days})
+        # C13: update_plant's 2nd positional arg is `location`; a dict here silently
+        # no-ops the frequency change. Pass frequency_days as a keyword.
+        update_plant(plant_name, frequency_days=new_days)
 
         # Append to plant profile doc
         from datetime import date as _date
         today = _date.today().isoformat()
         freq_note = f"\n| {today} | ?→{new_days} days | Applied via Telegram photo assessment |"
-        slug = plant_name.lower().replace(" ", "-")
-        profile_path = PLANT_ASSESSMENT_DIR / f"{slug}.md"
-        if profile_path.exists():
+        # C11: bound the untrusted plant name to a safe path inside the plants
+        # directory; safe_profile_path raises if the slug escapes.
+        try:
+            profile_path = safe_profile_path(plant_name)
+        except ValueError:
+            profile_path = None
+        if profile_path and profile_path.exists():
             existing = profile_path.read_text()
             if "## Frequency History" in existing:
-                existing = existing.rstrip() + freq_note + "\n"
-                profile_path.write_text(existing)
+                # Phase 1.3: atomic write so a crash can't truncate the profile.
+                write_profile_atomic(profile_path, existing.rstrip() + freq_note + "\n")
 
         await query.edit_message_text(
             f"✓ Updated {plant_name} watering frequency to every {new_days} days."

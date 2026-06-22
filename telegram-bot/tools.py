@@ -3,11 +3,15 @@
 Each function returns a plain string for the LLM to relay to the user.
 All exceptions are caught and returned as error strings.
 """
+import ipaddress
+import re
+import socket
 import subprocess
 import sys
 import time
 from datetime import date, datetime, timedelta
 from pathlib import Path
+from urllib.parse import urlparse
 
 import psutil
 import yaml
@@ -16,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from agents.db import AgentDB
 from agents.plant_weather import weather_adjusted_frequency, MIN_FREQUENCY, MAX_FREQUENCY
 from agents.weather import fetch_weather
-from agents.plant_profiles import append_frequency_history, write_profile_atomic, upsert_frontmatter, parse_frontmatter
+from agents.plant_profiles import append_frequency_history, write_profile_atomic, upsert_frontmatter, parse_frontmatter, safe_profile_path
 
 AGENTS = ["daily-briefing", "news-briefing", "security-audit", "travel-agent", "librarian", "plant-agent", "agent-health"]
 DB_PATH = Path(__file__).parent.parent / "data" / "agents.db"
@@ -26,6 +30,30 @@ REPO_ROOT = Path(__file__).parent.parent
 CEST_OFFSET = 2  # UTC+2
 SUNLIGHT_VALUES = ("full sun", "partial shade", "shade")
 SENSITIVITY_VALUES = ("high", "medium", "low")
+
+
+def _validate_http_url(url: str) -> str | None:
+    """Return None if the URL is a safe public http(s) URL, else an error string.
+
+    Blocks non-http(s) schemes, argv flag-smuggling (a leading '-'), and SSRF to
+    private / loopback / link-local hosts (defence in depth — the recipe scraper
+    does its own check too)."""
+    url = url.strip()
+    if not url or url.startswith("-"):
+        return "Invalid URL."
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        return "Only http(s) URLs are supported."
+    host = parsed.hostname
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except socket.gaierror:
+        return "Could not resolve URL host."
+    for info in infos:
+        ip = ipaddress.ip_address(info[4][0])
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+            return "Refusing to fetch a private/internal address."
+    return None
 
 
 def get_agent_status() -> str:
@@ -110,11 +138,14 @@ def get_yopflix_status() -> str:
             ["docker", "ps", "--format", "{{.Names}}\t{{.Status}}"],
             capture_output=True, text=True, timeout=10,
         )
-        lines = [l for l in res.stdout.strip().splitlines() if l]
-        if lines:
-            parts.append("Containers:\n" + "\n".join(f"  {l}" for l in lines))
+        if res.returncode != 0:
+            parts.append(f"Docker error: {res.stderr.strip()[:200] or 'docker ps failed'}")
         else:
-            parts.append("No containers running")
+            lines = [l for l in res.stdout.strip().splitlines() if l]
+            if lines:
+                parts.append("Containers:\n" + "\n".join(f"  {l}" for l in lines))
+            else:
+                parts.append("No containers running")
     except FileNotFoundError:
         parts.append("Docker unavailable (not installed or not in PATH)")
     except Exception as e:
@@ -226,6 +257,17 @@ def run_travel_agent(
 ) -> str:
     """Launch the travel agent as a background subprocess."""
     try:
+        # Validate every value that becomes argv so a leading '-' can't smuggle a
+        # flag into the subprocess, and dates/mode are well-formed.
+        if mode not in ("search", "plan"):
+            return "mode must be 'search' or 'plan'."
+        for label, value in (("checkin", checkin), ("checkout", checkout)):
+            if not re.match(r"^\d{4}-\d{2}-\d{2}$", value):
+                return f"{label} must be an ISO date (YYYY-MM-DD)."
+        for label, value in (("destination", destination), ("origin", origin),
+                             ("flights", flights), ("hotel", hotel)):
+            if value and value.lstrip().startswith("-"):
+                return f"Invalid {label}."
         cmd = [
             "python3", "-m", "agents", "travel-agent",
             "--mode", mode,
@@ -502,8 +544,10 @@ def save_plant_assessment(plant_name: str, summary: str) -> str:
 
 
 def note_plant_observation(name: str, notes: str) -> str:
-    slug = name.lower().replace(" ", "-")
-    profile_path = REPO_ROOT / "docs" / "plants" / f"{slug}.md"
+    try:
+        profile_path = safe_profile_path(name)
+    except ValueError:
+        return f"Invalid plant name: {name!r}"
     if not profile_path.exists():
         return f"No profile doc found for {name}"
     content = profile_path.read_text()
@@ -516,6 +560,9 @@ MEALSAVE_PYTHON = REPO_ROOT / "skills" / "mealsave" / ".venv" / "bin" / "python"
 
 
 def save_recipe(url: str) -> str:
+    err = _validate_http_url(url)
+    if err:
+        return err
     python = str(MEALSAVE_PYTHON) if MEALSAVE_PYTHON.exists() else "python3"
     try:
         result = subprocess.run(

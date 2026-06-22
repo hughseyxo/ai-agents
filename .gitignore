@@ -13,6 +13,8 @@ credentials.json
 mcp-servers/__pycache__/
 agents/__pycache__/
 data/agents.db
+data/agents.db*
+data/*.corrupt-bak
 docs/agent-notes.md
 docs/security-audit-agent.md
 *.mp4

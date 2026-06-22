@@ -498,7 +498,10 @@ class NewsBriefingAgent(BaseAgent):
         prompt = prompt.replace("{{TODAY}}", today)
         prompt = prompt.replace("{{HTML_EMAIL}}", html_email)
 
-        self.synthesize(prompt)
+        result = self.synthesize(prompt)
+        if not result:
+            # Don't dedup a send that didn't happen — let the next run retry.
+            return {"sent": False, "error": "synthesize returned no result"}
 
         self.mark_seen("email_sent", today)
         return {"sent": True, "output_path": str(output_path)}

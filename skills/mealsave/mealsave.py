@@ -288,7 +288,9 @@ def fetch_youtube_transcript(url: str) -> str:
 
         if cookies:
             cmd += ["--cookies", str(cookies)]
-        cmd.append(url)
+        # `--` terminates option parsing so a URL starting with '-' can't be
+        # interpreted as a yt-dlp flag.
+        cmd += ["--", url]
 
         try:
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=90)
@@ -341,11 +343,38 @@ def fetch_youtube_transcript(url: str) -> str:
 BYPARR_URL = "http://localhost:8191/v1"
 
 
+def _is_public_http_url(url: str) -> bool:
+    """True only for http(s) URLs whose host resolves to public addresses.
+    Blocks SSRF: byparr would otherwise fetch internal/loopback/link-local
+    targets on the server's behalf."""
+    import ipaddress
+    import socket
+    from urllib.parse import urlparse
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return False
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        return False
+    try:
+        infos = socket.getaddrinfo(parsed.hostname, None)
+    except socket.gaierror:
+        return False
+    for info in infos:
+        ip = ipaddress.ip_address(info[4][0])
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+            return False
+    return True
+
+
 def fetch_via_byparr(url: str) -> str | None:
     """
     Fetch HTML via byparr (FlareSolverr-compatible) running locally on port 8191.
     Returns HTML string on success, None if byparr is unavailable or fails.
     """
+    if not _is_public_http_url(url):
+        print("[mealsave] refusing to fetch non-public URL via byparr (SSRF guard).", file=sys.stderr)
+        return None
     try:
         r = requests.post(
             BYPARR_URL,
@@ -467,9 +496,12 @@ def _parse_json_response(output: str) -> dict:
         output = match.group(0)
 
     try:
-        return json.loads(output)
+        parsed = json.loads(output)
     except json.JSONDecodeError as e:
         die(f"LLM returned invalid JSON ({e}). Got: {output[:300]}")
+    if not isinstance(parsed, dict):
+        die(f"LLM returned JSON that is not an object (got {type(parsed).__name__}).")
+    return parsed
 
 
 # ---------------------------------------------------------------------------
@@ -488,7 +520,9 @@ def create_from_data(mealie_url: str, token: str, data: dict, org_url: str) -> s
         timeout=10,
     )
     if r.status_code not in (200, 201):
-        die(f"Failed to create recipe: HTTP {r.status_code} — {r.text[:200]}")
+        # Don't surface the raw Mealie response body — it can echo tokens/headers.
+        print(f"[mealsave] create recipe failed: HTTP {r.status_code} — {r.text[:200]}", file=sys.stderr)
+        die(f"Failed to create recipe (HTTP {r.status_code}).")
 
     resp_body = r.json()
     # Mealie may return slug as a bare string or inside an object
@@ -560,7 +594,7 @@ def fetch_tiktok_metadata(url: str) -> dict:
     base_dir = Path(__file__).parent
     venv_ytdlp = base_dir / ".venv" / "bin" / "yt-dlp"
     ytdlp_bin = str(venv_ytdlp) if venv_ytdlp.exists() else "yt-dlp"
-    cmd = [ytdlp_bin, "--dump-json", "--skip-download", "--quiet", "--no-warnings", url]
+    cmd = [ytdlp_bin, "--dump-json", "--skip-download", "--quiet", "--no-warnings", "--", url]
     try:
         result = subprocess.run(cmd, capture_output=True, check=True, timeout=30, text=True)
         info = json.loads(result.stdout)
@@ -587,7 +621,7 @@ def fetch_tiktok_video(url: str, tmpdir: str) -> str:
         "--no-warnings",
         "--output", output_tmpl,
         # TikTok sometimes needs specific user-agent or cookies but often works with just this
-        url
+        "--", url
     ]
 
     try:
