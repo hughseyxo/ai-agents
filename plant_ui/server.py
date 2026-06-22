@@ -25,6 +25,7 @@ from agents.plant_profiles import (
     append_frequency_history,
     append_intelligence_note,
     profile_path,
+    safe_profile_path,
     write_profile_atomic
 )
 from claude_backend import assess_image
@@ -43,12 +44,28 @@ PLANT_HEALTH_SYSTEM = (
     "Keep your response to 3-5 sentences."
 )
 
+# Upload limits / prompt bounds
+MAX_UPLOAD_BYTES = 8 * 1024 * 1024  # 8 MB
+ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
+# Magic-byte signatures for the allowed image types (defence beyond content-type).
+_IMAGE_MAGIC = (b"\xff\xd8\xff", b"\x89PNG\r\n\x1a\n", b"RIFF")
+MAX_PROFILE_CHARS = 4000  # cap profile markdown folded into the vision prompt
+
+
+def _safe_profile_path_or_400(name: str) -> Path:
+    """Resolve a plant profile path, raising HTTP 400 on a traversal attempt."""
+    try:
+        return safe_profile_path(name)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid plant name")
+
+
 # Pydantic models for API
 class PlantCreate(BaseModel):
-    name: str
-    frequency_days: int
+    name: str = Field(min_length=1, max_length=100)
+    frequency_days: int = Field(ge=1, le=30)
     location: Literal["indoor", "outdoor"] = "indoor"
-    sunlight: str = ""
+    sunlight: str = Field(default="", max_length=50)
     water_sensitivity: Literal["high", "medium", "low"] = "medium"
 
 class PlantUpdate(BaseModel):
@@ -84,7 +101,7 @@ def get_db() -> AgentDB:
         db.close()
 
 def create_profile_doc(name: str, location: str, sunlight: str, sensitivity: str, frequency: int):
-    path = profile_path(name)
+    path = _safe_profile_path_or_400(name)
     if path.exists():
         return
     content = f"""# {name}
@@ -223,7 +240,7 @@ def get_plant_detail(name: str, store: PlantStore = Depends(get_store)):
     if not plant:
         raise HTTPException(status_code=404, detail=f"Plant '{name}' not found")
     
-    path = profile_path(plant.name)
+    path = _safe_profile_path_or_400(plant.name)
     markdown_content = ""
     if path.exists():
         markdown_content = path.read_text()
@@ -285,9 +302,9 @@ def update_plant_fields(name: str, data: PlantUpdate, store: PlantStore = Depend
         if any(p.name.lower() == new_name_clean.lower() for p in plants if p.name.lower() != old_name.lower()):
             raise HTTPException(status_code=400, detail=f"Plant '{new_name_clean}' already exists")
             
-        # Rename markdown profile
-        old_profile = profile_path(old_name)
-        new_profile = profile_path(new_name_clean)
+        # Rename markdown profile (both paths bounded inside the plants dir)
+        old_profile = _safe_profile_path_or_400(old_name)
+        new_profile = _safe_profile_path_or_400(new_name_clean)
         if old_profile.exists():
             old_profile.rename(new_profile)
     
@@ -337,7 +354,7 @@ def delete_plant(name: str, store: PlantStore = Depends(get_store)):
     store.save_plants(plants)
 
     # Delete profile document if exists
-    p_path = profile_path(plant.name)
+    p_path = _safe_profile_path_or_400(plant.name)
     if p_path.exists():
         try:
             p_path.unlink()
@@ -399,8 +416,17 @@ async def upload_photo(name: str, file: UploadFile = File(...), store: PlantStor
     if not plant:
         raise HTTPException(status_code=404, detail=f"Plant '{name}' not found")
         
+    # Validate the upload: declared content-type, size cap, and magic bytes.
+    if file.content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(status_code=400, detail="Only JPEG, PNG or WebP images are accepted.")
     contents = await file.read()
-    
+    if not contents:
+        raise HTTPException(status_code=400, detail="Empty upload.")
+    if len(contents) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="Image too large (max 8 MB).")
+    if not contents.startswith(_IMAGE_MAGIC):
+        raise HTTPException(status_code=400, detail="Upload is not a valid image file.")
+
     # Replicate _analyze_plant_image logic
     last_watered = plant.last_watered.isoformat()
     try:
@@ -408,19 +434,23 @@ async def upload_photo(name: str, file: UploadFile = File(...), store: PlantStor
         days_str = f"{days_since} days ago"
     except Exception:
         days_str = "unknown"
-        
-    slug = plant.name.lower().replace(" ", "-").replace("/", "-")
-    p_path = profile_path(plant.name)
+
+    import asyncio
+    p_path = _safe_profile_path_or_400(plant.name)
     profile_context = ""
     if p_path.exists():
-        profile_context = f"\n\nPlant profile history:\n{p_path.read_text()}"
+        # Read off the event loop; truncate so a huge profile can't blow up the prompt.
+        profile_text = await asyncio.to_thread(p_path.read_text)
+        if len(profile_text) > MAX_PROFILE_CHARS:
+            profile_text = profile_text[:MAX_PROFILE_CHARS] + "\n[profile truncated]"
+        profile_context = f"\n\nPlant profile history:\n{profile_text}"
         
-    species_context = _load_species_context(plant.name)
-    
-    # Read/fallback system prompt
+    species_context = await asyncio.to_thread(_load_species_context, plant.name)
+
+    # Read/fallback system prompt (off the event loop)
     system_prompt = PLANT_HEALTH_SYSTEM
     if PLANT_ASSESSMENT_SYSTEM_PATH.exists():
-        system_prompt = PLANT_ASSESSMENT_SYSTEM_PATH.read_text()
+        system_prompt = await asyncio.to_thread(PLANT_ASSESSMENT_SYSTEM_PATH.read_text)
         
     if species_context:
         system_prompt += f"\n\n## Species Reference\n{species_context}"
@@ -438,7 +468,6 @@ async def upload_photo(name: str, file: UploadFile = File(...), store: PlantStor
         tmp_img.write_bytes(contents)
         
         # Run assess_image from claude_backend in executor since it's blocking
-        import asyncio
         loop = asyncio.get_running_loop()
         try:
             raw_response = await loop.run_in_executor(
