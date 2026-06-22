@@ -54,6 +54,9 @@ def main():
         try:
             msg = json.loads(line)
         except json.JSONDecodeError:
+            # Per JSON-RPC 2.0, a malformed request gets a Parse error with a null
+            # id rather than being silently dropped (which would hang the client).
+            send_error(None, -32700, "Parse error")
             continue
 
         msg_id = msg.get("id")

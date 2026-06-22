@@ -12,6 +12,7 @@ import tempfile
 import time
 import urllib.request
 import urllib.parse
+import urllib.error
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
@@ -48,6 +49,8 @@ def get_access_token():
     obtained_at = tokens.get("obtained_at", 0)
     expires_in = tokens.get("expires_in", 3600)
     if time.time() > obtained_at + expires_in - 300:
+        if "refresh_token" not in tokens:
+            raise RuntimeError("No refresh_token in token file; re-authentication required.")
         data = urllib.parse.urlencode({
             "client_id": CLIENT_ID,
             "client_secret": CLIENT_SECRET,
@@ -59,13 +62,37 @@ def get_access_token():
             data=data,
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
-        with urllib.request.urlopen(req) as resp:
-            new_tokens = json.loads(resp.read())
-            tokens["access_token"] = new_tokens["access_token"]
-            tokens["expires_in"] = new_tokens.get("expires_in", 3600)
-            tokens["obtained_at"] = time.time()
-            save_tokens(tokens)
+        try:
+            with urllib.request.urlopen(req) as resp:
+                new_tokens = json.loads(resp.read())
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode(errors="replace")[:200] if hasattr(e, "read") else ""
+            raise RuntimeError(f"OAuth token refresh failed (HTTP {e.code}): {detail}")
+        except urllib.error.URLError as e:
+            raise RuntimeError(f"OAuth token refresh failed (network): {e.reason}")
+        if "access_token" not in new_tokens:
+            raise RuntimeError(f"OAuth refresh response missing access_token: {new_tokens}")
+        tokens["access_token"] = new_tokens["access_token"]
+        tokens["expires_in"] = new_tokens.get("expires_in", 3600)
+        tokens["obtained_at"] = time.time()
+        save_tokens(tokens)
     return tokens["access_token"]
+
+
+# Cache the authenticated user's address so every send doesn't hit the profile API.
+_SENDER_ADDRESS = None
+
+
+def _get_sender_address():
+    """Return the authenticated Gmail address (for the From header). Falls back to
+    None on any failure — Gmail still sends as the authenticated user."""
+    global _SENDER_ADDRESS
+    if _SENDER_ADDRESS is None:
+        try:
+            _SENDER_ADDRESS = get_profile().get("emailAddress")
+        except Exception:
+            _SENDER_ADDRESS = None
+    return _SENDER_ADDRESS
 
 
 def gmail_request(method, path, params=None, body=None):
@@ -94,7 +121,9 @@ def get_profile():
 
 def send_email(to, subject, body, mime_type="text/html"):
     msg = MIMEMultipart("alternative")
-    msg["From"] = to
+    sender = _get_sender_address()
+    if sender:
+        msg["From"] = sender
     msg["To"] = to
     msg["Subject"] = subject
     msg.attach(MIMEText(body, mime_type.split("/")[-1]))
@@ -104,7 +133,9 @@ def send_email(to, subject, body, mime_type="text/html"):
 
 def create_draft(to, subject, body, mime_type="text/html"):
     msg = MIMEMultipart("alternative")
-    msg["From"] = to
+    sender = _get_sender_address()
+    if sender:
+        msg["From"] = sender
     msg["To"] = to
     msg["Subject"] = subject
     msg.attach(MIMEText(body, mime_type.split("/")[-1]))
@@ -147,6 +178,21 @@ TOOLS = [
     {
         "name": "gmail_send",
         "description": "Send an email via Gmail.",
+        "inputSchema": {
+            "type": "object",
+            "required": ["to", "subject", "body"],
+            "properties": {
+                "to": {"type": "string", "description": "Recipient email address"},
+                "subject": {"type": "string"},
+                "body": {"type": "string", "description": "Email body"},
+                "mimeType": {"type": "string", "default": "text/html",
+                             "description": "text/html or text/plain"},
+            },
+        },
+    },
+    {
+        "name": "gmail_create_draft",
+        "description": "Create a draft email in Gmail (does not send).",
         "inputSchema": {
             "type": "object",
             "required": ["to", "subject", "body"],
