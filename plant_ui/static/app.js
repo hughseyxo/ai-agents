@@ -443,6 +443,47 @@ function plantApp() {
       }
     },
 
+    // Chat state and methods
+    chatMessages: [],
+    chatSessionId: null,
+    chatScope: 'garden',
+    chatPlant: null,
+    chatInput: '',
+    chatLoading: false,
+
+    openChat(scope, plantName) {
+      this.chatScope = scope;
+      this.chatPlant = plantName || null;
+      this.chatMessages = [];
+      this.chatSessionId = null;
+      this.setView('chat');
+    },
+
+    async sendChat() {
+      const msg = this.chatInput.trim();
+      if (!msg || this.chatLoading) return;
+      this.chatMessages.push({ role: 'user', text: msg });
+      this.chatInput = '';
+      this.chatLoading = true;
+      try {
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: msg, scope: this.chatScope,
+            plant_name: this.chatPlant, session_id: this.chatSessionId,
+          }),
+        });
+        const data = await res.json();
+        this.chatSessionId = data.session_id;
+        this.chatMessages.push({ role: 'assistant', text: data.reply });
+      } catch (e) {
+        this.chatMessages.push({ role: 'assistant', text: 'Network error — try again.' });
+      } finally {
+        this.chatLoading = false;
+      }
+    },
+
     // Formatters
     formatDate(dateStr) {
       if (!dateStr) return 'Never';

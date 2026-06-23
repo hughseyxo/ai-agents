@@ -202,6 +202,7 @@
             </button>
             <button class="btn btn-secondary" @click="openPhotoUpload()"><span class="btn-icon">📸</span> Diagnose Health</button>
             <button class="btn btn-outline" @click="openEditForm(activePlant?.plant)"><span class="btn-icon">✏️</span> Edit</button>
+            <button class="btn btn-secondary" @click="openChat('plant', activePlant?.plant?.name)"><span class="btn-icon">💬</span> Ask about <span x-text="activePlant?.plant?.name"></span></button>
             <button class="btn btn-danger" @click="deletePlant(activePlant?.plant?.name)"><span class="btn-icon">🗑️</span> Delete</button>
           </div>
         </section>
@@ -395,10 +396,32 @@
       </section>
     </div>
 
+    <!-- View: Garden Chat -->
+    <div x-show="currentView === 'chat'" x-transition:enter="transition-fade-in" class="view-pane chat-view">
+      <header class="chat-header glass-panel">
+        <button class="btn btn-back" @click="setView(chatPlant ? 'detail' : 'dashboard')">← Back</button>
+        <span x-text="chatPlant ? ('Chat — ' + chatPlant) : 'Garden chat'"></span>
+      </header>
+      <div class="chat-log">
+        <template x-for="(m, i) in chatMessages" :key="i">
+          <div :class="'chat-msg chat-' + m.role">
+            <div x-show="m.role === 'assistant'" x-html="renderMarkdown(m.text || '')"></div>
+            <div x-show="m.role === 'user'" x-text="m.text"></div>
+          </div>
+        </template>
+        <div x-show="chatLoading" class="chat-msg chat-assistant chat-typing">…</div>
+      </div>
+      <form class="chat-input" @submit.prevent="sendChat()">
+        <input type="text" x-model="chatInput" placeholder="Ask a gardening question…" :disabled="chatLoading">
+        <button type="submit" :disabled="chatLoading">Send</button>
+      </form>
+    </div>
+
   </main>
 
   <!-- Floating Action Buttons -->
   <div class="fab-group" x-show="currentView === 'dashboard'">
+    <button class="fab btn-chat" @click="openChat('garden')" title="Garden chat">💬 Garden chat</button>
     <button class="fab btn-water-all" @click="waterAll('indoor')" title="Water all indoor plants">🏠 Water All Indoor</button>
     <button class="fab btn-water-all" @click="waterAll('outdoor')" title="Water all outdoor plants">☀️ Water All Outdoor</button>
     <button class="fab fab-add" @click="openAddForm()" title="Add a plant">+</button>
