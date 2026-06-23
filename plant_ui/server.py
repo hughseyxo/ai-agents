@@ -4,6 +4,7 @@ import re
 import json
 import logging
 import tempfile
+import asyncio
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Optional, Literal
@@ -420,7 +421,6 @@ def complete_care_task(data: CompleteTaskRequest, db: AgentDB = Depends(get_db))
 
 @app.post("/api/chat")
 async def chat_endpoint(req: ChatRequest):
-    import asyncio
     reply, session_id = await asyncio.to_thread(
         chat_backend.chat,
         message=req.message, scope=req.scope,
@@ -456,7 +456,6 @@ async def upload_photo(name: str, file: UploadFile = File(...), store: PlantStor
     except Exception:
         days_str = "unknown"
 
-    import asyncio
     p_path = _safe_profile_path_or_400(plant.name)
     profile_context = ""
     if p_path.exists():

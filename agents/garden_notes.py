@@ -113,7 +113,14 @@ def append_linked_note(plant_slug: str, note_rel_path: str, title: str) -> bool:
     if not path.exists():
         return False
     line = f"- [[{Path(note_rel_path).stem}|{title}]]"
+    # Known narrow TOCTOU: reads then writes non-atomically; concurrent intelligence runs could lose the link.
     content = path.read_text()
+
+    # Check for duplicate before inserting
+    stem = Path(note_rel_path).stem
+    if stem in content:
+        return True  # already linked
+
     if "## Linked Notes" in content:
         content = content.replace("## Linked Notes\n", f"## Linked Notes\n{line}\n", 1)
     else:

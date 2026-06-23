@@ -66,6 +66,15 @@ def test_append_linked_note(notes_dirs):
     assert "2026-06-23-leaf-spot" in text
 
 
+def test_append_linked_note_no_duplicates(notes_dirs):
+    _, _, plants = notes_dirs
+    (plants / "lavender.md").write_text("---\ntype: plant\n---\n# Lavender\n")
+    garden_notes.append_linked_note("lavender", "docs/plant-observations/lavender/2026-06-23-leaf-spot.md", "Leaf Spot")
+    garden_notes.append_linked_note("lavender", "docs/plant-observations/lavender/2026-06-23-leaf-spot.md", "Leaf Spot")
+    text = (plants / "lavender.md").read_text()
+    assert text.count("2026-06-23-leaf-spot") == 1
+
+
 def test_maybe_create_observation_note_gating(notes_dirs):
     assert garden_notes.maybe_create_observation_note("lavender", {"noteworthy": False}) is None
     (notes_dirs[2] / "lavender.md").write_text("---\ntype: plant\n---\n# Lavender\n")
