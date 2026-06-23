@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "concierge": {
+      "type": "stdio",
+      "command": "python3",
+      "args": ["mcp-servers/concierge_server.py"]
+    }
+  }
+}
