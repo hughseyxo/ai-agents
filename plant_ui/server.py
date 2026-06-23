@@ -20,6 +20,7 @@ sys.path.insert(0, str(REPO_ROOT / "telegram-bot"))
 
 from agents.plant_model import PlantStore, Plant, AssessmentRecord
 from agents.db import AgentDB
+from agents import garden_notes
 from agents.plant_profiles import (
     write_health_assessment,
     append_frequency_history,
@@ -508,7 +509,13 @@ async def upload_photo(name: str, file: UploadFile = File(...), store: PlantStor
         profile_notes = parsed.get("profile_notes", "")
         if profile_notes:
             write_health_assessment(plant.name, profile_notes)
-            
+
+        # Auto-create a standalone observation note when the assessment is noteworthy.
+        try:
+            garden_notes.maybe_create_observation_note(plant.name, parsed)
+        except Exception as e:
+            logger.warning("observation note creation failed: %s", e)
+
         # Save assessment summary to DB
         summary_to_save = parsed.get("summary", display_text)
         status_to_save = parsed.get("status", "Assessment")

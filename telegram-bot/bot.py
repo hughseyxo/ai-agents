@@ -14,6 +14,7 @@ from telegram.ext import ApplicationBuilder, CallbackQueryHandler, CommandHandle
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from agents.plant_profiles import write_health_assessment, write_profile_atomic, safe_profile_path
+from agents import garden_notes
 from tools import (
     update_plant,
     get_plant,
@@ -376,6 +377,12 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         profile_notes = parsed.get("profile_notes", "")
         if profile_notes:
             write_health_assessment(plant["name"], profile_notes)
+
+        # Auto-create a standalone observation note when the assessment is noteworthy.
+        try:
+            garden_notes.maybe_create_observation_note(plant["name"], parsed)
+        except Exception as e:
+            logger.warning("observation note creation failed: %s", e)
 
         # Save assessment summary to DB state (existing behaviour)
         save_plant_assessment(plant["name"], parsed.get("summary", display_text))

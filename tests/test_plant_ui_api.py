@@ -259,6 +259,51 @@ def test_complete_care_task_idempotent(client, mock_store_db):
     assert response.json()["remaining"] == 0
 
 
+_JPEG_BYTES = b"\xff\xd8\xff\xe0" + b"\x00" * 100
+
+
+def test_photo_noteworthy_creates_observation(client, mock_store_db, monkeypatch):
+    import plant_ui.server as srv
+    store, db, plants_dir = mock_store_db
+    plant_data = Plant(
+        name="Aloe",
+        frequency_days=20,
+        baseline_frequency_days=20,
+        last_watered=date.today() - timedelta(days=15),
+        location="indoor",
+    )
+    store.save_plants([plant_data])
+    plants_dir.mkdir(parents=True, exist_ok=True)
+    (plants_dir / "aloe.md").write_text("# Aloe\n## Health Assessments\n")
+
+    captured = {}
+    monkeypatch.setattr(
+        srv.garden_notes,
+        "maybe_create_observation_note",
+        lambda slug, parsed: captured.setdefault("called", (slug, parsed)) or "docs/x.md",
+    )
+    monkeypatch.setattr(
+        srv,
+        "assess_image",
+        lambda *a, **k: json.dumps({
+            "status": "Concern",
+            "summary": "aphids spotted",
+            "profile_notes": "### 2026-06-23 — Concern\n- aphids",
+            "noteworthy": True,
+            "note_title": "Aphids",
+            "note_body": "colony found",
+        }),
+    )
+
+    from io import BytesIO
+    r = client.post(
+        "/api/plants/Aloe/photo",
+        files={"file": ("p.jpg", BytesIO(_JPEG_BYTES), "image/jpeg")},
+    )
+    assert r.status_code == 200
+    assert captured["called"][0] == "Aloe"
+
+
 def test_photo_assessment(client, mock_store_db):
     store, db, plants_dir = mock_store_db
     

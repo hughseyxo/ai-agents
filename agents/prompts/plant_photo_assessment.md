@@ -18,8 +18,13 @@ Output this exact structure:
   "observations": ["specific observation 1", "specific observation 2"],
   "watering_recommendation": "immediate|on_schedule|delay",
   "frequency_suggestion": null,
-  "profile_notes": "### YYYY-MM-DD — <Status>\n<detailed notes to append under ## Health Assessments>"
+  "profile_notes": "### YYYY-MM-DD — <Status>\n<detailed notes to append under ## Health Assessments>",
+  "noteworthy": false,
+  "note_title": "",
+  "note_body": ""
 }
+
+Set "noteworthy" to true only when the assessment reveals a disease, pest infestation, nutrient deficiency, or a notable growth milestone that deserves a standalone observation record. When noteworthy is true, provide a concise "note_title" (plain text, ≤ 10 words) and a "note_body" (2–4 paragraphs of markdown detail). When noteworthy is false, omit or leave "note_title" and "note_body" as empty strings.
 
 If the visual evidence clearly warrants a frequency change, use this form instead of null:
 
