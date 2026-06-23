@@ -54,9 +54,10 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 │   ├── security_audit.py       # Security audit agent — 18 checks: 12 system + 4 seedbox + 2 web (Cloudflare IP validation, Shodan InternetDB). Schedule: Sunday 06:00 UTC / 08:00 CEST. Seedbox configs live in ~/git/yopflix (private repo).
 │   ├── commit_security.py      # Commit security agent (on-demand) — LLM-based scan of git diff for secrets/vulnerabilities. run_hook() used by .git/hooks/pre-push; blocks push on Critical/High. Also runnable via CLI.
 │   ├── travel_agent.py         # Travel agent (on-demand) — search mode: finds flights/hotels/activities; plan mode: itinerary from existing bookings. model: claude-sonnet-4-6. Design doc: docs/travel-agent.md
-│   ├── librarian.py            # Librarian agent (on-demand, cron-managed: audit Sun 06:00 UTC, watch Mon-Sat 06:00 UTC). Reads agent run history + output files, calls LLM to produce findings. Auto-applies learnings (confidence ≥0.8), emails prompt proposals (0.5-0.79) with approve/reject links via bridge server.
+│   ├── librarian.py            # Librarian agent (on-demand, cron-managed: audit Sun 06:00 UTC, watch Mon-Sat 06:00 UTC). Reads agent run history + output files, calls LLM to produce findings. Auto-applies learnings (confidence ≥0.8), emails prompt proposals (0.5-0.79) for review — approve/reject/plan via `python3 -m agents librarian-apply|librarian-reject|librarian-plan <id>` CLI.
 │   ├── plant_agent.py          # Master Plant Agent (schedule: 0 * * * * / hourly, model: claude-haiku-4-5). Steps (all frequency-gated): weather_update (every run, deterministic) → send_status_email (24h, LLM sends plant status table email) → intelligence_run (24h, LLM analyses plant profiles, flags needs_photo, appends notes to docs/plants/<slug>.md). (sync_watering/create_tasks/photo_requests were removed — the FloraPulse PWA is now the task source of truth.) Design doc: docs/superpowers/specs/2026-05-26-plant-sensitivity-and-underwatering-design.md
 │   ├── agent_health.py         # Agent Health monitor (schedule: 0 * * * * / hourly, deterministic, no LLM). Flags any scheduled agent whose last healthy run is older than 2× its cron interval; pushes Telegram alert (CONCIERGE_BOT_TOKEN) with dedup + recovery messages. Catches silently-dropped cron entries. Design doc: docs/agent-health-staleness-monitor.md
+│   ├── garden_notes.py         # Controlled Obsidian note writers: create_observation_note → docs/plant-observations/<slug>/YYYY-MM-DD-<title>.md, create_knowledge_note → docs/garden-knowledge/<topic>.md, append_linked_note (adds ## Linked Notes entry to plant profile), maybe_create_observation_note (auto-gate for photo assessments — creates note + profile link when noteworthy=true).
 │   └── prompts/                # LLM CLI synthesis prompt templates
 │       ├── daily_briefing.md
 │       ├── news_briefing.md
@@ -68,7 +69,8 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 │       ├── librarian_report.md      # Email send prompt
 │       ├── plant_status_email.md    # Plant status table email (used by send_status_email step)
 │       ├── plant_intelligence.md    # Intelligence analysis prompt (used by intelligence_run step)
-│       └── plant_photo_assessment.md # Photo assessment prompt (used by Telegram bot save_plant_assessment)
+│       ├── plant_photo_assessment.md # Photo assessment prompt (used by Telegram bot save_plant_assessment); extended with noteworthy/note_title/note_body fields — auto-creates observation note on noteworthy assessments
+│       └── garden_chat.md           # Gardening assistant system prompt (used by plant_ui/chat_backend.py)
 ├── telegram-bot/       # Server concierge Telegram bot (Antigravity/agy CLI primary, claude CLI secondary)
 │   ├── bot.py                  # Bot: polling, auth gate, agy-CLI primary path, claude-CLI fallback, photo assessment
 │   ├── antigravity_backend.py  # ask_antigravity(): pipes prompt via stdin to `agy --dangerously-skip-permissions` with concierge MCP (global agy config). Stateless (no session resume). _run_agy() helper; returns None on failure → caller falls back to claude.
@@ -93,8 +95,8 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 │   │   ├── mealsave_bot.py     # Telegram bot for remote saving
 │   │   └── check-yt-auth.sh    # YouTube cookie expiry check
 │   └── free-time/              # Suggest best tasks for a free time window
-├── mcp-servers/        # Custom MCP servers (calendar, gmail auth) + bridge_server.py (HTTP MCP over Tailscale for laptop access). GET /librarian/approve?id=&token= and /librarian/reject?id=&token= for one-click proposal approval. concierge_server.py exposes the concierge bot's tools (from telegram-bot/tool_specs.py) to the claude CLI.
-├── triggers/           # Agent operation docs — how to run agents on demand via the MCP bridge from laptop Claude Code. See triggers/README.md.
+├── mcp-servers/        # Custom MCP servers (calendar, gmail auth). concierge_server.py exposes the concierge bot's tools (from telegram-bot/tool_specs.py) to the claude CLI. (The MCP bridge_server.py + laptop/server auth were deleted 2026-06-22 — see Phase 0 of the code-review remediation.)
+├── triggers/           # Agent operation docs — how to run agents on demand directly on the server. See triggers/README.md.
 ├── tests/              # pytest test suite (run: pytest tests/)
 │   ├── test_synthesize.py      # Failover + prompt adaptation + providers override tests
 │   ├── test_news_briefing.py   # RSS parsing, dedup, Dutch translation, HTML/markdown builder tests
@@ -113,7 +115,7 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 │   ├── hermes-evaluation.md    # Summary of failed CLI-proxy/local-inference efforts
 │   ├── openrouter-telegram-bot.md # OpenRouter bot architecture (superseded by concierge)
 │   ├── telegram-bots.md        # Overview of all Telegram bots, status, failure history
-│   ├── mcp-bridge.md           # MCP bridge server design (Tailscale HTTP, 7 tools)
+│   ├── mcp-bridge.md           # SUPERSEDED (bridge deleted 2026-06-22) — kept for historical context only
 │   ├── travel-agent.md         # Travel agent design (search + plan modes, no API keys)
 │   ├── agent-health-staleness-monitor.md  # Agent Health monitor design (cron-interval staleness, Telegram alerts)
 │   └── superpowers/
@@ -122,7 +124,9 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
 │       └── plans/
 │           └── 2026-05-17-laptop-server-bridge.md  # Laptop↔server bridge implementation plan
 ├── plant_ui/           # FloraPulse Progressive Web App (PWA) served over Tailscale (port 8765)
-│   ├── server.py              # FastAPI app — REST API + static file serving
+│   ├── server.py              # FastAPI app — REST API + static file serving. POST /api/chat: {message, scope, plant_name?, session_id?} → {reply, session_id}; never 500.
+│   ├── chat_backend.py        # Gardening chat backend — Claude Sonnet (`claude -p --resume`, 180s timeout, `--add-dir docs/` read access, concierge MCP tools). **Claude-only by design** — Antigravity is stateless (no --resume), so no failover here.
+│   ├── garden_chat_mcp.json   # MCP config for chat backend (loads concierge server, --strict-mcp-config)
 │   ├── requirements.txt       # fastapi, uvicorn, python-multipart, aiofiles, python-dotenv, httpx, pillow
 │   ├── plant_ui.service       # systemd user service template
 │   ├── static/
@@ -175,7 +179,10 @@ Personal AI agent workspace for automating day-to-day tasks and learning AI auto
   - Weather cache written to `plant_weather_cache` table; `get_plant_status()` in the concierge bot reads from it
   - Indoor: ±1-2 days adjustment based on temp/humidity; Outdoor: ±1-3 days based on rain/heatwaves
   - Weather fetch failure is non-fatal — cache not updated, bot falls back to base schedule
-- **Plant profiles:** `docs/plants/<slug>.md` — created automatically, updated by intelligence runs. Contain observed behaviour, health assessments, frequency history, and LLM notes.
+- **Plant profiles:** `docs/plants/<slug>.md` — created automatically, updated by intelligence runs. Contain observed behaviour, health assessments, frequency history, LLM notes, and a `## Linked Notes` section listing observation notes created for that plant.
+- **Garden observation notes:** `docs/plant-observations/<slug>/YYYY-MM-DD-<title>.md` — auto-created on noteworthy photo assessments (both Telegram bot and PWA photo paths) and via concierge MCP tools. Linked from plant profiles' `## Linked Notes`.
+- **Garden knowledge notes:** `docs/garden-knowledge/<topic>.md` — general gardening knowledge captured via concierge tools or chat. Not plant-specific.
+- Both new note directories sync to CouchDB ~30s (same livesync-bridge as the rest of `docs/`).
 - **When adding a plant without an explicit frequency:** search the web for recommended indoor watering cadence, check at least 3 sources, and use the consensus value. Do NOT default to 7 days.
 
 # Available MCP Integrations
@@ -190,7 +197,7 @@ Configured for both Claude (`.mcp.json`) and Antigravity (`mcp_config.json`):
 - **Backend (primary):** **Antigravity** `agy` CLI (`antigravity_backend.py`, `ask_antigravity`) — spares Claude usage per project rule. Prompt piped via **stdin** to `agy --dangerously-skip-permissions` (NOT `-p`); system prompt prepended to the prompt text (no `--append-system-prompt`). Native tool use via the `concierge` MCP server loaded from agy's **global** config `~/.gemini/antigravity-cli/mcp_config.json` (symlink → `~/.gemini/config/mcp_config.json`) — no per-call MCP isolation. **Stateless** (no JSON output / session id, so no `--resume`; `--continue` unsafe since cron agents share agy history). Runs off the event loop via `run_in_executor`.
 - **Backend (secondary/fallback):** if `agy` fails (rc≠0/timeout/empty → `ask_antigravity` returns None), falls through to the `claude` CLI (`claude_backend.py`, Sonnet, `--strict-mcp-config` concierge-only) which also carries per-chat `--resume` multi-turn memory. The OpenRouter free-model loop has been **removed entirely**.
 - **Photo/vision path:** plant image analysis (`handle_photo` → `_identify_plant_from_image`, `_analyze_plant_image`) runs on the `claude` CLI via `claude_backend.assess_image()` — **Opus 4.8** (`VISION_MODEL`) reading the image with the `Read` tool on the Pro subscription (no API billing). No fallback: a CLI failure returns "assessment unavailable". The old free OpenRouter `VISION_MODELS` and the second-pass `_validate_plant_assessment` cross-check were removed (Opus is consistent enough to need neither).
-- **Tools:** defined once in `tool_specs.py` (canonical SPECS) — feed the concierge MCP server; tools execute inside `mcp-servers/concierge_server.py` (not dispatched by `bot.py`). `tools.py` holds the implementations.
+- **Tools:** defined once in `tool_specs.py` (canonical SPECS) — feed the concierge MCP server; tools execute inside `mcp-servers/concierge_server.py` (not dispatched by `bot.py`). `tools.py` holds the implementations. Garden-note tools: `create_observation_note`, `create_knowledge_note`, `list_garden_notes`, `read_garden_note`.
 - **Auth:** `TELEGRAM_USER_ID` env var — all other users silently ignored
 - **Service:** `concierge-bot.service` (systemd user service, `~/.config/systemd/user/`)
 - **Latency:** each reply spawns the CLI + MCP server (~2–6s); "typing" indicator covers it.
@@ -201,5 +208,7 @@ Configured for both Claude (`.mcp.json`) and Antigravity (`mcp_config.json`):
 - **Port:** 8765, bound to `0.0.0.0` (Tailscale: `100.96.86.73:8765`).
 - **Service:** `plant_ui.service` (systemd user service, `~/.config/systemd/user/`)
 - **Frontend:** Single Page Application (SPA) loading Alpine.js and Marked.js from CDN, custom vanilla CSS styling, service worker cached assets for offline capabilities.
+- **Chat views:** dashboard "Garden chat" button (scope=garden, whole-garden assistant) + plant detail "Ask about X" button (scope=plant, plant-scoped). Both use `POST /api/chat` with `--resume` session persistence per chat thread.
+- **Chat exception:** `chat_backend.py` is **Claude-only** — this is the one place where Antigravity is not tried first. Reason: `--resume` multi-turn memory requires Claude's stateful session IDs; Antigravity is stateless.
 - **Verification:** API tests live in `tests/test_plant_ui_api.py`. Runs via `.venv/bin/pytest tests/test_plant_ui_api.py`.
 
