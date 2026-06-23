@@ -19,7 +19,8 @@ EXPECTED_TOOLS = {
     "run_travel_agent", "get_travel_report", "water_plants", "water_plant",
     "add_plant", "update_plant", "set_plant_frequency", "research_plant_sunlight",
     "research_plant_watering", "save_recipe", "get_plant", "get_all_plants",
-    "remove_plant", "save_plant_assessment",
+    "remove_plant", "save_plant_assessment", "note_plant_observation",
+    "create_observation_note", "create_knowledge_note", "list_garden_notes", "read_garden_note",
 }
 
 
@@ -62,3 +63,15 @@ def test_water_plants_spec_has_location_enum():
 def test_every_spec_has_required_keys():
     for s in SPECS:
         assert "name" in s and "description" in s and "parameters" in s and "func" in s
+
+
+def test_note_tools_registered():
+    """Verify garden note tools are registered in SPECS."""
+    names = {s["name"] for s in SPECS}
+    assert {"create_observation_note", "create_knowledge_note",
+            "list_garden_notes", "read_garden_note"} <= names
+    fmap = func_map()
+    assert callable(fmap["create_observation_note"])
+    assert callable(fmap["create_knowledge_note"])
+    assert callable(fmap["list_garden_notes"])
+    assert callable(fmap["read_garden_note"])

@@ -29,6 +29,10 @@ from tools import (
     get_all_plants,
     save_plant_assessment,
     note_plant_observation,
+    create_observation_note,
+    create_knowledge_note,
+    list_garden_notes,
+    read_garden_note,
 )
 
 _EMPTY = {"type": "object", "properties": {}, "required": []}
@@ -286,6 +290,51 @@ SPECS = [
             "required": ["name", "notes"],
         },
         "func": note_plant_observation,
+    },
+    {
+        "name": "create_observation_note",
+        "description": "Create a dated Obsidian observation note for a plant (disease, pest, milestone, notable change) and link it from the plant profile.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "plant_name": {"type": "string", "description": "Plant the observation is about (e.g. 'Lavender')."},
+                "title": {"type": "string", "description": "Short note title (e.g. 'Leaf spot on lower leaves')."},
+                "body": {"type": "string", "description": "Full observation in markdown."},
+                "status": {"type": "string", "description": "Health status label (e.g. 'Healthy', 'Concern'). Optional."},
+            },
+            "required": ["plant_name", "title", "body"],
+        },
+        "func": create_observation_note,
+    },
+    {
+        "name": "create_knowledge_note",
+        "description": "Create a general gardening knowledge Obsidian note (care technique, species reference, seasonal tip). Use when the user asks to save gardening knowledge.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "topic": {"type": "string", "description": "Note topic / title (e.g. 'Overwintering Pelargoniums')."},
+                "body": {"type": "string", "description": "Full note content in markdown."},
+                "related_plants": {"type": "string", "description": "Comma-separated plant names this relates to. Optional."},
+            },
+            "required": ["topic", "body"],
+        },
+        "func": create_knowledge_note,
+    },
+    {
+        "name": "list_garden_notes",
+        "description": "List all existing garden observation and knowledge notes (path + type).",
+        "parameters": _EMPTY,
+        "func": list_garden_notes,
+    },
+    {
+        "name": "read_garden_note",
+        "description": "Read the full contents of a garden note by its repo-relative path (from list_garden_notes).",
+        "parameters": {
+            "type": "object",
+            "properties": {"path": {"type": "string", "description": "Repo-relative note path."}},
+            "required": ["path"],
+        },
+        "func": read_garden_note,
     },
 ]
 

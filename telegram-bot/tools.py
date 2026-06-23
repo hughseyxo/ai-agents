@@ -21,6 +21,7 @@ from agents.db import AgentDB
 from agents.plant_weather import weather_adjusted_frequency, MIN_FREQUENCY, MAX_FREQUENCY
 from agents.weather import fetch_weather
 from agents.plant_profiles import append_frequency_history, write_profile_atomic, upsert_frontmatter, parse_frontmatter, safe_profile_path
+from agents import garden_notes
 
 AGENTS = ["daily-briefing", "news-briefing", "security-audit", "travel-agent", "librarian", "plant-agent", "agent-health"]
 DB_PATH = Path(__file__).parent.parent / "data" / "agents.db"
@@ -629,3 +630,50 @@ def set_plant_frequency(plant_name: str, frequency_days: int, reason: str = "") 
         return f"{match['name']} base frequency set to {target} days{suffix}."
     except Exception as e:
         return f"Failed to set frequency: {e}"
+
+
+# ---------------------------------------------------------------------------
+# Garden notes tools
+# ---------------------------------------------------------------------------
+
+def create_observation_note(plant_name: str, title: str, body: str, status: str = "Observation") -> str:
+    """Create a dated Obsidian observation note for a plant and link it from the profile."""
+    try:
+        from datetime import datetime, timezone
+        today = datetime.now(timezone.utc).date().isoformat()
+        rel = garden_notes.create_observation_note(plant_name, today, title, status, body)
+        garden_notes.append_linked_note(plant_name, rel, title)
+        return f"Saved observation note: {rel}"
+    except Exception as e:
+        return f"Error saving observation note: {e}"
+
+
+def create_knowledge_note(topic: str, body: str, related_plants: str = "") -> str:
+    """Create a general gardening knowledge Obsidian note."""
+    try:
+        plants = tuple(p.strip() for p in related_plants.split(",") if p.strip())
+        rel = garden_notes.create_knowledge_note(topic, body, plants)
+        return f"Saved knowledge note: {rel}"
+    except Exception as e:
+        return f"Error saving knowledge note: {e}"
+
+
+def list_garden_notes() -> str:
+    """List all existing garden observation and knowledge notes."""
+    try:
+        notes = garden_notes.list_garden_notes()
+        if not notes:
+            return "No garden notes yet."
+        return "\n".join(f"- [{n['type']}] {n['path']}" for n in notes)
+    except Exception as e:
+        return f"Error listing garden notes: {e}"
+
+
+def read_garden_note(path: str) -> str:
+    """Read the full contents of a garden note by its repo-relative path."""
+    try:
+        return garden_notes.read_garden_note(path)
+    except ValueError as e:
+        return f"Error: {e}"
+    except Exception as e:
+        return f"Error reading garden note: {e}"

@@ -34,6 +34,10 @@ from tools import (
     research_plant_water_sensitivity,
     add_plant,
     set_plant_frequency,
+    create_observation_note,
+    create_knowledge_note,
+    list_garden_notes,
+    read_garden_note,
 )
 
 FAKE_PLANTS = [
@@ -925,3 +929,87 @@ def test_set_plant_frequency_not_found():
     with patch("tools.AgentDB", return_value=mock_db):
         result = set_plant_frequency("Ghost", 5)
     assert "No plant" in result
+
+
+# ---------------------------------------------------------------------------
+# Garden notes tools
+# ---------------------------------------------------------------------------
+
+def test_create_observation_note_tool(monkeypatch):
+    """Test wrapper for create_observation_note from garden_notes."""
+    import tools
+    monkeypatch.setattr(tools.garden_notes, "create_observation_note",
+                        lambda plant_slug, date, title, status, body: "docs/plant-observations/test/2026-06-23-test.md")
+    monkeypatch.setattr(tools.garden_notes, "append_linked_note", lambda plant_slug, rel, title: True)
+
+    out = tools.create_observation_note(plant_name="Test", title="Test Title", body="Test body")
+    assert "plant-observations" in out
+    assert "Saved observation note" in out
+
+
+def test_create_knowledge_note_tool(monkeypatch):
+    """Test wrapper for create_knowledge_note from garden_notes."""
+    import tools
+    monkeypatch.setattr(tools.garden_notes, "create_knowledge_note",
+                        lambda topic, body, related_plants=(): "docs/garden-knowledge/test-topic.md")
+
+    out = tools.create_knowledge_note(topic="Test Topic", body="Test body")
+    assert "garden-knowledge" in out
+    assert "Saved knowledge note" in out
+
+
+def test_create_knowledge_note_with_related_plants(monkeypatch):
+    """Test create_knowledge_note with comma-separated plant list."""
+    import tools
+    monkeypatch.setattr(tools.garden_notes, "create_knowledge_note",
+                        lambda topic, body, related_plants=(): f"docs/garden-knowledge/{topic}.md")
+
+    out = tools.create_knowledge_note(topic="Watering Tips", body="content", related_plants="Monstera, Aloe, Lavender")
+    assert "Watering Tips" in out
+
+
+def test_list_garden_notes_tool(monkeypatch):
+    """Test wrapper for list_garden_notes from garden_notes."""
+    import tools
+    monkeypatch.setattr(tools.garden_notes, "list_garden_notes",
+                        lambda: [
+                            {"path": "docs/plant-observations/monstera/2026-06-23-test.md", "type": "observation", "title": "test"},
+                            {"path": "docs/garden-knowledge/watering.md", "type": "knowledge", "title": "watering"},
+                        ])
+
+    out = tools.list_garden_notes()
+    assert "[observation]" in out
+    assert "[knowledge]" in out
+    assert "docs/plant-observations" in out
+    assert "docs/garden-knowledge" in out
+
+
+def test_list_garden_notes_empty(monkeypatch):
+    """Test list_garden_notes when no notes exist."""
+    import tools
+    monkeypatch.setattr(tools.garden_notes, "list_garden_notes", lambda: [])
+
+    out = tools.list_garden_notes()
+    assert "No garden notes" in out
+
+
+def test_read_garden_note_tool(monkeypatch):
+    """Test wrapper for read_garden_note from garden_notes."""
+    import tools
+    test_content = "---\ntype: observation\n---\n# Test Note\n\nContent here"
+    monkeypatch.setattr(tools.garden_notes, "read_garden_note",
+                        lambda path: test_content)
+
+    out = tools.read_garden_note(path="docs/plant-observations/test/2026-06-23-test.md")
+    assert "Test Note" in out
+    assert test_content == out
+
+
+def test_read_garden_note_not_found(monkeypatch):
+    """Test read_garden_note when note doesn't exist."""
+    import tools
+    monkeypatch.setattr(tools.garden_notes, "read_garden_note",
+                        lambda path: (_ for _ in ()).throw(ValueError("note not found or outside note dirs: invalid.md")))
+
+    out = tools.read_garden_note(path="invalid.md")
+    assert "Error" in out or "not found" in out
