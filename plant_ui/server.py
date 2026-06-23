@@ -30,6 +30,7 @@ from agents.plant_profiles import (
     write_profile_atomic
 )
 from claude_backend import assess_image
+from plant_ui import chat_backend
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("plant_ui")
@@ -85,6 +86,12 @@ class WaterAllRequest(BaseModel):
 class CompleteTaskRequest(BaseModel):
     plant: str
     action: str
+
+class ChatRequest(BaseModel):
+    message: str = Field(min_length=1, max_length=4000)
+    scope: Literal["garden", "plant"] = "garden"
+    plant_name: Optional[str] = None
+    session_id: Optional[str] = None
 
 # Helper functions
 def get_store() -> PlantStore:
@@ -409,6 +416,19 @@ def complete_care_task(data: CompleteTaskRequest, db: AgentDB = Depends(get_db))
     today = date.today().isoformat()
     append_intelligence_note(data.plant, f"### {today} (completed)\n- {data.action} (marked done via PWA)")
     return {"status": "success", "remaining": len(updated)}
+
+
+@app.post("/api/chat")
+async def chat_endpoint(req: ChatRequest):
+    import asyncio
+    reply, session_id = await asyncio.to_thread(
+        chat_backend.chat,
+        message=req.message, scope=req.scope,
+        plant_name=req.plant_name, session_id=req.session_id,
+    )
+    if reply is None:
+        reply = "Sorry — the gardening assistant is unavailable right now. Try again shortly."
+    return {"reply": reply, "session_id": session_id}
 
 
 @app.post("/api/plants/{name}/photo")

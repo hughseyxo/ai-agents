@@ -259,6 +259,23 @@ def test_complete_care_task_idempotent(client, mock_store_db):
     assert response.json()["remaining"] == 0
 
 
+def test_chat_endpoint_happy(client, monkeypatch):
+    import plant_ui.server as srv
+    monkeypatch.setattr(srv.chat_backend, "chat", lambda **kw: ("Water less in winter.", "sess-9"))
+    r = client.post("/api/chat", json={"message": "How often?", "scope": "garden"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["reply"] == "Water less in winter." and body["session_id"] == "sess-9"
+
+
+def test_chat_endpoint_backend_failure(client, monkeypatch):
+    import plant_ui.server as srv
+    monkeypatch.setattr(srv.chat_backend, "chat", lambda **kw: (None, None))
+    r = client.post("/api/chat", json={"message": "hi", "scope": "garden"})
+    assert r.status_code == 200
+    assert "unavailable" in r.json()["reply"].lower()
+
+
 _JPEG_BYTES = b"\xff\xd8\xff\xe0" + b"\x00" * 100
 
 
