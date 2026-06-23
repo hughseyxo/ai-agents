@@ -17,6 +17,7 @@ data/agents.db*
 data/*.corrupt-bak
 docs/agent-notes.md
 docs/security-audit-agent.md
+docs/_map/
 *.mp4
 *.mkv
 *.avi
