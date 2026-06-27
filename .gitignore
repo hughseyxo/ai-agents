@@ -30,3 +30,4 @@ mcp-servers/.env.bridge
 
 # Antigravity CLI per-repo conversation cache
 cache/
+data/wedding.db*

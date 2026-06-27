@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Our Wedding Fund</title>
+  <meta name="theme-color" content="#3d2b3d">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" href="/static/icon-192.png">
+  <link rel="manifest" href="/static/manifest.json">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Jost:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.15.12/dist/cdn.min.js"
+          integrity="sha384-pb6hrQvo4s23cEUFtj0CZkzGE3jyK3pj26RIupXXxhSrrcUA/Cn0lZgcCrGH0t6L"
+          crossorigin="anonymous"></script>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body x-data="weddingApp()" x-init="init()">
+
+  <div class="aurora"></div>
+
+  <main class="shell" :class="{ loaded }">
+
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark">&#10084;</span>
+        <div>
+          <h1>Our Wedding Fund</h1>
+          <p class="sub" x-text="`${b.config.guests} guests · ${b.tables} tables`"></p>
+        </div>
+      </div>
+      <nav class="tabs">
+        <button :class="{ active: view==='overview' }" @click="view='overview'">Overview</button>
+        <button :class="{ active: view==='afford' }" @click="view='afford'">Afford</button>
+        <button :class="{ active: view==='breakdown' }" @click="view='breakdown'">Breakdown</button>
+      </nav>
+    </header>
+
+    <!-- ===================== OVERVIEW ===================== -->
+    <section x-show="view==='overview'" class="view">
+      <div class="glass hero">
+        <svg class="ring" viewBox="0 0 200 200">
+          <circle class="ring-bg" cx="100" cy="100" r="86"/>
+          <circle class="ring-fg" cx="100" cy="100" r="86"
+                  :stroke-dasharray="ringCirc"
+                  :stroke-dashoffset="ringCirc - ringCirc * Math.min(b.pct_funded,100)/100"/>
+        </svg>
+        <div class="ring-center">
+          <span class="ring-pct" x-text="`${b.pct_funded}%`"></span>
+          <span class="ring-label">funded</span>
+        </div>
+      </div>
+
+      <div class="stat-row">
+        <div class="glass stat">
+          <span class="stat-k">Saved</span>
+          <span class="stat-v" x-text="money(b.savings)"></span>
+        </div>
+        <div class="glass stat">
+          <span class="stat-k">Goal (incl. buffer)</span>
+          <span class="stat-v" x-text="money(b.grand_total)"></span>
+        </div>
+        <div class="glass stat">
+          <span class="stat-k" x-text="b.fully_funded ? 'Surplus' : 'Still to save'"></span>
+          <span class="stat-v accent" x-text="money(b.gap)"></span>
+        </div>
+      </div>
+
+      <div class="glass savings-edit">
+        <label>How much have we saved?</label>
+        <div class="money-input">
+          <span>&euro;</span>
+          <input type="number" min="0" step="100" :value="b.savings"
+                 @change="setConfig({ savings: Number($event.target.value) })">
+        </div>
+        <p class="hint" x-text="affordHeadline()"></p>
+      </div>
+
+      <div class="cat-bars">
+        <template x-for="c in categoryTotals()" :key="c.name">
+          <div class="glass cat-bar">
+            <div class="cat-bar-head">
+              <span x-text="c.name"></span>
+              <span class="muted" x-text="money(c.total)"></span>
+            </div>
+            <div class="bar"><div class="bar-fill" :style="`width:${c.pct}%`"></div></div>
+          </div>
+        </template>
+      </div>
+    </section>
+
+    <!-- ===================== AFFORD ===================== -->
+    <section x-show="view==='afford'" class="view">
+      <p class="lede">With <strong x-text="money(b.savings)"></strong> saved, here's what's covered &mdash;
+        essentials first.</p>
+      <div class="afford-grid">
+        <template x-for="it in b.items" :key="it.key">
+          <div class="glass afford-card" :class="it.status">
+            <div class="afford-top">
+              <span class="afford-label" x-text="it.label"></span>
+              <span class="badge" :class="it.status" x-text="badgeText(it)"></span>
+            </div>
+            <div class="bar"><div class="bar-fill" :style="`width:${Math.min(it.pct_funded,100)}%`"></div></div>
+            <p class="afford-detail" x-text="coverageText(it)"></p>
+          </div>
+        </template>
+      </div>
+    </section>
+
+    <!-- ===================== BREAKDOWN ===================== -->
+    <section x-show="view==='breakdown'" class="view">
+      <div class="glass controls">
+        <div class="ctrl">
+          <label>Guests</label>
+          <input type="number" min="1" :value="b.config.guests"
+                 @change="setConfig({ guests: Number($event.target.value) })">
+        </div>
+        <div class="ctrl">
+          <label>Seats / table</label>
+          <input type="number" min="1" :value="b.config.seats_per_table"
+                 @change="setConfig({ seats_per_table: Number($event.target.value) })">
+        </div>
+        <div class="ctrl">
+          <label>Contingency %</label>
+          <input type="number" min="0" max="100" :value="b.config.contingency_pct"
+                 @change="setConfig({ contingency_pct: Number($event.target.value) })">
+        </div>
+        <button class="ghost" @click="reset()">Reset to Irish averages</button>
+      </div>
+
+      <template x-for="cat in groupedItems()" :key="cat.name">
+        <div class="cat-group">
+          <h3 x-text="cat.name"></h3>
+          <template x-for="it in cat.items" :key="it.key">
+            <div class="glass row" x-show="it.key !== '_contingency'">
+              <div class="row-main">
+                <span class="row-label" x-text="it.label"></span>
+                <span class="row-meta" x-text="scalingText(it)"></span>
+              </div>
+              <div class="row-edit">
+                <span class="euro">&euro;</span>
+                <input type="number" min="0" step="1" :value="it.unit_cost"
+                       @change="setItem(it.key, { unit_cost: Number($event.target.value) })">
+                <span class="row-total" x-text="money(it.line_total)"></span>
+                <button class="del" @click="delItem(it.key)" title="Remove">&times;</button>
+              </div>
+            </div>
+          </template>
+        </div>
+      </template>
+
+      <div class="glass total-row">
+        <span>Subtotal</span><span x-text="money(b.subtotal)"></span>
+      </div>
+      <div class="glass total-row">
+        <span x-text="`Contingency (${b.config.contingency_pct}%)`"></span><span x-text="money(b.contingency)"></span>
+      </div>
+      <div class="glass total-row grand">
+        <span>Grand total</span><span x-text="money(b.grand_total)"></span>
+      </div>
+
+      <details class="glass add-item">
+        <summary>+ Add a custom item</summary>
+        <div class="add-grid">
+          <input placeholder="key (e.g. marquee)" x-model="nu.key">
+          <input placeholder="Label" x-model="nu.label">
+          <input placeholder="Category" x-model="nu.category">
+          <input type="number" placeholder="Unit cost" x-model.number="nu.unit_cost">
+          <select x-model="nu.scaling">
+            <option value="fixed">fixed</option>
+            <option value="per_guest">per guest</option>
+            <option value="per_table">per table</option>
+          </select>
+          <button @click="addItem()">Add</button>
+        </div>
+      </details>
+    </section>
+
+    <footer class="foot">Seeded with Irish 2025/2026 averages &middot; every figure is editable</footer>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
