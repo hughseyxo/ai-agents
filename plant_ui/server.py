@@ -164,9 +164,49 @@ def _build_assessment_display(parsed: dict, plant_name: str) -> str:
     if rec:
         labels = {"immediate": "💧 Water now", "on_schedule": "✅ On schedule", "delay": "⏳ Delay watering"}
         lines += ["", labels.get(rec, f"Watering: {rec}")]
+    actions = parsed.get("care_actions") or []
+    action_lines = _format_care_action_lines(actions)
+    if action_lines:
+        lines += ["", "*Next steps:*"] + action_lines
     if freq and isinstance(freq, dict):
         lines += [f"📅 Suggested frequency: every {freq.get('days')} days"]
     return "\n".join(lines)
+
+
+_PRIORITY_EMOJI = {"high": "🔴", "medium": "🟡", "low": "🟢"}
+
+
+def _format_care_action_lines(actions: list) -> list[str]:
+    """Render care_actions as markdown list lines, highest priority first."""
+    order = {"high": 0, "medium": 1, "low": 2}
+    out = []
+    for a in sorted(
+        (a for a in actions if isinstance(a, dict) and a.get("action")),
+        key=lambda a: order.get(str(a.get("priority", "")).lower(), 1),
+    ):
+        prio = str(a.get("priority", "")).lower()
+        emoji = _PRIORITY_EMOJI.get(prio, "•")
+        reason = a.get("reason", "")
+        suffix = f" — {reason}" if reason else ""
+        out.append(f"{emoji} {a['action']}{suffix}")
+    return out
+
+
+def _format_care_actions_for_profile(actions: list) -> str:
+    """Deterministic markdown block appended to persisted profile notes."""
+    order = {"high": 0, "medium": 1, "low": 2}
+    rows = []
+    for a in sorted(
+        (a for a in actions if isinstance(a, dict) and a.get("action")),
+        key=lambda a: order.get(str(a.get("priority", "")).lower(), 1),
+    ):
+        prio = str(a.get("priority", "")).lower() or "medium"
+        reason = a.get("reason", "")
+        suffix = f" — {reason}" if reason else ""
+        rows.append(f"- ({prio}) {a['action']}{suffix}")
+    if not rows:
+        return ""
+    return "\n\n**Recommended next steps:**\n" + "\n".join(rows)
 
 def _extract_assessment_from_text(raw: str) -> dict | None:
     status_m = re.search(r'\*{0,2}[Ss]tatus\*{0,2}\s*[:\-]\s*([A-Za-z]+)', raw)
@@ -192,7 +232,8 @@ def _extract_assessment_from_text(raw: str) -> dict | None:
     if not (status_m or summary_m):
         return None
     return {"status": status, "summary": summary, "observations": obs,
-            "watering_recommendation": rec, "frequency_suggestion": None, "profile_notes": ""}
+            "watering_recommendation": rec, "care_actions": [],
+            "frequency_suggestion": None, "profile_notes": ""}
 
 # API Endpoints
 @app.get("/api/plants")
@@ -524,10 +565,12 @@ async def upload_photo(name: str, file: UploadFile = File(...), store: PlantStor
             display_text = f"*{plant.name}*\n\n{raw_response}"
             
     if parsed:
-        # Save structured notes to plant profile doc (## Health Assessments section)
+        # Save structured notes to plant profile doc (## Health Assessments section),
+        # folding in the prioritised care actions so next steps persist over time.
         profile_notes = parsed.get("profile_notes", "")
-        if profile_notes:
-            write_health_assessment(plant.name, profile_notes)
+        care_block = _format_care_actions_for_profile(parsed.get("care_actions") or [])
+        if profile_notes or care_block:
+            write_health_assessment(plant.name, (profile_notes + care_block).strip())
 
         # Auto-create a standalone observation note when the assessment is noteworthy.
         try:

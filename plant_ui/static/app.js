@@ -459,6 +459,23 @@ function plantApp() {
       this.setView('chat');
     },
 
+    // Open the plant-scoped chat seeded with the latest assessment's next steps.
+    discussActions() {
+      if (!this.activePlant) return;
+      const name = this.activePlant.plant.name;
+      const actions = (this.diagnosticResult?.parsed?.care_actions) || [];
+      this.openChat('plant', name);
+      if (actions.length) {
+        const list = actions.map(a => `- ${a.action}`).join('\n');
+        this.chatInput =
+          `Your latest assessment of my ${name} recommended these next steps:\n${list}\n\n` +
+          `Help me think through how and when to do them.`;
+      } else {
+        this.chatInput = `Let's talk through the next steps for my ${name} after your latest assessment.`;
+      }
+      this.sendChat();
+    },
+
     async sendChat() {
       const msg = this.chatInput.trim();
       if (!msg || this.chatLoading) return;

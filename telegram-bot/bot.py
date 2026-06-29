@@ -105,7 +105,8 @@ def _extract_assessment_from_text(raw: str) -> dict | None:
     if not (status_m or summary_m):
         return None
     return {"status": status, "summary": summary, "observations": obs,
-            "watering_recommendation": rec, "frequency_suggestion": None, "profile_notes": ""}
+            "watering_recommendation": rec, "care_actions": [],
+            "frequency_suggestion": None, "profile_notes": ""}
 
 
 def _load_species_context(plant_name: str) -> str:
@@ -205,6 +206,33 @@ def _identify_plant_from_image(image_bytes: bytes, plants: list) -> dict | None:
 
 _WATERING_LABELS = {"immediate": "💧 Water now", "on_schedule": "✅ On schedule", "delay": "⏳ Delay watering"}
 _STATUS_EMOJI = {"Healthy": "🟢", "Stressed": "🟡", "Concerning": "🟠", "Underwatered": "🔵", "Overwatered": "🔴"}
+_PRIORITY_EMOJI = {"high": "🔴", "medium": "🟡", "low": "🟢"}
+_PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
+
+
+def _sorted_care_actions(actions: list) -> list:
+    return sorted(
+        (a for a in (actions or []) if isinstance(a, dict) and a.get("action")),
+        key=lambda a: _PRIORITY_ORDER.get(str(a.get("priority", "")).lower(), 1),
+    )
+
+
+def _format_care_action_lines(actions: list) -> list:
+    out = []
+    for a in _sorted_care_actions(actions):
+        emoji = _PRIORITY_EMOJI.get(str(a.get("priority", "")).lower(), "•")
+        reason = a.get("reason", "")
+        out.append(f"{emoji} {a['action']}" + (f" — {reason}" if reason else ""))
+    return out
+
+
+def _format_care_actions_for_profile(actions: list) -> str:
+    rows = []
+    for a in _sorted_care_actions(actions):
+        prio = str(a.get("priority", "")).lower() or "medium"
+        reason = a.get("reason", "")
+        rows.append(f"- ({prio}) {a['action']}" + (f" — {reason}" if reason else ""))
+    return "\n\n**Recommended next steps:**\n" + "\n".join(rows) if rows else ""
 
 
 def _build_assessment_display(parsed: dict, plant: dict) -> str:
@@ -219,6 +247,9 @@ def _build_assessment_display(parsed: dict, plant: dict) -> str:
         lines += ["", "*Observations:*"] + [f"• {o}" for o in obs]
     if rec:
         lines += ["", _WATERING_LABELS.get(rec, f"Watering: {rec}")]
+    action_lines = _format_care_action_lines(parsed.get("care_actions"))
+    if action_lines:
+        lines += ["", "*Next steps:*"] + action_lines
     if freq and isinstance(freq, dict):
         lines += [f"📅 Suggested frequency: every {freq.get('days')} days"]
     return "\n".join(lines)
@@ -373,10 +404,11 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     display_text, parsed = await asyncio.to_thread(_analyze_plant_image, image_bytes, plant)
 
     if parsed:
-        # Save structured notes to plant profile doc (## Health Assessments section)
+        # Save structured notes to plant profile doc, folding in prioritised care actions.
         profile_notes = parsed.get("profile_notes", "")
-        if profile_notes:
-            write_health_assessment(plant["name"], profile_notes)
+        care_block = _format_care_actions_for_profile(parsed.get("care_actions"))
+        if profile_notes or care_block:
+            write_health_assessment(plant["name"], (profile_notes + care_block).strip())
 
         # Auto-create a standalone observation note when the assessment is noteworthy.
         try:

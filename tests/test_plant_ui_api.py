@@ -370,3 +370,64 @@ def test_photo_assessment(client, mock_store_db):
         
         # Verify markdown profile was updated
         assert "Looking very strong" in prof_path.read_text()
+
+
+def test_build_assessment_display_includes_care_actions():
+    from plant_ui.server import _build_assessment_display
+    parsed = {
+        "status": "Stressed",
+        "summary": "Lower leaves yellowing.",
+        "observations": ["Yellow lower leaves"],
+        "watering_recommendation": "delay",
+        "care_actions": [
+            {"action": "Remove the 3 yellow lower leaves", "priority": "high", "reason": "they won't recover and divert energy"},
+            {"action": "Move 1m closer to the window", "priority": "medium", "reason": "more light"},
+        ],
+    }
+    out = _build_assessment_display(parsed, "Aloe")
+    assert "Next steps" in out
+    assert "Remove the 3 yellow lower leaves" in out
+    assert "Move 1m closer to the window" in out
+    assert "more light" in out
+
+
+def test_photo_care_actions_persisted_to_profile(client, mock_store_db):
+    store, db, plants_dir = mock_store_db
+    plant_data = Plant(
+        name="Aloe",
+        frequency_days=20,
+        baseline_frequency_days=20,
+        last_watered=date.today() - timedelta(days=15),
+        location="indoor",
+    )
+    store.save_plants([plant_data])
+    plants_dir.mkdir(parents=True, exist_ok=True)
+    prof_path = plants_dir / "aloe.md"
+    prof_path.write_text("# Aloe\n## Health Assessments\n")
+
+    mock_response = json.dumps({
+        "status": "Stressed",
+        "summary": "Lower leaves yellowing.",
+        "observations": ["Yellow lower leaves"],
+        "watering_recommendation": "delay",
+        "care_actions": [
+            {"action": "Remove the 3 yellow lower leaves", "priority": "high", "reason": "they won't recover"},
+        ],
+        "profile_notes": "### 2026-06-29 — Stressed\n- Yellowing observed.",
+    })
+
+    with patch("plant_ui.server.assess_image", return_value=mock_response):
+        from io import BytesIO
+        jpeg_bytes = b"\xff\xd8\xff\xe0" + b"dummy image bytes"
+        r = client.post(
+            "/api/plants/Aloe/photo",
+            files={"file": ("p.jpg", BytesIO(jpeg_bytes), "image/jpeg")},
+        )
+        assert r.status_code == 200
+        data = r.json()
+        assert "Remove the 3 yellow lower leaves" in data["display_text"]
+        assert data["parsed"]["care_actions"][0]["priority"] == "high"
+
+    profile = prof_path.read_text()
+    assert "Remove the 3 yellow lower leaves" in profile
+    assert "Yellowing observed" in profile

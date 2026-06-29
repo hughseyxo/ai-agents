@@ -926,6 +926,12 @@ input[type="text"]:focus, input[type="number"]:focus, select:focus {
   gap: 10px;
 }
 
+.result-actions {
+  margin-top: 16px;
+  display: flex;
+  gap: 10px;
+}
+
 /* Floating Action Button (FAB) */
 .fab-group {
   position: fixed;

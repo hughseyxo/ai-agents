@@ -17,6 +17,7 @@ Output this exact structure:
   "summary": "2-3 sentence assessment of overall health",
   "observations": ["specific observation 1", "specific observation 2"],
   "watering_recommendation": "immediate|on_schedule|delay",
+  "care_actions": [{"action": "concise next step", "priority": "high|medium|low", "reason": "why this helps"}],
   "frequency_suggestion": null,
   "profile_notes": "### YYYY-MM-DD — <Status>\n<detailed notes to append under ## Health Assessments>",
   "noteworthy": false,
@@ -35,4 +36,5 @@ Assessment guidelines:
 - Be specific — name which leaves show symptoms, describe the growth stage, identify which symptoms are present
 - Only suggest a frequency change if the visual evidence is unambiguous and (where profile history exists) the pattern appears across multiple observations, not just one photo
 - watering_recommendation: "immediate" = water now regardless of schedule; "on_schedule" = follow existing schedule; "delay" = plant does not need water yet
+- care_actions: 1–4 concrete, prioritised next steps the owner should take, ordered most-important first. Go beyond watering — cover pruning (which leaves), light/placement, pest treatment, fertiliser, repotting, humidity, soil, etc. as the evidence warrants. Each action must be specific and doable ("Remove the 3 yellow lower leaves", not "improve plant health"). Set priority to "high" for issues needing action within days, "medium" within a couple of weeks, "low" for nice-to-haves. Use an empty list [] only when the plant is healthy and genuinely needs nothing beyond its current routine. Do NOT restate the watering_recommendation as a care_action.
 - profile_notes should be detailed enough to be useful in a future assessment — describe what you see concretely
