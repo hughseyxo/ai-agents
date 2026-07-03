@@ -263,7 +263,7 @@ class TestApplyIntelligenceOutput:
         plants_dir.mkdir(parents=True)
 
         plant = _make_plant(name="Fern", needs_photo=True)
-        agent.db.set_state("daily-briefing", "plants", [plant])
+        self._seed_store(agent, plant)
 
         output = json.dumps({
             "plants": [],  # Fern not mentioned
@@ -273,8 +273,12 @@ class TestApplyIntelligenceOutput:
         with patch("agents.plant_agent.REPO_ROOT", tmp_path):
             agent._apply_intelligence_output(output, [plant])
 
-        plants_in_db = agent.db.get_state("daily-briefing", "plants")
-        assert plants_in_db[0]["needs_photo"] is True
+        from agents.plant_model import PlantStore
+        store = PlantStore(agent.db.db_path)
+        fern = store.get_plant("Fern")
+        store.close()
+        assert fern is not None
+        assert fern.needs_photo is True
 
     def test_invalid_json_logs_and_skips(self, agent, tmp_path, capsys):
         plants_dir = tmp_path / "docs" / "plants"
