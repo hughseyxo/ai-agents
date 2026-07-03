@@ -25,6 +25,9 @@ class NewsBriefingAgent(BaseAgent):
     model = "claude-haiku-4-5"
     # Claude primary, Antigravity fallback (default PROVIDERS is Antigravity-first)
     providers = list(reversed(BaseAgent.PROVIDERS))
+    # Prompts embed untrusted RSS content; belt-and-braces with the Claude-first
+    # providers override above (untrusted_input alone would hard-exclude agy).
+    untrusted_input = True
 
     FEEDS = {
         "International": [

@@ -388,3 +388,22 @@ class TestSynthesize:
         prompt = mock_run.call_args[1]["input"]
         assert "Agent Learnings" not in prompt
         assert prompt == "Do a thing"
+
+
+def test_untrusted_input_skips_antigravity(monkeypatch):
+    from agents.base import BaseAgent
+
+    class A(BaseAgent):
+        name = "t-untrusted"
+        untrusted_input = True
+
+    calls = []
+
+    def fake_run(cmd, **kw):
+        calls.append(cmd[0])
+        m = type("R", (), {"returncode": 0, "stdout": "ok", "stderr": ""})()
+        return m
+
+    monkeypatch.setattr("agents.base.subprocess.run", fake_run)
+    A(db_path=":memory:").synthesize("hello")
+    assert calls and all(c == "claude" for c in calls)

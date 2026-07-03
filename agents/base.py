@@ -28,6 +28,7 @@ class BaseAgent:
     max_retries: int = 2
     model: str | None = None  # Claude model override (e.g. "claude-sonnet-4-6"); None = CLI default
     providers: list | None = None  # Override provider order/set; None = use PROVIDERS class default
+    untrusted_input: bool = False  # True → prompt embeds external content; never route to agy (no tool allowlist there)
 
     def __init__(self, db_path: str | Path = DEFAULT_DB_PATH):
         self.db = AgentDB(db_path)
@@ -156,7 +157,13 @@ class BaseAgent:
                 prompt = f"## Agent Learnings (apply these)\n{learnings}\n\n---\n\n{prompt}"
 
         last_error = None
-        for provider in (self.providers or self.PROVIDERS):
+        if self.providers:
+            providers = self.providers
+        elif self.untrusted_input:
+            providers = [p for p in self.PROVIDERS if p["name"] == "claude"]
+        else:
+            providers = self.PROVIDERS
+        for provider in providers:
             p_prompt = self._adapt_prompt_for_antigravity(prompt) if provider["adapt_prompt"] else prompt
             cmd = list(provider["cmd_prefix"]) + list(provider["cmd_suffix"])
 
