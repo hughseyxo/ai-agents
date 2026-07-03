@@ -16,6 +16,9 @@ tags: [dashboard, home, moc]
 - [[Librarian Intelligence]] — active learnings, recent findings, architecture memory
 - [[Memory]] — durable facts grouped by type
 
+## Reviews
+- [[reviews/2026-07-03-agents-skills-systematic-review|Agents & Skills Systematic Review (2026-07-03)]] — whole-repo findings + prioritised recommendations
+
 ## Recent Daily Notes
 
 ```dataview
