@@ -410,3 +410,106 @@ def test_translate_dutch_retries_on_bad_json(mock_synth, agent):
     agent._translate_dutch_step()
     assert agent.context["news_data"]["Netherlands"][0]["title"] == "Amsterdam floods"
     assert mock_synth.call_count == 2
+
+
+# ---- _run_briefing() — deterministic gmail_client send (Task 7) ----
+
+def _prep_briefing(agent, tmp_path, monkeypatch):
+    """Route output/ writes into tmp_path and stand up plan/news_data context."""
+    (tmp_path / "output").mkdir(exist_ok=True)
+    monkeypatch.setattr("agents.news_briefing.REPO_ROOT", tmp_path)
+    agent.context["plan"] = {"today": TODAY}
+    agent.context["news_data"] = SAMPLE_NEWS
+
+
+class TestRunBriefingSendsDirectly:
+    def test_run_briefing_sends_html_directly(self, agent, tmp_path, monkeypatch):
+        sent = {}
+        monkeypatch.setattr(
+            "agents.news_briefing.send_email",
+            lambda to, subject, body, **kw: sent.update(to=to, subject=subject, body=body) or {"id": "1"},
+        )
+        _prep_briefing(agent, tmp_path, monkeypatch)
+
+        result = agent._run_briefing()
+
+        assert result["sent"] is True
+        assert "<html" in sent["body"] or "<h" in sent["body"]
+        assert TODAY in sent["subject"]
+        assert sent["to"] == "cianohughes@gmail.com"
+
+    def test_run_briefing_does_not_call_synthesize(self, agent, tmp_path, monkeypatch):
+        """Sending must not round-trip through the LLM CLI at all."""
+        monkeypatch.setattr("agents.news_briefing.send_email", lambda *a, **kw: {"id": "1"})
+        _prep_briefing(agent, tmp_path, monkeypatch)
+
+        with patch.object(agent, "synthesize") as mock_synth:
+            agent._run_briefing()
+
+        mock_synth.assert_not_called()
+
+    def test_run_briefing_marks_sent_for_dedup(self, agent, tmp_path, monkeypatch):
+        monkeypatch.setattr("agents.news_briefing.send_email", lambda *a, **kw: {"id": "1"})
+        _prep_briefing(agent, tmp_path, monkeypatch)
+
+        agent._run_briefing()
+
+        assert agent.is_duplicate("email_sent", TODAY)
+
+    def test_run_briefing_send_failure_propagates_and_leaves_dedup_unmarked(self, agent, tmp_path, monkeypatch):
+        """A failed send must not be swallowed — BaseAgent needs the exception to
+        mark the run partial_failure, and the dedup key must stay unmarked so the
+        next run retries instead of silently skipping."""
+        def _boom(*a, **kw):
+            raise RuntimeError("gmail down")
+
+        monkeypatch.setattr("agents.news_briefing.send_email", _boom)
+        _prep_briefing(agent, tmp_path, monkeypatch)
+
+        with pytest.raises(RuntimeError):
+            agent._run_briefing()
+
+        assert not agent.is_duplicate("email_sent", TODAY)
+
+    def test_run_briefing_recipient_honours_env_override(self, agent, tmp_path, monkeypatch):
+        sent = {}
+        monkeypatch.setenv("AGENT_EMAIL_TO", "someoneelse@example.com")
+        monkeypatch.setattr(
+            "agents.news_briefing.send_email",
+            lambda to, subject, body, **kw: sent.update(to=to) or {"id": "1"},
+        )
+        _prep_briefing(agent, tmp_path, monkeypatch)
+
+        agent._run_briefing()
+
+        assert sent["to"] == "someoneelse@example.com"
+
+    def test_run_briefing_skips_when_already_sent(self, agent, tmp_path, monkeypatch):
+        sent = {}
+        monkeypatch.setattr(
+            "agents.news_briefing.send_email",
+            lambda *a, **kw: sent.update(called=True) or {"id": "1"},
+        )
+        _prep_briefing(agent, tmp_path, monkeypatch)
+        agent.mark_seen("email_sent", TODAY)
+
+        result = agent._run_briefing()
+
+        assert result == {"skipped": True, "reason": "already_sent"}
+        assert "called" not in sent
+
+    def test_run_briefing_skips_when_no_news(self, agent, tmp_path, monkeypatch):
+        sent = {}
+        monkeypatch.setattr(
+            "agents.news_briefing.send_email",
+            lambda *a, **kw: sent.update(called=True) or {"id": "1"},
+        )
+        (tmp_path / "output").mkdir(exist_ok=True)
+        monkeypatch.setattr("agents.news_briefing.REPO_ROOT", tmp_path)
+        agent.context["plan"] = {"today": TODAY}
+        agent.context["news_data"] = {k: [] for k in SAMPLE_NEWS}
+
+        result = agent._run_briefing()
+
+        assert result == {"skipped": True, "reason": "no_news"}
+        assert "called" not in sent

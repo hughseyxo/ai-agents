@@ -1,11 +1,13 @@
 """News Briefing Agent.
 
-Python handles: RSS fetching, parsing, dedup, selection, HTML/markdown building.
-LLM CLI (with MCP access) handles: sending the pre-built email only.
+Python handles: RSS fetching, parsing, dedup, selection, HTML/markdown building,
+and sending the built email directly via gmail_client.send_email().
+LLM CLI handles only genuine synthesis: Dutch translation and relevance scoring.
 """
 
 import html as html_lib
 import json
+import os
 import re
 import sys
 import time
@@ -17,6 +19,7 @@ from typing import Dict, List
 import requests
 
 from .base import BaseAgent, REPO_ROOT
+from .gmail_client import send_email
 
 
 class NewsBriefingAgent(BaseAgent):
@@ -496,15 +499,12 @@ class NewsBriefingAgent(BaseAgent):
         output_path = REPO_ROOT / "output" / f"daily-news-briefing-{today}.md"
         output_path.write_text(markdown)
 
-        prompt_path = REPO_ROOT / "agents" / "prompts" / "news_briefing.md"
-        prompt = prompt_path.read_text()
-        prompt = prompt.replace("{{TODAY}}", today)
-        prompt = prompt.replace("{{HTML_EMAIL}}", html_email)
-
-        result = self.synthesize(prompt)
-        if not result:
-            # Don't dedup a send that didn't happen — let the next run retry.
-            return {"sent": False, "error": "synthesize returned no result"}
+        # Let send_email() failures propagate: BaseAgent._execute_step records the
+        # step error and marks the run partial_failure. Dedup key stays unmarked on
+        # failure (we never reach mark_seen), so it retries next run.
+        send_email(os.environ.get("AGENT_EMAIL_TO", "cianohughes@gmail.com"),
+                   f"📰 News Briefing — {today}", html_email)
 
         self.mark_seen("email_sent", today)
-        return {"sent": True, "output_path": str(output_path)}
+        return {"sent": True, "output_path": str(output_path),
+                "articles": sum(len(v) for v in news_data.values())}
