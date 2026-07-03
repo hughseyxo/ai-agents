@@ -1,11 +1,12 @@
-"""Atomicity tests for the Google OAuth token writers in the MCP servers.
+"""Atomicity tests for the Google OAuth token writers used by Gmail/Calendar.
 
-Regression: gmail_server and calendar_server both refresh the shared
-~/.google_tokens.json. When a daily/news briefing spawns both MCP servers at
-once, their concurrent (and previously non-atomic) writes interleaved and
-corrupted the file, leaving "No refresh_token found" and silently killing the
-briefing emails. save_tokens() must write atomically so a crash or a racing
-writer can never leave a truncated / half-written file.
+Regression: agents.gmail_client (used by gmail_server) and calendar_server
+both refresh the shared ~/.google_tokens.json. When a daily/news briefing
+spawns both MCP servers at once, their concurrent (and previously
+non-atomic) writes interleaved and corrupted the file, leaving "No
+refresh_token found" and silently killing the briefing emails. save_tokens()
+must write atomically so a crash or a racing writer can never leave a
+truncated / half-written file.
 """
 
 import importlib.util
@@ -13,6 +14,8 @@ import json
 from pathlib import Path
 
 import pytest
+
+from agents import gmail_client
 
 MCP_DIR = Path(__file__).resolve().parent.parent / "mcp-servers"
 VALID_TOKENS = {
@@ -32,9 +35,11 @@ def _load_module(name):
     return module
 
 
-@pytest.fixture(params=["gmail_server", "calendar_server"])
+@pytest.fixture(params=["gmail_client", "calendar_server"])
 def server(request, tmp_path, monkeypatch):
-    module = _load_module(request.param)
+    # gmail's token load/save now lives in agents.gmail_client (extracted from
+    # gmail_server.py); calendar_server still owns its copy directly.
+    module = gmail_client if request.param == "gmail_client" else _load_module(request.param)
     token_file = tmp_path / ".google_tokens.json"
     token_file.write_text(json.dumps(VALID_TOKENS))
     monkeypatch.setattr(module, "TOKEN_FILE", str(token_file))
