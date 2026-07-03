@@ -21,6 +21,7 @@ EXPECTED_TOOLS = {
     "research_plant_watering", "save_recipe", "get_plant", "get_all_plants",
     "remove_plant", "save_plant_assessment", "note_plant_observation",
     "create_observation_note", "create_knowledge_note", "list_garden_notes", "read_garden_note",
+    "suggest_free_time_tasks",
 }
 
 

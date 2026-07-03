@@ -33,6 +33,7 @@ from tools import (
     create_knowledge_note,
     list_garden_notes,
     read_garden_note,
+    suggest_free_time_tasks,
 )
 
 _EMPTY = {"type": "object", "properties": {}, "required": []}
@@ -335,6 +336,16 @@ SPECS = [
             "required": ["path"],
         },
         "func": read_garden_note,
+    },
+    {
+        "name": "suggest_free_time_tasks",
+        "description": "Suggest the best Todoist inbox tasks that fit a free time window of N minutes.",
+        "parameters": {
+            "type": "object",
+            "properties": {"minutes": {"type": "integer", "description": "Available minutes"}},
+            "required": ["minutes"],
+        },
+        "func": suggest_free_time_tasks,
     },
 ]
 

@@ -677,3 +677,12 @@ def read_garden_note(path: str) -> str:
         return f"Error: {e}"
     except Exception as e:
         return f"Error reading garden note: {e}"
+
+
+def suggest_free_time_tasks(minutes: int) -> str:
+    """Suggest the best Todoist inbox tasks that fit a free time window of N minutes."""
+    try:
+        from agents.free_time import suggest
+        return suggest(int(minutes))
+    except Exception as e:
+        return f"Free-time suggestions unavailable: {e}"
