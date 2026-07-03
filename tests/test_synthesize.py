@@ -407,3 +407,56 @@ def test_untrusted_input_skips_antigravity(monkeypatch):
     monkeypatch.setattr("agents.base.subprocess.run", fake_run)
     A(db_path=":memory:").synthesize("hello")
     assert calls and all(c == "claude" for c in calls)
+
+
+def test_untrusted_input_overrides_providers_list(monkeypatch):
+    """untrusted_input must hard-exclude agy even from an explicit providers
+    override — including the failover path when claude exhausts retries."""
+    from agents.base import BaseAgent
+
+    class A(BaseAgent):
+        name = "t-untrusted-override"
+        untrusted_input = True
+        providers = list(reversed(BaseAgent.PROVIDERS))  # claude-first, agy fallback
+
+    calls = []
+
+    def fake_run(cmd, **kw):
+        calls.append(cmd[0])
+        # Every provider call fails, so failover would normally reach agy
+        m = type("R", (), {"returncode": 1, "stdout": "", "stderr": "boom"})()
+        return m
+
+    monkeypatch.setattr("agents.base.subprocess.run", fake_run)
+    monkeypatch.setattr("agents.base.time.sleep", lambda *_: None)
+
+    with pytest.raises(RuntimeError):
+        A(db_path=":memory:").synthesize("hello")
+
+    assert calls and all(c == "claude" for c in calls)
+
+
+def test_untrusted_input_with_no_safe_provider_fails_cleanly(monkeypatch, capsys):
+    """If untrusted_input filtering removes every provider, synthesize must
+    raise cleanly — never silently fall back to agy."""
+    from agents.base import BaseAgent
+
+    class A(BaseAgent):
+        name = "t-untrusted-empty"
+        untrusted_input = True
+        providers = [p for p in BaseAgent.PROVIDERS if p["name"] == "antigravity"]
+
+    calls = []
+
+    def fake_run(cmd, **kw):
+        calls.append(cmd[0])
+        m = type("R", (), {"returncode": 0, "stdout": "ok", "stderr": ""})()
+        return m
+
+    monkeypatch.setattr("agents.base.subprocess.run", fake_run)
+
+    with pytest.raises(RuntimeError):
+        A(db_path=":memory:").synthesize("hello")
+
+    assert calls == []  # agy must never be invoked
+    assert "untrusted_input" in capsys.readouterr().err

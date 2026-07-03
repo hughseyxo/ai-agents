@@ -157,12 +157,19 @@ class BaseAgent:
                 prompt = f"## Agent Learnings (apply these)\n{learnings}\n\n---\n\n{prompt}"
 
         last_error = None
-        if self.providers:
-            providers = self.providers
-        elif self.untrusted_input:
-            providers = [p for p in self.PROVIDERS if p["name"] == "claude"]
-        else:
-            providers = self.PROVIDERS
+        providers = self.providers or self.PROVIDERS
+        if self.untrusted_input:
+            # Hard-exclude the unsandboxed agy path from whatever list is in
+            # play (class default or per-agent override) — prompts embedding
+            # external content must only reach sandboxed providers.
+            providers = [p for p in providers if p["name"] != "antigravity"]
+            if not providers:
+                msg = (
+                    f"[{self.name}] untrusted_input=True left no safe LLM provider "
+                    "(all configured providers are unsandboxed); refusing to call agy"
+                )
+                print(f"[synthesize] {msg}", file=sys.stderr)
+                raise RuntimeError(msg)
         for provider in providers:
             p_prompt = self._adapt_prompt_for_antigravity(prompt) if provider["adapt_prompt"] else prompt
             cmd = list(provider["cmd_prefix"]) + list(provider["cmd_suffix"])
