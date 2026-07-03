@@ -391,3 +391,20 @@ async def test_handle_photo_unauthorized_user_ignored(mocker):
     await handle_photo(update, context)
 
     update.message.reply_text.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# main() startup
+# ---------------------------------------------------------------------------
+
+def test_main_refuses_to_start_without_allowed_user(monkeypatch, caplog):
+    import bot as bot_mod
+    monkeypatch.setattr(bot_mod, "TELEGRAM_TOKEN", "dummy-token")
+    monkeypatch.setattr(bot_mod, "ALLOWED_USER_ID", "")
+    called = {}
+    monkeypatch.setattr(
+        bot_mod, "ApplicationBuilder",
+        lambda: (_ for _ in ()).throw(AssertionError("must not build app")),
+    )
+    bot_mod.main()  # should return early, never touching ApplicationBuilder
+    assert "TELEGRAM_USER_ID" in caplog.text
