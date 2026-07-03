@@ -251,6 +251,11 @@ class LibrarianAgent(BaseAgent):
     schedule = ""
     model = "claude-haiku-4-5"
 
+    @classmethod
+    def cron_entries(cls) -> list[tuple[str, str]]:
+        return [("0 6 * * 0", f"{cls.name} --mode audit"),
+                ("0 6 * * 1-6", f"{cls.name} --mode watch")]
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.mode: str | None = None

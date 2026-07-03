@@ -22,6 +22,9 @@ class _Agent:
         self.name = name
         self.schedule = schedule
 
+    def cron_entries(self):
+        return [(self.schedule, self.name)] if self.schedule else []
+
 
 # --- fail-closed on crontab -l error ---
 
@@ -118,3 +121,18 @@ class TestInstallCronSanitises:
         assert len(write_calls) == 1
         written = write_calls[0][1]["input"]
         assert "daily-briefing" in written
+
+
+# --- cron_entries() ---
+
+def test_librarian_cron_entries_cover_both_modes():
+    from agents.librarian import LibrarianAgent
+    assert LibrarianAgent.cron_entries() == [
+        ("0 6 * * 0", "librarian --mode audit"),
+        ("0 6 * * 1-6", "librarian --mode watch"),
+    ]
+
+
+def test_default_cron_entries_from_schedule():
+    from agents.plant_agent import PlantAgent
+    assert PlantAgent.cron_entries() == [("0 * * * *", "plant-agent")]

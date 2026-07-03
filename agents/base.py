@@ -30,6 +30,12 @@ class BaseAgent:
     providers: list | None = None  # Override provider order/set; None = use PROVIDERS class default
     untrusted_input: bool = False  # True → prompt embeds external content; never route to agy (no tool allowlist there)
 
+    @classmethod
+    def cron_entries(cls) -> list[tuple[str, str]]:
+        """(cron_schedule, argv_suffix) pairs for install-cron. Override for agents
+        needing multiple entries or extra args (e.g. librarian --mode)."""
+        return [(cls.schedule, cls.name)] if cls.schedule else []
+
     def __init__(self, db_path: str | Path = DEFAULT_DB_PATH):
         self.db = AgentDB(db_path)
         self.run_id: int | None = None

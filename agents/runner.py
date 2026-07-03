@@ -21,7 +21,9 @@ from pathlib import Path
 # Cron schedules contain only digits, * / , - and spaces; agent names are
 # lowercase slugs. Anything else is a shell-injection vector into the crontab.
 _CRON_SCHEDULE_RE = re.compile(r"[\d\*/,\- ]+")
-_AGENT_NAME_RE = re.compile(r"[a-z0-9\-]+")
+# Each whitespace-separated token of a cron_entries() argv suffix (agent name
+# or a --flag/value) must match this — same fail-closed intent as above.
+_CRON_TOKEN_RE = re.compile(r"--?[a-z\-]+|[a-z0-9\-]+")
 
 from .db import AgentDB, DEFAULT_DB_PATH
 
@@ -117,26 +119,27 @@ def cmd_install_cron(args):
 
     lines = []
     for cls in agents:
-        if not cls.schedule:
-            continue
-        # Sanitise the class-attr-derived fields before they become a crontab
-        # line — fail closed rather than emit an injectable entry.
-        if not _CRON_SCHEDULE_RE.fullmatch(cls.schedule):
-            print(
-                f"Refusing to install: agent '{cls.name}' has an invalid cron "
-                f"schedule {cls.schedule!r}",
-                file=sys.stderr,
+        for sched, suffix in cls.cron_entries():
+            # Sanitise the class-attr-derived fields before they become a crontab
+            # line — fail closed rather than emit an injectable entry.
+            if not _CRON_SCHEDULE_RE.fullmatch(sched):
+                print(
+                    f"Refusing to install: agent '{cls.name}' has an invalid cron "
+                    f"schedule {sched!r}",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+            for token in suffix.split():
+                if not _CRON_TOKEN_RE.fullmatch(token):
+                    print(
+                        f"Refusing to install: agent '{cls.name}' has an invalid "
+                        f"crontab token {token!r}",
+                        file=sys.stderr,
+                    )
+                    sys.exit(1)
+            lines.append(
+                f"{sched} {run_agent} {suffix} >> {log_file} 2>&1"
             )
-            sys.exit(1)
-        if not _AGENT_NAME_RE.fullmatch(cls.name):
-            print(
-                f"Refusing to install: invalid agent name {cls.name!r}",
-                file=sys.stderr,
-            )
-            sys.exit(1)
-        lines.append(
-            f"{cls.schedule} {run_agent} {cls.name} >> {log_file} 2>&1"
-        )
 
     if not lines:
         print("No agents with schedules found.")
@@ -178,6 +181,12 @@ def cmd_install_cron(args):
             continue
         if not skipping:
             filtered.append(line)
+
+    strays = [l for l in filtered if "run-agent.sh" in l]
+    if strays:
+        print("WARNING: unmanaged run-agent.sh crontab lines (move into managed block):", file=sys.stderr)
+        for l in strays:
+            print(f"  {l}", file=sys.stderr)
 
     # Add new entries
     filtered.append(marker_start)
