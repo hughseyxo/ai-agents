@@ -52,6 +52,12 @@ CREATE TABLE IF NOT EXISTS seen (
     PRIMARY KEY (agent, category, identifier)
 );
 
+CREATE TABLE IF NOT EXISTS plants (
+    name    TEXT PRIMARY KEY,
+    data    TEXT NOT NULL,
+    updated TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE INDEX IF NOT EXISTS idx_runs_agent_date ON runs(agent, started_at DESC);
 CREATE INDEX IF NOT EXISTS idx_seen_lookup ON seen(agent, category, identifier);
 """
@@ -199,3 +205,31 @@ class AgentDB:
                 "SELECT plant_name, adjusted_date, adjustment_reason, updated_at FROM plant_weather_cache"
             ).fetchall()
         return [dict(r) for r in rows]
+
+    # --- Plants (row-per-plant) ---
+
+    def get_plant_rows(self) -> list[dict]:
+        with self._lock:
+            rows = self._conn.execute("SELECT data FROM plants ORDER BY rowid").fetchall()
+        return [json.loads(r["data"]) for r in rows]
+
+    def upsert_plant_row(self, name: str, data: dict):
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO plants (name, data, updated) VALUES (?, ?, datetime('now')) "
+                "ON CONFLICT(name) DO UPDATE SET data=excluded.data, updated=excluded.updated",
+                (name.lower(), json.dumps(data)))
+            self._conn.commit()
+
+    def delete_plant_row(self, name: str):
+        with self._lock:
+            self._conn.execute("DELETE FROM plants WHERE name = ?", (name.lower(),))
+            self._conn.commit()
+
+    def replace_plant_rows(self, rows: list[dict]):
+        with self._lock:
+            self._conn.execute("DELETE FROM plants")
+            for data in rows:
+                self._conn.execute("INSERT INTO plants (name, data) VALUES (?, ?)",
+                                   (data["name"].lower(), json.dumps(data)))
+            self._conn.commit()

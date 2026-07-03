@@ -235,3 +235,123 @@ class TestPlantIntelligenceResult:
         })
         with pytest.raises(ValidationError):
             PlantIntelligenceResult.from_llm_output(bad)
+
+
+# --- Row-per-plant storage (Task 8) ---
+
+def test_store_migrates_legacy_blob_to_rows(tmp_path):
+    from agents.db import AgentDB
+    from agents.plant_model import PlantStore
+    db = AgentDB(tmp_path / "t.db")
+    db.set_state("daily-briefing", "plants", [{"name": "Aloe", "frequency_days": 10}])
+    db.close()
+    store = PlantStore(tmp_path / "t.db")
+    assert [p.name for p in store.get_plants()] == ["Aloe"]
+    assert store._db.get_plant_rows()  # rows populated, legacy blob no longer authoritative
+    store.close()
+
+
+def test_update_fields_touches_only_one_row(tmp_path):
+    from agents.plant_model import PlantStore, Plant
+    from datetime import date
+    store = PlantStore(tmp_path / "t.db")
+    store.add(Plant(name="Aloe", frequency_days=10, baseline_frequency_days=10, last_watered=date.today()))
+    store.add(Plant(name="Yucca", frequency_days=14, baseline_frequency_days=14, last_watered=date.today()))
+    out = store.update_fields("aloe", frequency_days=5)
+    assert out.frequency_days == 5
+    assert store.get_plant("Yucca").frequency_days == 14
+    store.close()
+
+
+class TestAgentDBPlantRows:
+    """AgentDB row helpers backing PlantStore (upsert overwrite, delete, replace)."""
+
+    def test_get_plant_rows_empty(self, tmp_path):
+        from agents.db import AgentDB
+        db = AgentDB(tmp_path / "t.db")
+        assert db.get_plant_rows() == []
+        db.close()
+
+    def test_upsert_plant_row_overwrites(self, tmp_path):
+        from agents.db import AgentDB
+        db = AgentDB(tmp_path / "t.db")
+        db.upsert_plant_row("Aloe", {"name": "Aloe", "frequency_days": 10})
+        db.upsert_plant_row("Aloe", {"name": "Aloe", "frequency_days": 20})
+        rows = db.get_plant_rows()
+        assert len(rows) == 1
+        assert rows[0]["frequency_days"] == 20
+        db.close()
+
+    def test_upsert_plant_row_keyed_lowercase(self, tmp_path):
+        from agents.db import AgentDB
+        db = AgentDB(tmp_path / "t.db")
+        db.upsert_plant_row("Aloe Vera", {"name": "Aloe Vera", "frequency_days": 10})
+        db.upsert_plant_row("ALOE VERA", {"name": "Aloe Vera", "frequency_days": 30})
+        assert len(db.get_plant_rows()) == 1
+        db.close()
+
+    def test_delete_plant_row(self, tmp_path):
+        from agents.db import AgentDB
+        db = AgentDB(tmp_path / "t.db")
+        db.upsert_plant_row("Aloe", {"name": "Aloe", "frequency_days": 10})
+        db.upsert_plant_row("Yucca", {"name": "Yucca", "frequency_days": 14})
+        db.delete_plant_row("aloe")
+        rows = db.get_plant_rows()
+        assert [r["name"] for r in rows] == ["Yucca"]
+        db.close()
+
+    def test_delete_plant_row_missing_is_noop(self, tmp_path):
+        from agents.db import AgentDB
+        db = AgentDB(tmp_path / "t.db")
+        db.delete_plant_row("nonexistent")  # should not raise
+        assert db.get_plant_rows() == []
+        db.close()
+
+    def test_replace_plant_rows_clears_previous(self, tmp_path):
+        from agents.db import AgentDB
+        db = AgentDB(tmp_path / "t.db")
+        db.upsert_plant_row("Aloe", {"name": "Aloe", "frequency_days": 10})
+        db.replace_plant_rows([{"name": "Yucca", "frequency_days": 14}])
+        rows = db.get_plant_rows()
+        assert [r["name"] for r in rows] == ["Yucca"]
+        db.close()
+
+
+class TestPlantStoreRowOps:
+    """PlantStore.add / remove / update_fields / get_plants_raw."""
+
+    def test_add_persists_plant(self, store):
+        store.add(_make_plant("Aloe"))
+        assert [p.name for p in store.get_plants()] == ["Aloe"]
+
+    def test_add_second_plant_does_not_drop_first(self, store):
+        store.add(_make_plant("Aloe"))
+        store.add(_make_plant("Yucca"))
+        assert sorted(p.name for p in store.get_plants()) == ["Aloe", "Yucca"]
+
+    def test_remove_existing_returns_true(self, store):
+        store.add(_make_plant("Aloe"))
+        assert store.remove("aloe") is True
+        assert store.get_plants() == []
+
+    def test_remove_missing_returns_false(self, store):
+        store.add(_make_plant("Aloe"))
+        assert store.remove("Cactus") is False
+        assert len(store.get_plants()) == 1
+
+    def test_update_fields_not_found_returns_none(self, store):
+        assert store.update_fields("Nonexistent", frequency_days=5) is None
+
+    def test_update_fields_rename_moves_row(self, store):
+        store.add(_make_plant("Aloe"))
+        updated = store.update_fields("aloe", name="Aloe Vera")
+        assert updated.name == "Aloe Vera"
+        assert store.get_plant("Aloe Vera") is not None
+        # old row key gone, no duplicate under the old name
+        assert len(store.get_plants()) == 1
+
+    def test_get_plants_raw_returns_dicts(self, store):
+        store.add(_make_plant("Aloe"))
+        raw = store.get_plants_raw()
+        assert isinstance(raw, list)
+        assert raw[0]["name"] == "Aloe"

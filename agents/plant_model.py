@@ -84,10 +84,18 @@ class PlantIntelligenceResult(BaseModel):
 # --- PlantStore ---
 
 class PlantStore:
-    """Typed read/write access to the plant list in AgentDB."""
+    """Typed read/write access to the plant list in AgentDB.
 
-    DB_AGENT = "daily-briefing"
-    DB_KEY = "plants"
+    Storage is row-per-plant (the `plants` table in AgentDB), keyed by
+    `name.lower()`. The legacy single-blob state key (agent="daily-briefing",
+    key="plants") is migrated lazily on first read and left in place
+    afterwards for rollback — but rows are authoritative once populated, so
+    the two copies WILL diverge on subsequent writes. Any code path that
+    still reads/writes the legacy blob directly (outside this class) is
+    stale as of this migration.
+    """
+
+    LEGACY_AGENT, LEGACY_KEY = "daily-briefing", "plants"
 
     def __init__(self, db_path: str | Path = DEFAULT_DB_PATH):
         self._db = AgentDB(db_path)
@@ -95,12 +103,23 @@ class PlantStore:
     def close(self) -> None:
         self._db.close()
 
+    def _ensure_migrated(self) -> None:
+        if self._db.get_plant_rows():
+            return
+        legacy = self._db.get_state(self.LEGACY_AGENT, self.LEGACY_KEY) or []
+        if legacy:
+            self._db.replace_plant_rows([self._migrate(r).model_dump(mode="json") for r in legacy])
+            # keep the legacy blob for rollback; rows are now authoritative
+
     def get_plants(self) -> list[Plant]:
-        raw = self._db.get_state(self.DB_AGENT, self.DB_KEY) or []
-        return [self._migrate(r) for r in raw]
+        self._ensure_migrated()
+        return [self._migrate(r) for r in self._db.get_plant_rows()]
+
+    def get_plants_raw(self) -> list[dict]:
+        return [p.model_dump(mode="json") for p in self.get_plants()]
 
     def save_plants(self, plants: list[Plant]) -> None:
-        self._db.set_state(self.DB_AGENT, self.DB_KEY, [p.model_dump(mode="json") for p in plants])
+        self._db.replace_plant_rows([p.model_dump(mode="json") for p in plants])
 
     def get_plant(self, name: str) -> Optional[Plant]:
         name_lower = name.lower().strip()
@@ -110,15 +129,38 @@ class PlantStore:
             or next((p for p in plants if name_lower in p.name.lower()), None)
         )
 
+    def add(self, plant: Plant) -> None:
+        self._ensure_migrated()
+        self._db.upsert_plant_row(plant.name, plant.model_dump(mode="json"))
+
+    def remove(self, name: str) -> bool:
+        p = self.get_plant(name)
+        if not p:
+            return False
+        self._db.delete_plant_row(p.name)
+        return True
+
     def update_plant(self, updated: Plant) -> bool:
         """Replace an existing plant by name. Returns False if not found."""
-        plants = self.get_plants()
-        for i, p in enumerate(plants):
-            if p.name.lower() == updated.name.lower():
-                plants[i] = updated
-                self.save_plants(plants)
-                return True
-        return False
+        if not self.get_plant(updated.name):
+            return False
+        self._db.upsert_plant_row(updated.name, updated.model_dump(mode="json"))
+        return True
+
+    def update_fields(self, name: str, /, **fields) -> Optional[Plant]:
+        """Patch a single plant's fields in place — one row touched, no read-modify-write of the full list.
+
+        `name` is positional-only so a rename can be passed as fields["name"]
+        without colliding with the lookup argument.
+        """
+        p = self.get_plant(name)
+        if not p:
+            return None
+        updated = p.model_copy(update=fields)
+        if updated.name.lower() != p.name.lower():
+            self._db.delete_plant_row(p.name)
+        self._db.upsert_plant_row(updated.name, updated.model_dump(mode="json"))
+        return updated
 
     @staticmethod
     def _migrate(raw: dict) -> Plant:
