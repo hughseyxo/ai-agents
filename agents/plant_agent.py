@@ -1,12 +1,14 @@
 """Master Plant Agent — frequency-gated steps for weather and intelligence."""
 
 import json
+import os
 import re
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .base import BaseAgent, REPO_ROOT
+from .gmail_client import send_email
 from .plant_model import PlantIntelligenceResult
 from .plant_weather import weather_adjusted_frequency, apply_frequency_step
 from .plant_profiles import (
@@ -60,6 +62,22 @@ def _build_status_table(plants: list, weather_cache: dict, today) -> str:
     entries.sort(key=lambda e: (e[0], e[1]))
     header = "| Plant | Next Water | Status | Adjustment |\n|---|---|---|---|"
     return header + "\n" + "\n".join(e[2] for e in entries)
+
+
+def _build_status_html(plants: list, weather_cache: dict, today) -> str:
+    """Wrap the markdown status table (`_build_status_table`) as an HTML table
+    suitable for the status email body."""
+    md = _build_status_table(plants, weather_cache, today)
+    rows = [l for l in md.splitlines() if l.startswith("|") and "---" not in l]
+    if not rows:
+        return f"<p>{md}</p>"
+    cells = lambda r: "".join(f"<td style='padding:4px 10px'>{c.strip()}</td>"
+                              for c in r.strip("|").split("|"))
+    head = rows[0].strip("|").split("|")
+    thead = "".join(f"<th align='left' style='padding:4px 10px'>{c.strip()}</th>" for c in head)
+    body = "".join(f"<tr>{cells(r)}</tr>" for r in rows[1:])
+    return (f"<h3>\U0001f33f Plant status — {today}</h3>"
+            f"<table border='0' cellspacing='0'><tr>{thead}</tr>{body}</table>")
 
 
 def _create_profile_doc(path: Path, plant: dict):
@@ -184,16 +202,12 @@ class PlantAgent(BaseAgent):
         plants = self.context["plan"]["plants"]
         weather_cache = self.context["plan"]["weather_cache"]
         today = datetime.now(timezone.utc).date()
-
-        plant_table = _build_status_table(plants, weather_cache, today)
-
-        prompt_path = REPO_ROOT / "agents" / "prompts" / "plant_status_email.md"
-        prompt = prompt_path.read_text()
-        prompt = prompt.replace("{{plant_table}}", plant_table).replace("{{today}}", today.isoformat())
-        # Let synthesize() failures propagate: BaseAgent._execute_step records the
+        html = _build_status_html(plants, weather_cache, today)
+        # Let send_email() failures propagate: BaseAgent._execute_step records the
         # step error and marks the run partial_failure. Gate stays unmarked on
         # failure (we never reach _mark_ran), so it retries next run.
-        self.synthesize(prompt)
+        send_email(os.environ.get("AGENT_EMAIL_TO", "cianohughes@gmail.com"),
+                   f"\U0001f33f Plant Status — {today.isoformat()}", html)
         self._mark_ran("send_status_email")
         return {"sent": True, "plants": len(plants)}
 

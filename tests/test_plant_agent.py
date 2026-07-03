@@ -474,7 +474,7 @@ class TestStepFailurePropagation:
     def test_send_status_email_propagates_and_leaves_gate_unmarked(self, agent):
         plant = _make_plant(name="Fern")
         agent.context["plan"] = {"plants": [plant], "weather_cache": {}}
-        with patch.object(agent, "synthesize", side_effect=RuntimeError("boom")):
+        with patch("agents.plant_agent.send_email", side_effect=RuntimeError("boom")):
             with pytest.raises(RuntimeError):
                 agent._send_status_email()
         assert not agent.get_state("last_send_status_email")
@@ -486,3 +486,69 @@ class TestStepFailurePropagation:
             with pytest.raises(RuntimeError):
                 agent._intelligence_run()
         assert not agent.get_state("last_intelligence_run")
+
+
+# ---------------------------------------------------------------------------
+# 8. _build_status_html() / _send_status_email() — deterministic gmail_client send (Task 6)
+# ---------------------------------------------------------------------------
+
+class TestBuildStatusHtml:
+    def test_contains_table_and_rows(self):
+        from agents.plant_agent import _build_status_html
+        plants = [_make_plant(name="Aloe", frequency_days=7, last_watered="2026-06-30")]
+        html = _build_status_html(plants, {}, date(2026, 7, 3))
+        assert "<table" in html
+        assert "Aloe" in html
+        assert "Overdue" not in html
+
+    def test_no_plants_wraps_placeholder_in_paragraph(self):
+        from agents.plant_agent import _build_status_html
+        html = _build_status_html([], {}, date(2026, 7, 3))
+        assert "<p>" in html
+        assert "No plants tracked." in html
+
+
+class TestSendStatusEmail:
+    def test_uses_gmail_client_directly(self, agent, monkeypatch):
+        sent = {}
+        monkeypatch.setattr(
+            "agents.plant_agent.send_email",
+            lambda to, subject, body, **kw: sent.update(to=to, subject=subject, body=body) or {"id": "1"},
+        )
+        plant = _make_plant(name="Fern")
+        agent.context["plan"] = {"plants": [plant], "weather_cache": {}}
+
+        out = agent._send_status_email()
+
+        assert out == {"sent": True, "plants": 1}
+        assert "Plant Status" in sent["subject"]
+        assert "Fern" in sent["body"]
+        assert sent["to"] == "cianohughes@gmail.com"
+        assert agent.get_state("last_send_status_email")
+
+    def test_gated_when_recently_sent(self, agent, monkeypatch):
+        sent = {}
+        monkeypatch.setattr(
+            "agents.plant_agent.send_email",
+            lambda to, subject, body, **kw: sent.update(called=True) or {"id": "1"},
+        )
+        agent.set_state("last_send_status_email", datetime.now(timezone.utc).isoformat())
+        agent.context["plan"] = {"plants": [], "weather_cache": {}}
+
+        out = agent._send_status_email()
+
+        assert out == {"skipped": True}
+        assert "called" not in sent
+
+    def test_recipient_honours_env_override(self, agent, monkeypatch):
+        sent = {}
+        monkeypatch.setenv("AGENT_EMAIL_TO", "someoneelse@example.com")
+        monkeypatch.setattr(
+            "agents.plant_agent.send_email",
+            lambda to, subject, body, **kw: sent.update(to=to) or {"id": "1"},
+        )
+        agent.context["plan"] = {"plants": [], "weather_cache": {}}
+
+        agent._send_status_email()
+
+        assert sent["to"] == "someoneelse@example.com"
