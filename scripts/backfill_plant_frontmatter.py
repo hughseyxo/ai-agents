@@ -4,13 +4,14 @@ import pathlib
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
-from agents.db import AgentDB
+from agents.plant_model import PlantStore
 from agents import plant_profiles as pp
 
 
 def main():
-    db = AgentDB()
-    plants = db.get_state("daily-briefing", "plants") or []
+    store = PlantStore()
+    plants = store.get_plants_raw()
+    store.close()
     if not plants:
         print("No plants found in DB — run the plant agent first.")
         return

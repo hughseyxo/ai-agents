@@ -9,12 +9,12 @@ from pathlib import Path
 
 from .base import BaseAgent, REPO_ROOT
 from .gmail_client import send_email
-from .plant_model import PlantIntelligenceResult
+from .plant_model import PlantIntelligenceResult, PlantStore
 from .plant_weather import weather_adjusted_frequency, apply_frequency_step
 from .plant_profiles import (
     append_frequency_history, append_intelligence_note,
     write_health_assessment, write_profile_atomic,
-    upsert_frontmatter, rewrite_section,
+    upsert_frontmatter, rewrite_section, profile_path,
 )
 from .weather import fetch_weather
 
@@ -162,37 +162,54 @@ class PlantAgent(BaseAgent):
         ]
 
     def plan(self):
-        plants = self.db.get_state("daily-briefing", "plants") or []
+        store = PlantStore(self.db.db_path)
+        plants = store.get_plants_raw()
+        store.close()
         weather_cache = {r["plant_name"]: r for r in self.db.get_plant_weather_cache()}
         return {"plants": plants, "weather_cache": weather_cache}
+
+    def _persist_changed_plants(self, plants: list, changed_names: set) -> None:
+        """Write back only the plants whose name is in changed_names, one row
+        each via PlantStore, instead of replacing the whole legacy blob."""
+        if not changed_names:
+            return
+        store = PlantStore(self.db.db_path)
+        for plant in plants:
+            if plant["name"] not in changed_names:
+                continue
+            store.update_fields(
+                plant["name"],
+                frequency_days=plant.get("frequency_days"),
+                baseline_frequency_days=plant.get("baseline_frequency_days", plant.get("frequency_days")),
+                needs_photo=plant.get("needs_photo", False),
+            )
+        store.close()
 
     def _weather_update(self):
         weather = fetch_weather()
         self.context["weather"] = weather  # reused by _intelligence_run
         plants = self.context["plan"]["plants"]
-        changed = False
+        changed_names = set()
         # Baseline migration is weather-independent — always run
         for plant in plants:
             if "baseline_frequency_days" not in plant:
                 plant["baseline_frequency_days"] = plant["frequency_days"]
-                changed = True
+                changed_names.add(plant["name"])
         if weather is None:
             print(f"[{self.name}] Weather fetch failed — keeping existing frequency adjustments", file=sys.stderr)
-            if changed:
-                self.db.set_state("daily-briefing", "plants", plants)
+            self._persist_changed_plants(plants, changed_names)
             return {"updated": 0, "skipped": "weather_unavailable"}
         for plant in plants:
             new_freq, reason = weather_adjusted_frequency(plant, weather)
             if new_freq != plant.get("frequency_days"):
                 plant["frequency_days"] = new_freq
-                changed = True
+                changed_names.add(plant["name"])
             last_watered = _safe_date(plant.get("last_watered"))
             if last_watered is None:
                 continue  # bad date on this plant; skip rather than abort the run
             next_date = last_watered + timedelta(days=plant["frequency_days"])
             self.db.upsert_plant_weather_cache(plant["name"], next_date.isoformat(), reason)
-        if changed:
-            self.db.set_state("daily-briefing", "plants", plants)
+        self._persist_changed_plants(plants, changed_names)
         return {"updated": len(plants)}
 
     def _send_status_email(self):
@@ -219,13 +236,11 @@ class PlantAgent(BaseAgent):
         weather_cache_list = self.db.get_plant_weather_cache()
         today = datetime.now(timezone.utc).date()
 
-        PLANTS_DIR = REPO_ROOT / "docs" / "plants"
         profiles = []
         for plant in plants:
-            slug = plant["name"].lower().replace(" ", "-").replace("/", "-")
-            profile_path = PLANTS_DIR / f"{slug}.md"
-            if profile_path.exists():
-                profiles.append(f"### {plant['name']}\n{profile_path.read_text()}")
+            doc_path = profile_path(plant["name"])
+            if doc_path.exists():
+                profiles.append(f"### {plant['name']}\n{doc_path.read_text()}")
             else:
                 profiles.append(
                     f"### {plant['name']}\n"
@@ -256,7 +271,6 @@ class PlantAgent(BaseAgent):
         return {"ran": True}
 
     def _apply_intelligence_output(self, output: str, plants: list):
-        PLANTS_DIR = REPO_ROOT / "docs" / "plants"
         today = datetime.now(timezone.utc).date().isoformat()
         weather = self.context.get("weather")
 
@@ -267,8 +281,7 @@ class PlantAgent(BaseAgent):
             print(f"[{self.name}] Raw output (first 500 chars): {output[:500]}", file=sys.stderr)
             return
 
-        freq_changed = False
-        needs_photo_changed = False
+        changed_names = set()
 
         for entry in result.plants:
             plant_name = entry.name
@@ -277,10 +290,9 @@ class PlantAgent(BaseAgent):
             # Append intelligence notes to profile
             if entry.notes:
                 if plant:
-                    slug = plant_name.lower().replace(" ", "-").replace("/", "-")
-                    profile_path = PLANTS_DIR / f"{slug}.md"
-                    if not profile_path.exists():
-                        _create_profile_doc(profile_path, plant)
+                    doc_path = profile_path(plant_name)
+                    if not doc_path.exists():
+                        _create_profile_doc(doc_path, plant)
                 notes_text = "\n".join(f"- {n}" for n in entry.notes)
                 append_intelligence_note(plant_name, f"### {today}\n{notes_text}")
 
@@ -298,12 +310,12 @@ class PlantAgent(BaseAgent):
                     )
                     if not ok:
                         print(f"[{self.name}] append_frequency_history skipped — no profile for {plant['name']}", file=sys.stderr)
-                    freq_changed = True
+                    changed_names.add(plant["name"])
 
             # Update needs_photo flag
             if plant and entry.needs_photo != plant.get("needs_photo", False):
                 plant["needs_photo"] = entry.needs_photo
-                needs_photo_changed = True
+                changed_names.add(plant["name"])
 
             # Regenerate frontmatter projection + curate Current Observations
             if plant:
@@ -328,8 +340,7 @@ class PlantAgent(BaseAgent):
                     obs_body = "".join(f"- {n}\n" for n in entry.notes)
                     rewrite_section(plant_name, "Current Observations", obs_body)
 
-        if freq_changed or needs_photo_changed:
-            self.db.set_state("daily-briefing", "plants", plants)
+        self._persist_changed_plants(plants, changed_names)
 
         # Append pruning notes and persist as pending actions for daily briefing
         if result.pruning:

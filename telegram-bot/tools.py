@@ -18,6 +18,7 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from agents.db import AgentDB
+from agents.plant_model import AssessmentRecord, Plant, PlantStore
 from agents.plant_weather import weather_adjusted_frequency, MIN_FREQUENCY, MAX_FREQUENCY
 from agents.weather import fetch_weather
 from agents.plant_profiles import append_frequency_history, write_profile_atomic, upsert_frontmatter, parse_frontmatter, safe_profile_path
@@ -31,6 +32,10 @@ REPO_ROOT = Path(__file__).parent.parent
 CEST_OFFSET = 2  # UTC+2
 SUNLIGHT_VALUES = ("full sun", "partial shade", "shade")
 SENSITIVITY_VALUES = ("high", "medium", "low")
+
+
+def _store() -> PlantStore:
+    return PlantStore(DB_PATH)
 
 
 def _validate_http_url(url: str) -> str | None:
@@ -78,8 +83,10 @@ def get_agent_status() -> str:
 
 def get_plant_status() -> str:
     try:
+        s = _store()
+        plants = s.get_plants_raw()
+        s.close()
         db = AgentDB(DB_PATH)
-        plants = db.get_state("daily-briefing", "plants") or []
         cache = {r["plant_name"]: r for r in db.get_plant_weather_cache()}
         db.close()
         if not plants:
@@ -390,28 +397,27 @@ def research_plant_water_sensitivity(plant_name: str) -> str:
 
 def add_plant(name: str, frequency_days: int, location: str = "indoor", sunlight: str = "") -> str:
     try:
-        db = AgentDB(DB_PATH)
-        plants = db.get_state("daily-briefing", "plants") or []
+        s = _store()
         name_lower = name.lower().strip()
-        if any(p["name"].lower() == name_lower for p in plants):
-            db.close()
+        if any(p.name.lower() == name_lower for p in s.get_plants()):
+            s.close()
             return f"A plant named '{name}' already exists."
 
         sensitivity = research_plant_water_sensitivity(name)
         if sensitivity not in SENSITIVITY_VALUES:
             sensitivity = "medium"
 
-        plants.append({
-            "name": name,
-            "frequency_days": frequency_days,
-            "baseline_frequency_days": frequency_days,
-            "last_watered": date.today().isoformat(),
-            "location": location,
-            "sunlight": sunlight,
-            "water_sensitivity": sensitivity,
-        })
-        db.set_state("daily-briefing", "plants", plants)
-        db.close()
+        plant = Plant(
+            name=name,
+            frequency_days=frequency_days,
+            baseline_frequency_days=frequency_days,
+            last_watered=date.today(),
+            location=location,
+            sunlight=sunlight,
+            water_sensitivity=sensitivity,
+        )
+        s.add(plant)
+        s.close()
         sun_str = f", {sunlight}" if sunlight else ""
         return (
             f"{name} added ({location}{sun_str}, water every {frequency_days} days, "
@@ -423,66 +429,58 @@ def add_plant(name: str, frequency_days: int, location: str = "indoor", sunlight
 
 def update_plant(plant_name: str, location: str = "", frequency_days: int = 0, sunlight: str = "") -> str:
     try:
-        db = AgentDB(DB_PATH)
-        plants = db.get_state("daily-briefing", "plants") or []
-        match = _find_plant(plant_name, plants)
+        s = _store()
+        match = s.get_plant(plant_name)
         if not match:
-            names = ", ".join(p["name"] for p in plants)
-            db.close()
+            names = ", ".join(p.name for p in s.get_plants())
+            s.close()
             return f"No plant named '{plant_name}' found. Known plants: {names or 'none'}"
         changes = []
+        fields = {}
         if location in ("indoor", "outdoor"):
-            match["location"] = location
+            fields["location"] = location
             changes.append(f"location → {location}")
         if frequency_days > 0:
             # Set the baseline too, else the hourly weather recompute reverts it.
-            match["baseline_frequency_days"] = frequency_days
-            match["frequency_days"] = frequency_days
+            fields["baseline_frequency_days"] = frequency_days
+            fields["frequency_days"] = frequency_days
             changes.append(f"frequency → every {frequency_days} days")
         if sunlight in SUNLIGHT_VALUES:
-            match["sunlight"] = sunlight
+            fields["sunlight"] = sunlight
             changes.append(f"sunlight → {sunlight}")
         if not changes:
-            db.close()
+            s.close()
             return "Nothing to update — specify location ('indoor'/'outdoor'), frequency_days, or sunlight."
-        db.set_state("daily-briefing", "plants", plants)
-        db.close()
-        return f"{match['name']} updated: {', '.join(changes)}."
+        s.update_fields(match.name, **fields)
+        s.close()
+        return f"{match.name} updated: {', '.join(changes)}."
     except Exception as e:
         return f"Failed to update plant: {e}"
 
 
 def water_plant(plant_name: str) -> str:
     try:
-        db = AgentDB(DB_PATH)
-        plants = db.get_state("daily-briefing", "plants") or []
-        match = _find_plant(plant_name, plants)
-        if not match:
-            names = ", ".join(p["name"] for p in plants)
-            db.close()
+        s = _store()
+        p = s.update_fields(plant_name, last_watered=date.today())
+        names = ", ".join(x.name for x in s.get_plants())
+        s.close()
+        if not p:
             return f"No plant named '{plant_name}' found. Known plants: {names or 'none'}"
-        match["last_watered"] = date.today().isoformat()
-        db.set_state("daily-briefing", "plants", plants)
-        db.close()
-        return f"{match['name']} marked as watered today ({match['last_watered']})."
+        return f"{p.name} marked as watered today ({p.last_watered.isoformat()})."
     except Exception as e:
         return f"Failed to update plant: {e}"
 
 
 def water_plants(location: str) -> str:
     try:
-        db = AgentDB(DB_PATH)
-        plants = db.get_state("daily-briefing", "plants") or []
-        targets = [p for p in plants if p.get("location") == location]
-        if not targets:
-            db.close()
-            return f"No {location} plants found."
-        today = date.today().isoformat()
+        s = _store()
+        targets = [p for p in s.get_plants() if p.location == location]
         for p in targets:
-            p["last_watered"] = today
-        db.set_state("daily-briefing", "plants", plants)
-        db.close()
-        names = ", ".join(p["name"] for p in targets)
+            s.update_fields(p.name, last_watered=date.today())
+        s.close()
+        if not targets:
+            return f"No {location} plants found."
+        names = ", ".join(p.name for p in targets)
         return f"Marked {len(targets)} {location} plant{'s' if len(targets) != 1 else ''} as watered today: {names}."
     except Exception as e:
         return f"Failed to update plants: {e}"
@@ -490,27 +488,25 @@ def water_plants(location: str) -> str:
 
 def remove_plant(plant_name: str) -> str:
     try:
-        db = AgentDB(DB_PATH)
-        plants = db.get_state("daily-briefing", "plants") or []
-        match = _find_plant(plant_name, plants)
-        if not match:
-            names = ", ".join(p["name"] for p in plants)
-            db.close()
+        s = _store()
+        p = s.get_plant(plant_name)
+        if not p:
+            names = ", ".join(x.name for x in s.get_plants())
+            s.close()
             return f"No plant named '{plant_name}' found. Known plants: {names or 'none'}"
-        plants = [p for p in plants if p is not match]
-        db.set_state("daily-briefing", "plants", plants)
-        db.close()
-        return f"{match['name']} removed from plant tracker."
+        s.remove(p.name)
+        s.close()
+        return f"{p.name} removed from plant tracker."
     except Exception as e:
         return f"Failed to remove plant: {e}"
 
 
 def get_all_plants() -> list[dict]:
     try:
-        db = AgentDB(DB_PATH)
-        plants = db.get_state("daily-briefing", "plants") or []
-        db.close()
-        return plants
+        s = _store()
+        out = s.get_plants_raw()
+        s.close()
+        return out
     except Exception:
         return []
 
@@ -522,24 +518,22 @@ def get_plant(plant_name: str) -> dict | None:
 
 def save_plant_assessment(plant_name: str, summary: str) -> str:
     try:
-        db = AgentDB(DB_PATH)
-        plants = db.get_state("daily-briefing", "plants") or []
-        match = _find_plant(plant_name, plants)
+        s = _store()
+        match = s.get_plant(plant_name)
         if not match:
-            db.close()
+            s.close()
             return f"No plant named '{plant_name}' found — assessment not saved."
         today = date.today().isoformat()
-        match["last_assessment"] = {"date": today, "summary": summary}
-        db.set_state("daily-briefing", "plants", plants)
-        db.close()
+        s.update_fields(match.name, last_assessment=AssessmentRecord(date=today, summary=summary))
+        s.close()
         # Refresh latest_health in frontmatter projection (merge, preserve other fields)
         from agents.plant_profiles import profile_path as _pp
-        path = _pp(match["name"])
+        path = _pp(match.name)
         if path.exists():
             existing_meta, _ = parse_frontmatter(path.read_text())
             existing_meta["latest_health"] = {"date": today, "summary": summary}
-            upsert_frontmatter(match["name"], existing_meta)
-        return f"{match['name']} assessment saved."
+            upsert_frontmatter(match.name, existing_meta)
+        return f"{match.name} assessment saved."
     except Exception as e:
         return f"Failed to save assessment: {e}"
 
@@ -610,24 +604,22 @@ def set_plant_frequency(plant_name: str, frequency_days: int, reason: str = "") 
     """Set a plant's BASELINE watering frequency (1-30 days). Weather is folded
     into the effective schedule automatically. Logs the change to the profile."""
     try:
-        db = AgentDB(DB_PATH)
-        plants = db.get_state("daily-briefing", "plants") or []
-        match = _find_plant(plant_name, plants)
+        s = _store()
+        match = s.get_plant(plant_name)
         if not match:
-            names = ", ".join(p["name"] for p in plants)
-            db.close()
+            names = ", ".join(p.name for p in s.get_plants())
+            s.close()
             return f"No plant named '{plant_name}' found. Known plants: {names or 'none'}"
         target = max(MIN_FREQUENCY, min(MAX_FREQUENCY, int(frequency_days)))
-        old = match.get("baseline_frequency_days", match["frequency_days"])
-        match["baseline_frequency_days"] = target
-        match["frequency_days"], _ = weather_adjusted_frequency(match, fetch_weather())
-        db.set_state("daily-briefing", "plants", plants)
-        db.close()
+        old = match.baseline_frequency_days
+        calc = match.model_copy(update={"baseline_frequency_days": target})
+        eff, _ = weather_adjusted_frequency(calc.model_dump(mode="json"), fetch_weather())
+        s.update_fields(match.name, baseline_frequency_days=target, frequency_days=eff)
+        s.close()
         if old != target:
-            append_frequency_history(match["name"], old, target, f"bot: {reason}".rstrip(": ").strip())
-        eff = match["frequency_days"]
+            append_frequency_history(match.name, old, target, f"bot: {reason}".rstrip(": ").strip())
         suffix = f" (effective {eff}d after weather)" if eff != target else ""
-        return f"{match['name']} base frequency set to {target} days{suffix}."
+        return f"{match.name} base frequency set to {target} days{suffix}."
     except Exception as e:
         return f"Failed to set frequency: {e}"
 

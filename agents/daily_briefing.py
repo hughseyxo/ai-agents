@@ -9,6 +9,7 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from .base import BaseAgent, REPO_ROOT
+from .plant_model import PlantStore
 
 
 class DailyBriefingAgent(BaseAgent):
@@ -65,7 +66,9 @@ class DailyBriefingAgent(BaseAgent):
     def _build_plant_care_block(self, today: str) -> str:
         """Build a pre-computed plant care section for injection into the briefing prompt."""
         today_date = date.fromisoformat(today)
-        plants = self.db.get_state("daily-briefing", "plants") or []
+        store = PlantStore(self.db.db_path)
+        plants = store.get_plants_raw()
+        store.close()
         pending_actions = self.db.get_state("plant-agent", "pending_plant_actions") or []
 
         due_now = []

@@ -71,8 +71,8 @@ class TestDailyBriefingPlan:
 
 
 class TestBuildPlantCareBlock:
-    def _agent(self):
-        agent = DailyBriefingAgent(db_path=":memory:")
+    def _agent(self, tmp_path):
+        agent = DailyBriefingAgent(db_path=tmp_path / "briefing.db")
         agent.run_id = agent.db.start_run(agent.name)
         agent.context = {}
         return agent
@@ -82,14 +82,23 @@ class TestBuildPlantCareBlock:
         base = {"name": "Testus", "frequency_days": 7, "last_watered": today.isoformat(), "location": "indoor"}
         return [{**base, **o} for o in overrides]
 
-    def test_empty_when_no_plants(self):
-        agent = self._agent()
+    def _seed(self, agent, plants):
+        from agents.plant_model import Plant, PlantStore
+        store = PlantStore(agent.db.db_path)
+        for p in plants:
+            data = {**p}
+            data.setdefault("baseline_frequency_days", data.get("frequency_days", 7))
+            store.add(Plant(**data))
+        store.close()
+
+    def test_empty_when_no_plants(self, tmp_path):
+        agent = self._agent(tmp_path)
         assert agent._build_plant_care_block(date.today().isoformat()) == ""
 
-    def test_overdue_plant_in_due_now(self):
-        agent = self._agent()
+    def test_overdue_plant_in_due_now(self, tmp_path):
+        agent = self._agent(tmp_path)
         last = (date.today() - timedelta(days=10)).isoformat()
-        agent.db.set_state("daily-briefing", "plants", [
+        self._seed(agent, [
             {"name": "Fern", "frequency_days": 7, "last_watered": last, "location": "indoor"}
         ])
         block = agent._build_plant_care_block(date.today().isoformat())
@@ -97,20 +106,20 @@ class TestBuildPlantCareBlock:
         assert "overdue" in block
         assert "Coming up" not in block
 
-    def test_due_today_plant_in_due_now(self):
-        agent = self._agent()
+    def test_due_today_plant_in_due_now(self, tmp_path):
+        agent = self._agent(tmp_path)
         last = (date.today() - timedelta(days=7)).isoformat()
-        agent.db.set_state("daily-briefing", "plants", [
+        self._seed(agent, [
             {"name": "Basil", "frequency_days": 7, "last_watered": last, "location": "indoor"}
         ])
         block = agent._build_plant_care_block(date.today().isoformat())
         assert "Water Basil" in block
         assert "due today" in block
 
-    def test_upcoming_plant_in_coming_up(self):
-        agent = self._agent()
+    def test_upcoming_plant_in_coming_up(self, tmp_path):
+        agent = self._agent(tmp_path)
         last = (date.today() - timedelta(days=4)).isoformat()
-        agent.db.set_state("daily-briefing", "plants", [
+        self._seed(agent, [
             {"name": "Mint", "frequency_days": 7, "last_watered": last, "location": "indoor"}
         ])
         block = agent._build_plant_care_block(date.today().isoformat())
@@ -118,17 +127,17 @@ class TestBuildPlantCareBlock:
         assert "Coming up" in block
         assert "overdue" not in block and "due today" not in block
 
-    def test_plant_due_beyond_7_days_excluded(self):
-        agent = self._agent()
+    def test_plant_due_beyond_7_days_excluded(self, tmp_path):
+        agent = self._agent(tmp_path)
         last = date.today().isoformat()
-        agent.db.set_state("daily-briefing", "plants", [
+        self._seed(agent, [
             {"name": "Cactus", "frequency_days": 30, "last_watered": last, "location": "indoor"}
         ])
         block = agent._build_plant_care_block(date.today().isoformat())
         assert block == ""
 
-    def test_pending_intelligence_action_in_due_now(self):
-        agent = self._agent()
+    def test_pending_intelligence_action_in_due_now(self, tmp_path):
+        agent = self._agent(tmp_path)
         agent.db.set_state("plant-agent", "pending_plant_actions", [
             {"plant": "Gazania", "action": "deadhead", "reason": "spent flowers", "date": date.today().isoformat()}
         ])

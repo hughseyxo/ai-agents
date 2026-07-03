@@ -200,11 +200,23 @@ class TestApplyIntelligenceOutput:
         # No doc created if plant not in list
         assert not profile_path.exists()
 
+    def _seed_store(self, agent, plant: dict):
+        """Seed a plant into PlantStore's row storage (agent.context["plan"] is set
+        directly in these tests, bypassing plan(), so the row must exist ahead of
+        time for _persist_changed_plants()'s update_fields() to find it)."""
+        from agents.plant_model import Plant, PlantStore
+        store = PlantStore(agent.db.db_path)
+        data = {**plant}
+        data.setdefault("baseline_frequency_days", data.get("frequency_days", 7))
+        store.add(Plant(**data))
+        store.close()
+
     def test_needs_photo_sets_flag_on_matching_plant(self, agent, tmp_path):
         plants_dir = tmp_path / "docs" / "plants"
         plants_dir.mkdir(parents=True)
 
         plant = _make_plant(name="Orchid", needs_photo=False)
+        self._seed_store(agent, plant)
 
         output = json.dumps({
             "plants": [{"name": "Orchid", "status": "Concerning",
@@ -215,10 +227,12 @@ class TestApplyIntelligenceOutput:
         with patch("agents.plant_agent.REPO_ROOT", tmp_path):
             agent._apply_intelligence_output(output, [plant])
 
-        plants_in_db = agent.db.get_state("daily-briefing", "plants")
-        assert plants_in_db is not None
-        orchid = next(p for p in plants_in_db if p["name"] == "Orchid")
-        assert orchid["needs_photo"] is True
+        from agents.plant_model import PlantStore
+        store = PlantStore(agent.db.db_path)
+        orchid = store.get_plant("Orchid")
+        store.close()
+        assert orchid is not None
+        assert orchid.needs_photo is True
 
     def test_needs_photo_explicit_false_clears_flag(self, agent, tmp_path):
         """Plant with needs_photo=True gets cleared when JSON explicitly sets it False."""
@@ -226,6 +240,7 @@ class TestApplyIntelligenceOutput:
         plants_dir.mkdir(parents=True)
 
         plant = _make_plant(name="Cactus", needs_photo=True)
+        self._seed_store(agent, plant)
 
         output = json.dumps({
             "plants": [{"name": "Cactus", "status": "Healthy",
@@ -236,9 +251,11 @@ class TestApplyIntelligenceOutput:
         with patch("agents.plant_agent.REPO_ROOT", tmp_path):
             agent._apply_intelligence_output(output, [plant])
 
-        plants_in_db = agent.db.get_state("daily-briefing", "plants")
-        cactus = next(p for p in plants_in_db if p["name"] == "Cactus")
-        assert cactus["needs_photo"] is False
+        from agents.plant_model import PlantStore
+        store = PlantStore(agent.db.db_path)
+        cactus = store.get_plant("Cactus")
+        store.close()
+        assert cactus.needs_photo is False
 
     def test_unlisted_plant_flag_unchanged(self, agent, tmp_path):
         """Plant not mentioned in JSON output keeps its existing needs_photo flag."""
