@@ -357,6 +357,7 @@ def complete_care_task(data: CompleteTaskRequest, db: AgentDB = Depends(get_db))
     tasks = db.get_state("plant-agent", "pending_plant_actions") or []
     updated = [t for t in tasks if not (t.get("plant") == data.plant and t.get("action") == data.action)]
     db.set_state("plant-agent", "pending_plant_actions", updated)
+    db.mark_seen("plant-agent", "completed_action", f"{data.plant}:{data.action}")
     today = date.today().isoformat()
     append_intelligence_note(data.plant, f"### {today} (completed)\n- {data.action} (marked done via PWA)")
     return {"status": "success", "remaining": len(updated)}

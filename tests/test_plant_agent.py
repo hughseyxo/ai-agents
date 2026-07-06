@@ -445,6 +445,28 @@ class TestIntelligenceFrontmatterCuration:
         assert "existing note" in profile.read_text()
 
 
+class TestPendingPlantActionsLifecycle:
+    """Task 11: pending_plant_actions must be written unconditionally (clearing stale
+    tasks) and must filter out actions already marked completed via dedup."""
+
+    def test_pending_actions_cleared_when_no_pruning(self, agent, tmp_path):
+        agent.set_state("pending_plant_actions", [{"plant": "Aloe", "action": "old"}])
+        agent.context["weather"] = None
+        with patch("agents.plant_agent.REPO_ROOT", tmp_path):
+            agent._apply_intelligence_output('{"plants": [], "pruning": []}', [])
+        assert agent.get_state("pending_plant_actions") == []
+
+    def test_completed_action_not_resurrected(self, agent, tmp_path):
+        agent.db.mark_seen("plant-agent", "completed_action", "Aloe:prune dead leaf")
+        agent.context["weather"] = None
+        output = json.dumps({
+            "plants": [], "pruning": [{"name": "Aloe", "action": "prune dead leaf", "reason": ""}],
+        })
+        with patch("agents.plant_agent.REPO_ROOT", tmp_path):
+            agent._apply_intelligence_output(output, [])
+        assert agent.get_state("pending_plant_actions") == []
+
+
 def test_intelligence_prompt_documents_frequency_marker():
     import agents.plant_agent as mod
     text = (mod.REPO_ROOT / "agents" / "prompts" / "plant_intelligence.md").read_text()

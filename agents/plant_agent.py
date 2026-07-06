@@ -15,6 +15,7 @@ from .plant_profiles import (
     append_frequency_history, append_intelligence_note,
     write_health_assessment, write_profile_atomic,
     upsert_frontmatter, rewrite_section, profile_path,
+    read_profile_context,
 )
 from .weather import fetch_weather
 
@@ -238,16 +239,11 @@ class PlantAgent(BaseAgent):
 
         profiles = []
         for plant in plants:
-            doc_path = profile_path(plant["name"])
-            if doc_path.exists():
-                profiles.append(f"### {plant['name']}\n{doc_path.read_text()}")
-            else:
-                profiles.append(
-                    f"### {plant['name']}\n"
-                    f"No profile yet. Location: {plant.get('location', 'unknown')}, "
-                    f"frequency: {plant['frequency_days']} days, "
-                    f"sensitivity: {plant.get('water_sensitivity', 'medium')}."
-                )
+            ctx = read_profile_context(plant["name"])
+            profiles.append(f"### {plant['name']}\n" + (ctx or
+                f"No profile yet. Location: {plant.get('location', 'unknown')}, "
+                f"frequency: {plant['frequency_days']} days, "
+                f"sensitivity: {plant.get('water_sensitivity', 'medium')}."))
 
         notes_path = REPO_ROOT / "docs" / "agent-notes.md"
         agent_notes = ""
@@ -342,12 +338,16 @@ class PlantAgent(BaseAgent):
 
         self._persist_changed_plants(plants, changed_names)
 
-        # Append pruning notes and persist as pending actions for daily briefing
-        if result.pruning:
-            self.set_state("pending_plant_actions", [
-                {"plant": p.name, "action": p.action, "reason": p.reason, "date": today}
-                for p in result.pruning
-            ])
+        # Append pruning notes and persist as pending actions for daily briefing.
+        # Written unconditionally so a run with no pruning clears stale tasks, and
+        # filtered against completed-action dedup so a finished task can't be
+        # resurrected by the next intelligence run.
+        fresh = [
+            {"plant": p.name, "action": p.action, "reason": p.reason, "date": today}
+            for p in result.pruning
+            if not self.db.check_dedup(self.name, "completed_action", f"{p.name}:{p.action}")
+        ]
+        self.set_state("pending_plant_actions", fresh)
         for pruning in result.pruning:
             action_text = pruning.action
             if pruning.reason:

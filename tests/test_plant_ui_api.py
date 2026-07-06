@@ -259,6 +259,18 @@ def test_complete_care_task_idempotent(client, mock_store_db):
     assert response.json()["remaining"] == 0
 
 
+def test_complete_care_task_marks_seen(client, mock_store_db):
+    """Task 11: completing a care task must dedup-mark it so the next intelligence
+    run can't resurrect it into pending_plant_actions."""
+    store, db, plants_dir = mock_store_db
+    db.set_state("plant-agent", "pending_plant_actions", [
+        {"plant": "Aloe", "action": "prune", "reason": "", "date": "2026-06-17"},
+    ])
+    response = client.post("/api/care-tasks/complete", json={"plant": "Aloe", "action": "prune"})
+    assert response.status_code == 200
+    assert db.check_dedup("plant-agent", "completed_action", "Aloe:prune")
+
+
 def test_chat_endpoint_happy(client, monkeypatch):
     import plant_ui.server as srv
     monkeypatch.setattr(srv.chat_backend, "chat", lambda **kw: ("Water less in winter.", "sess-9"))
