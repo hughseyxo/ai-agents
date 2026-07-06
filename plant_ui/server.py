@@ -1,7 +1,5 @@
 import sys
 import os
-import re
-import json
 import logging
 import tempfile
 import asyncio
@@ -30,6 +28,11 @@ from agents.plant_profiles import (
     safe_profile_path,
     write_profile_atomic
 )
+from agents.plant_assessment import (
+    load_species_context as _load_species_context,
+    format_care_actions_for_profile as _format_care_actions_for_profile,
+    parse_assessment_response,
+)
 from claude_backend import assess_image
 from plant_ui import chat_backend
 
@@ -40,7 +43,6 @@ app = FastAPI(title="Plant AI PWA")
 
 # Constants
 PLANT_ASSESSMENT_SYSTEM_PATH = REPO_ROOT / "agents" / "prompts" / "plant_photo_assessment.md"
-SPECIES_REFERENCE_PATH = REPO_ROOT / "docs" / "plants" / "species_reference.md"
 PLANT_HEALTH_SYSTEM = (
     "You are a plant health expert. Assess the plant in the photo. "
     "Give specific observations about its health and concise actionable advice. "
@@ -134,106 +136,6 @@ def create_profile_doc(name: str, location: str, sunlight: str, sensitivity: str
 """
     path.parent.mkdir(parents=True, exist_ok=True)
     write_profile_atomic(path, content)
-
-def _load_species_context(plant_name: str) -> str:
-    try:
-        if not SPECIES_REFERENCE_PATH.exists():
-            return ""
-        text = SPECIES_REFERENCE_PATH.read_text()
-        heading = f"## {plant_name}"
-        start = text.find(heading)
-        if start == -1:
-            return ""
-        next_heading = text.find("\n## ", start + len(heading))
-        section = text[start:next_heading].strip() if next_heading != -1 else text[start:].strip()
-        return section
-    except Exception:
-        return ""
-
-def _build_assessment_display(parsed: dict, plant_name: str) -> str:
-    status = parsed.get("status", "Assessment")
-    summary = parsed.get("summary", "")
-    obs = parsed.get("observations", [])
-    rec = parsed.get("watering_recommendation", "")
-    freq = parsed.get("frequency_suggestion")
-    
-    emoji = {"Healthy": "🟢", "Stressed": "🟡", "Concerning": "🟠", "Underwatered": "🔵", "Overwatered": "🔴"}.get(status, "⚪")
-    lines = [f"{emoji} *{plant_name}* — {status}", "", summary]
-    if obs:
-        lines += ["", "*Observations:*"] + [f"• {o}" for o in obs]
-    if rec:
-        labels = {"immediate": "💧 Water now", "on_schedule": "✅ On schedule", "delay": "⏳ Delay watering"}
-        lines += ["", labels.get(rec, f"Watering: {rec}")]
-    actions = parsed.get("care_actions") or []
-    action_lines = _format_care_action_lines(actions)
-    if action_lines:
-        lines += ["", "*Next steps:*"] + action_lines
-    if freq and isinstance(freq, dict):
-        lines += [f"📅 Suggested frequency: every {freq.get('days')} days"]
-    return "\n".join(lines)
-
-
-_PRIORITY_EMOJI = {"high": "🔴", "medium": "🟡", "low": "🟢"}
-
-
-def _format_care_action_lines(actions: list) -> list[str]:
-    """Render care_actions as markdown list lines, highest priority first."""
-    order = {"high": 0, "medium": 1, "low": 2}
-    out = []
-    for a in sorted(
-        (a for a in actions if isinstance(a, dict) and a.get("action")),
-        key=lambda a: order.get(str(a.get("priority", "")).lower(), 1),
-    ):
-        prio = str(a.get("priority", "")).lower()
-        emoji = _PRIORITY_EMOJI.get(prio, "•")
-        reason = a.get("reason", "")
-        suffix = f" — {reason}" if reason else ""
-        out.append(f"{emoji} {a['action']}{suffix}")
-    return out
-
-
-def _format_care_actions_for_profile(actions: list) -> str:
-    """Deterministic markdown block appended to persisted profile notes."""
-    order = {"high": 0, "medium": 1, "low": 2}
-    rows = []
-    for a in sorted(
-        (a for a in actions if isinstance(a, dict) and a.get("action")),
-        key=lambda a: order.get(str(a.get("priority", "")).lower(), 1),
-    ):
-        prio = str(a.get("priority", "")).lower() or "medium"
-        reason = a.get("reason", "")
-        suffix = f" — {reason}" if reason else ""
-        rows.append(f"- ({prio}) {a['action']}{suffix}")
-    if not rows:
-        return ""
-    return "\n\n**Recommended next steps:**\n" + "\n".join(rows)
-
-def _extract_assessment_from_text(raw: str) -> dict | None:
-    status_m = re.search(r'\*{0,2}[Ss]tatus\*{0,2}\s*[:\-]\s*([A-Za-z]+)', raw)
-    summary_m = re.search(r'\*{0,2}[Ss]ummary\*{0,2}\s*[:\-]\s*(.+?)(?=\n\*{0,2}[A-Z]|\Z)', raw, re.DOTALL)
-    watering_m = re.search(r'\*{0,2}[Ww]atering[^:\n]*\*{0,2}\s*[:\-]\s*([A-Za-z _]+)', raw)
-    obs_m = re.search(r'\*{0,2}[Oo]bservations?\*{0,2}\s*[:\-]\s*(.+?)(?=\n\*{0,2}[A-Z]|\Z)', raw, re.DOTALL)
-
-    status = status_m.group(1).strip() if status_m else "Assessment"
-    summary = summary_m.group(1).strip().rstrip("*").strip() if summary_m else raw[:300].strip()
-    
-    rec_raw = watering_m.group(1).strip().lower() if watering_m else ""
-    rec = None
-    for k, v in {"immediate": "immediate", "now": "immediate", "water now": "immediate",
-                 "on schedule": "on_schedule", "on_schedule": "on_schedule", "schedule": "on_schedule",
-                 "delay": "delay", "delay watering": "delay"}.items():
-        if k in rec_raw:
-            rec = v
-            break
-            
-    obs_text = obs_m.group(1).strip() if obs_m else ""
-    obs = [l.lstrip("•*- ").strip() for l in obs_text.splitlines() if l.strip()] if obs_text else []
-
-    if not (status_m or summary_m):
-        return None
-    return {"status": status, "summary": summary, "observations": obs,
-            "watering_recommendation": rec, "care_actions": [],
-            "frequency_suggestion": None, "profile_notes": ""}
 
 # API Endpoints
 @app.get("/api/plants")
@@ -540,30 +442,9 @@ async def upload_photo(name: str, file: UploadFile = File(...), store: PlantStor
             
     if not raw_response:
         raise HTTPException(status_code=500, detail="Plant assessment is unavailable right now. Try again later.")
-        
-    parsed = None
-    display_text = ""
-    
-    # Try parsing response
-    try:
-        text = raw_response.strip()
-        if text.startswith("```"):
-            text = re.sub(r"^```[a-z]*\n?", "", text)
-            text = re.sub(r"\n?```$", "", text.strip())
-        if not text.startswith("{"):
-            m = re.search(r'\{.*\}', text, re.DOTALL)
-            if m:
-                text = m.group(0)
-        parsed = json.loads(text)
-        display_text = _build_assessment_display(parsed, plant.name)
-    except Exception:
-        # Try salvaging
-        parsed = _extract_assessment_from_text(raw_response)
-        if parsed:
-            display_text = _build_assessment_display(parsed, plant.name)
-        else:
-            display_text = f"*{plant.name}*\n\n{raw_response}"
-            
+
+    display_text, parsed = parse_assessment_response(raw_response, plant.name)
+
     if parsed:
         # Save structured notes to plant profile doc (## Health Assessments section),
         # folding in the prioritised care actions so next steps persist over time.

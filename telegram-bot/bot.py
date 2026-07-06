@@ -1,9 +1,7 @@
 import asyncio
 import io
-import json
 import logging
 import os
-import re
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
@@ -15,6 +13,11 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from agents.plant_profiles import write_health_assessment, write_profile_atomic, safe_profile_path
 from agents import garden_notes
+from agents.plant_assessment import (
+    load_species_context as _load_species_context,
+    format_care_actions_for_profile as _format_care_actions_for_profile,
+    parse_assessment_response,
+)
 from tools import (
     update_plant,
     get_plant,
@@ -77,52 +80,6 @@ def _resolve_plant_name(caption: str, plants: list[dict]) -> dict | None:
     # practice this only fires for non-photo callers.)
     cl = caption.lower()
     return next((p for p in plants if p["name"].lower() in cl or cl in p["name"].lower()), None)
-
-
-_SPECIES_REFERENCE_PATH = Path(__file__).parent.parent / "docs" / "plants" / "species_reference.md"
-
-_WATERING_REC_MAP = {
-    "immediate": "immediate", "now": "immediate", "water now": "immediate",
-    "on schedule": "on_schedule", "on_schedule": "on_schedule", "schedule": "on_schedule",
-    "delay": "delay", "delay watering": "delay",
-}
-
-
-def _extract_assessment_from_text(raw: str) -> dict | None:
-    """Try to salvage structured fields from a non-JSON markdown assessment response."""
-    status_m = re.search(r'\*{0,2}[Ss]tatus\*{0,2}\s*[:\-]\s*([A-Za-z]+)', raw)
-    summary_m = re.search(r'\*{0,2}[Ss]ummary\*{0,2}\s*[:\-]\s*(.+?)(?=\n\*{0,2}[A-Z]|\Z)', raw, re.DOTALL)
-    watering_m = re.search(r'\*{0,2}[Ww]atering[^:\n]*\*{0,2}\s*[:\-]\s*([A-Za-z _]+)', raw)
-    obs_m = re.search(r'\*{0,2}[Oo]bservations?\*{0,2}\s*[:\-]\s*(.+?)(?=\n\*{0,2}[A-Z]|\Z)', raw, re.DOTALL)
-
-    status = status_m.group(1).strip() if status_m else "Assessment"
-    summary = summary_m.group(1).strip().rstrip("*").strip() if summary_m else raw[:300].strip()
-    rec_raw = watering_m.group(1).strip().lower() if watering_m else ""
-    rec = next((v for k, v in _WATERING_REC_MAP.items() if k in rec_raw), None)
-    obs_text = obs_m.group(1).strip() if obs_m else ""
-    obs = [l.lstrip("•*- ").strip() for l in obs_text.splitlines() if l.strip()] if obs_text else []
-
-    if not (status_m or summary_m):
-        return None
-    return {"status": status, "summary": summary, "observations": obs,
-            "watering_recommendation": rec, "care_actions": [],
-            "frequency_suggestion": None, "profile_notes": ""}
-
-
-def _load_species_context(plant_name: str) -> str:
-    """Extract the section for this plant from species_reference.md. Returns '' on any failure."""
-    try:
-        text = _SPECIES_REFERENCE_PATH.read_text()
-        heading = f"## {plant_name}"
-        start = text.find(heading)
-        if start == -1:
-            return ""
-        # Find next ## heading after the start
-        next_heading = text.find("\n## ", start + len(heading))
-        section = text[start:next_heading].strip() if next_heading != -1 else text[start:].strip()
-        return section
-    except Exception:
-        return ""
 
 
 _GENERIC_ASSESSMENT_CAPTIONS = {"assess", "check", "identify"}
@@ -204,57 +161,6 @@ def _identify_plant_from_image(image_bytes: bytes, plants: list) -> dict | None:
     )
 
 
-_WATERING_LABELS = {"immediate": "💧 Water now", "on_schedule": "✅ On schedule", "delay": "⏳ Delay watering"}
-_STATUS_EMOJI = {"Healthy": "🟢", "Stressed": "🟡", "Concerning": "🟠", "Underwatered": "🔵", "Overwatered": "🔴"}
-_PRIORITY_EMOJI = {"high": "🔴", "medium": "🟡", "low": "🟢"}
-_PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
-
-
-def _sorted_care_actions(actions: list) -> list:
-    return sorted(
-        (a for a in (actions or []) if isinstance(a, dict) and a.get("action")),
-        key=lambda a: _PRIORITY_ORDER.get(str(a.get("priority", "")).lower(), 1),
-    )
-
-
-def _format_care_action_lines(actions: list) -> list:
-    out = []
-    for a in _sorted_care_actions(actions):
-        emoji = _PRIORITY_EMOJI.get(str(a.get("priority", "")).lower(), "•")
-        reason = a.get("reason", "")
-        out.append(f"{emoji} {a['action']}" + (f" — {reason}" if reason else ""))
-    return out
-
-
-def _format_care_actions_for_profile(actions: list) -> str:
-    rows = []
-    for a in _sorted_care_actions(actions):
-        prio = str(a.get("priority", "")).lower() or "medium"
-        reason = a.get("reason", "")
-        rows.append(f"- ({prio}) {a['action']}" + (f" — {reason}" if reason else ""))
-    return "\n\n**Recommended next steps:**\n" + "\n".join(rows) if rows else ""
-
-
-def _build_assessment_display(parsed: dict, plant: dict) -> str:
-    status = parsed.get("status", "Assessment")
-    summary = parsed.get("summary", "")
-    obs = parsed.get("observations", [])
-    rec = parsed.get("watering_recommendation", "")
-    freq = parsed.get("frequency_suggestion")
-    emoji = _STATUS_EMOJI.get(status, "⚪")
-    lines = [f"{emoji} *{plant['name']}* — {status}", "", summary]
-    if obs:
-        lines += ["", "*Observations:*"] + [f"• {o}" for o in obs]
-    if rec:
-        lines += ["", _WATERING_LABELS.get(rec, f"Watering: {rec}")]
-    action_lines = _format_care_action_lines(parsed.get("care_actions"))
-    if action_lines:
-        lines += ["", "*Next steps:*"] + action_lines
-    if freq and isinstance(freq, dict):
-        lines += [f"📅 Suggested frequency: every {freq.get('days')} days"]
-    return "\n".join(lines)
-
-
 def _analyze_plant_image(image_bytes: bytes, plant: dict) -> tuple[str, dict | None]:
     """Analyze a plant image. Returns (display_text, parsed_json_or_None)."""
     from datetime import date as _date
@@ -283,27 +189,7 @@ def _analyze_plant_image(image_bytes: bytes, plant: dict) -> tuple[str, dict | N
     if not raw_response:
         return "Plant assessment unavailable right now. Try again later.", None
 
-    # Try to parse as JSON — handle code fences, leading/trailing prose, and partial wrapping
-    try:
-        text = raw_response.strip()
-        # Strip markdown code fences
-        if text.startswith("```"):
-            text = re.sub(r"^```[a-z]*\n?", "", text)
-            text = re.sub(r"\n?```$", "", text.strip())
-        # If there's prose around the JSON, extract just the outermost {...} object
-        if not text.startswith("{"):
-            m = re.search(r'\{.*\}', text, re.DOTALL)
-            if m:
-                text = m.group(0)
-        parsed = json.loads(text)
-        display = _build_assessment_display(parsed, plant)
-        return display, parsed
-    except (json.JSONDecodeError, ValueError, KeyError):
-        # JSON parse failed — try to salvage structured fields from markdown prose
-        salvaged = _extract_assessment_from_text(raw_response)
-        if salvaged:
-            return _build_assessment_display(salvaged, plant), salvaged
-        return f"*{plant['name']}*\n\n{raw_response}", None
+    return parse_assessment_response(raw_response, plant["name"])
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

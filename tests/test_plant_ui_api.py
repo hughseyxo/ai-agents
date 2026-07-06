@@ -373,7 +373,7 @@ def test_photo_assessment(client, mock_store_db):
 
 
 def test_build_assessment_display_includes_care_actions():
-    from plant_ui.server import _build_assessment_display
+    from agents.plant_assessment import build_assessment_display as _build_assessment_display
     parsed = {
         "status": "Stressed",
         "summary": "Lower leaves yellowing.",
