@@ -239,7 +239,9 @@ class PlantAgent(BaseAgent):
 
         profiles = []
         for plant in plants:
-            ctx = read_profile_context(plant["name"])
+            # Intelligence notes carry the (pruning)/(completed) markers the
+            # prompt's no-re-flag rule depends on — include a bounded slice.
+            ctx = read_profile_context(plant["name"], max_intelligence_notes=6)
             profiles.append(f"### {plant['name']}\n" + (ctx or
                 f"No profile yet. Location: {plant.get('location', 'unknown')}, "
                 f"frequency: {plant['frequency_days']} days, "

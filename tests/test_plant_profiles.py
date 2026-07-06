@@ -100,6 +100,25 @@ def test_read_profile_context(tmp_path, monkeypatch):
     assert "2026-05-01" not in ctx        # bounded
 
 
+def test_read_profile_context_includes_recent_intelligence_notes(tmp_path, monkeypatch):
+    monkeypatch.setattr(pp, "PROFILES_DIR", tmp_path)
+    (tmp_path / "m.md").write_text(
+        "# M\n"
+        "## Current Observations\n- fine\n\n"
+        "## Intelligence Notes\n"
+        "<!-- Appended by each intelligence run -->\n"
+        "### 2026-07-05 (completed)\n- deadhead spent blooms\n"
+        "### 2026-07-01 (pruning)\n- deadhead spent blooms\n"
+        "### 2026-05-01 (pruning)\n- ancient note\n"
+    )
+    ctx = pp.read_profile_context("M", max_intelligence_notes=2)
+    assert "2026-07-05 (completed)" in ctx
+    assert "2026-07-01 (pruning)" in ctx
+    assert "2026-05-01" not in ctx        # bounded
+    # default stays lean — no intelligence notes unless asked for
+    assert "Intelligence Notes" not in pp.read_profile_context("M")
+
+
 def test_append_frequency_history_inserts_row(tmp_path, monkeypatch):
     from agents import plant_profiles as pp
     monkeypatch.setattr(pp, "PLANTS_DIR", tmp_path)

@@ -66,9 +66,22 @@ def rewrite_section(plant_name: str, section: str, new_body: str) -> bool:
     return True
 
 
-def read_profile_context(plant_name: str, max_assessments: int = 2) -> str:
+def _recent_section_entries(body: str, section: str, limit: int) -> list[str]:
+    """First `limit` `### ` entries of `## <section>` (entries are newest-first)."""
+    match = re.search(rf"^## {re.escape(section)}\n(.*?)(?=^## |\Z)", body, re.M | re.S)
+    if not match:
+        return []
+    entries = re.split(r"(?=^### )", match.group(1), flags=re.M)
+    return [e for e in entries if e.strip() and e.lstrip().startswith("###")][:limit]
+
+
+def read_profile_context(plant_name: str, max_assessments: int = 2,
+                         max_intelligence_notes: int = 0) -> str:
     """Return a token-lean slice: frontmatter (compact) + Current Observations +
-    the most recent `max_assessments` Health Assessments. Returns '' if absent."""
+    the most recent `max_assessments` Health Assessments (+ the most recent
+    `max_intelligence_notes` Intelligence Notes if requested — the intelligence
+    run needs them to honour its no-re-flag-completed-tasks rule).
+    Returns '' if absent."""
     path = _profile_path_pd(plant_name)
     if not path.exists():
         return ""
@@ -79,12 +92,13 @@ def read_profile_context(plant_name: str, max_assessments: int = 2) -> str:
     obs = re.search(r"^## Current Observations\n(.*?)(?=^## |\Z)", body, re.M | re.S)
     if obs:
         parts.append("## Current Observations\n" + obs.group(1).strip())
-    ha = re.search(r"^## Health Assessments\n(.*?)(?=^## |\Z)", body, re.M | re.S)
+    ha = _recent_section_entries(body, "Health Assessments", max_assessments)
     if ha:
-        entries = re.split(r"(?=^### )", ha.group(1), flags=re.M)
-        entries = [e for e in entries if e.strip()][:max_assessments]
-        if entries:
-            parts.append("## Recent Assessments\n" + "".join(entries).strip())
+        parts.append("## Recent Assessments\n" + "".join(ha).strip())
+    if max_intelligence_notes > 0:
+        notes = _recent_section_entries(body, "Intelligence Notes", max_intelligence_notes)
+        if notes:
+            parts.append("## Recent Intelligence Notes\n" + "".join(notes).strip())
     return "\n\n".join(parts)
 
 _TABLE_HEADER = "| Date | Change | Reason |\n|---|---|---|\n"
