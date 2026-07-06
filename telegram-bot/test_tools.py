@@ -799,12 +799,32 @@ def test_research_plant_water_sensitivity_failure_returns_error(mocker):
 
 
 # ---------------------------------------------------------------------------
+# research_plant_traits (single combined agy call)
+# ---------------------------------------------------------------------------
+
+def test_research_plant_traits_single_call(monkeypatch):
+    import tools
+    calls = []
+    def fake_run(cmd, **kw):
+        calls.append(cmd)
+        return type("R", (), {"returncode": 0, "stderr": "",
+                              "stdout": '{"frequency_days": 12, "sunlight": "full sun", "water_sensitivity": "high"}'})()
+    monkeypatch.setattr(tools.subprocess, "run", fake_run)
+    out = tools.research_plant_traits("Aloe Vera")
+    assert out == {"frequency_days": 12, "sunlight": "full sun", "water_sensitivity": "high"}
+    assert len(calls) == 1
+
+
+# ---------------------------------------------------------------------------
 # add_plant with water_sensitivity
 # ---------------------------------------------------------------------------
 
 def test_add_plant_stores_water_sensitivity(mocker, plant_db):
     mock_run = mocker.patch("tools.subprocess.run")
-    mock_run.return_value = MagicMock(returncode=0, stdout="high\n")
+    mock_run.return_value = MagicMock(
+        returncode=0,
+        stdout='{"frequency_days": 14, "sunlight": "partial shade", "water_sensitivity": "high"}',
+    )
     result = add_plant("Cactus", 14, "indoor")
     from agents.plant_model import PlantStore
     store = PlantStore(plant_db)

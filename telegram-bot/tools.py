@@ -4,6 +4,7 @@ Each function returns a plain string for the LLM to relay to the user.
 All exceptions are caught and returned as error strings.
 """
 import ipaddress
+import json
 import re
 import socket
 import subprocess
@@ -395,6 +396,31 @@ def research_plant_water_sensitivity(plant_name: str) -> str:
         return f"Research failed: {e}"
 
 
+def research_plant_traits(plant_name: str) -> dict:
+    """One agy call for frequency + sunlight + sensitivity. Missing/invalid → safe defaults."""
+    default = {"frequency_days": None, "sunlight": "", "water_sensitivity": "medium"}
+    prompt = (
+        f"For a {plant_name} houseplant kept indoors, reply with ONLY minified JSON, no prose: "
+        '{"frequency_days": <int days between waterings>, '
+        '"sunlight": <"full sun"|"partial shade"|"shade">, '
+        '"water_sensitivity": <"high"|"medium"|"low">}'
+    )
+    try:
+        res = subprocess.run(["agy", "-y", "-o", "text"], input=prompt,
+                             capture_output=True, text=True, timeout=45, cwd=str(REPO_ROOT))
+        if res.returncode != 0 or not res.stdout.strip():
+            return default
+        m = re.search(r"\{.*\}", res.stdout, re.DOTALL)
+        data = json.loads(m.group(0)) if m else {}
+        return {
+            "frequency_days": int(data["frequency_days"]) if str(data.get("frequency_days", "")).isdigit() else None,
+            "sunlight": data.get("sunlight") if data.get("sunlight") in SUNLIGHT_VALUES else "",
+            "water_sensitivity": data.get("water_sensitivity") if data.get("water_sensitivity") in SENSITIVITY_VALUES else "medium",
+        }
+    except Exception:
+        return default
+
+
 def add_plant(name: str, frequency_days: int, location: str = "indoor", sunlight: str = "") -> str:
     try:
         s = _store()
@@ -403,9 +429,10 @@ def add_plant(name: str, frequency_days: int, location: str = "indoor", sunlight
             s.close()
             return f"A plant named '{name}' already exists."
 
-        sensitivity = research_plant_water_sensitivity(name)
-        if sensitivity not in SENSITIVITY_VALUES:
-            sensitivity = "medium"
+        traits = research_plant_traits(name)
+        sensitivity = traits["water_sensitivity"]
+        if not sunlight:
+            sunlight = traits["sunlight"]
 
         plant = Plant(
             name=name,

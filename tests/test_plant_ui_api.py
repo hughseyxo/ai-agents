@@ -156,7 +156,7 @@ def test_water_all_plants(client, mock_store_db):
     
     response = client.post("/api/plants/water-all", json={"location": "outdoor"})
     assert response.status_code == 200
-    assert response.json()["waterED_count"] == 2
+    assert response.json()["watered_count"] == 2
 
     # Verify Mint and Rosemary last_watered is today
     db_plants = store.get_plants()

@@ -220,7 +220,7 @@ function plantApp() {
         if (!response.ok) throw new Error('Failed to water all plants');
         
         const result = await response.json();
-        alert(`Successfully marked ${result.waterED_count} ${location} plants as watered.`);
+        alert(`Successfully marked ${result.watered_count} ${location} plants as watered.`);
         
         await this.fetchPlants();
       } catch (err) {

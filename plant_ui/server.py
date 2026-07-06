@@ -339,7 +339,7 @@ def water_all_plants(data: WaterAllRequest, store: PlantStore = Depends(get_stor
     if updated_count > 0:
         store.save_plants(plants)
 
-    return {"status": "success", "waterED_count": updated_count}
+    return {"status": "success", "watered_count": updated_count}
 
 @app.get("/api/weather")
 def get_weather(db: AgentDB = Depends(get_db)):
