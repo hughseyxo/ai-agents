@@ -4,6 +4,7 @@ import json
 import os
 import re
 import sys
+from html import escape as html_escape
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -72,10 +73,10 @@ def _build_status_html(plants: list, weather_cache: dict, today) -> str:
     rows = [l for l in md.splitlines() if l.startswith("|") and "---" not in l]
     if not rows:
         return f"<p>{md}</p>"
-    cells = lambda r: "".join(f"<td style='padding:4px 10px'>{c.strip()}</td>"
+    cells = lambda r: "".join(f"<td style='padding:4px 10px'>{html_escape(c.strip())}</td>"
                               for c in r.strip("|").split("|"))
     head = rows[0].strip("|").split("|")
-    thead = "".join(f"<th align='left' style='padding:4px 10px'>{c.strip()}</th>" for c in head)
+    thead = "".join(f"<th align='left' style='padding:4px 10px'>{html_escape(c.strip())}</th>" for c in head)
     body = "".join(f"<tr>{cells(r)}</tr>" for r in rows[1:])
     return (f"<h3>\U0001f33f Plant status — {today}</h3>"
             f"<table border='0' cellspacing='0'><tr>{thead}</tr>{body}</table>")
@@ -158,7 +159,10 @@ class PlantAgent(BaseAgent):
     def steps(self):
         return [
             {"name": "weather_update", "fn": self._weather_update},
-            {"name": "send_status_email", "fn": self._send_status_email, "side_effects": True},
+            # retries: 0 — a send that dies mid-response may already have
+            # delivered; a retry would send a duplicate email.
+            {"name": "send_status_email", "fn": self._send_status_email,
+             "side_effects": True, "retries": 0},
             {"name": "intelligence_run", "fn": self._intelligence_run, "side_effects": True},
         ]
 
@@ -221,9 +225,10 @@ class PlantAgent(BaseAgent):
         weather_cache = self.context["plan"]["weather_cache"]
         today = datetime.now(timezone.utc).date()
         html = _build_status_html(plants, weather_cache, today)
-        # Let send_email() failures propagate: BaseAgent._execute_step records the
-        # step error and marks the run partial_failure. Gate stays unmarked on
-        # failure (we never reach _mark_ran), so it retries next run.
+        # Let send_email() failures propagate: with retries: 0 on this step,
+        # BaseAgent._execute_step records the error once (no in-run retry that
+        # could double-send) and marks the run partial_failure. Gate stays
+        # unmarked on failure (we never reach _mark_ran), so it retries next run.
         send_email(os.environ.get("AGENT_EMAIL_TO", "cianohughes@gmail.com"),
                    f"\U0001f33f Plant Status — {today.isoformat()}", html)
         self._mark_ran("send_status_email")

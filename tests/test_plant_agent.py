@@ -595,3 +595,8 @@ class TestSendStatusEmail:
         agent._send_status_email()
 
         assert sent["to"] == "someoneelse@example.com"
+
+
+def test_send_status_email_step_never_retries(agent):
+    step = next(s for s in agent.steps() if s["name"] == "send_status_email")
+    assert step.get("retries") == 0 and step.get("side_effects") is True

@@ -109,7 +109,10 @@ class NewsBriefingAgent(BaseAgent):
             {"name": "fetch_news",      "fn": self._fetch_news},
             {"name": "score_relevance", "fn": self._score_relevance},
             {"name": "translate_dutch", "fn": self._translate_dutch_step},
-            {"name": "news_briefing",   "fn": self._run_briefing, "side_effects": True},
+            # retries: 0 — a send that dies mid-response may already have
+            # delivered; a retry would send a duplicate email.
+            {"name": "news_briefing",   "fn": self._run_briefing,
+             "side_effects": True, "retries": 0},
         ]
 
     def report(self) -> str:
@@ -481,7 +484,7 @@ class NewsBriefingAgent(BaseAgent):
         )
 
     def _run_briefing(self):
-        """Build email/report in Python, then invoke LLM only to send the email."""
+        """Build email/report in Python and send it directly via gmail_client."""
         today = self.context["plan"]["today"]
 
         if self.is_duplicate("email_sent", today):
@@ -499,9 +502,10 @@ class NewsBriefingAgent(BaseAgent):
         output_path = REPO_ROOT / "output" / f"daily-news-briefing-{today}.md"
         output_path.write_text(markdown)
 
-        # Let send_email() failures propagate: BaseAgent._execute_step records the
-        # step error and marks the run partial_failure. Dedup key stays unmarked on
-        # failure (we never reach mark_seen), so it retries next run.
+        # Let send_email() failures propagate: with retries: 0 on this step,
+        # BaseAgent._execute_step records the error once (no in-run retry that
+        # could double-send) and marks the run partial_failure. Dedup key stays
+        # unmarked on failure (we never reach mark_seen), so it retries next run.
         send_email(os.environ.get("AGENT_EMAIL_TO", "cianohughes@gmail.com"),
                    f"📰 News Briefing — {today}", html_email)
 

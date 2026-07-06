@@ -18,6 +18,8 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
 TOKEN_FILE = os.path.expanduser("~/.google_tokens.json")
+# A hung Gmail/OAuth call must not stall an hourly cron run indefinitely.
+REQUEST_TIMEOUT = 60
 CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
 CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
 
@@ -64,7 +66,7 @@ def get_access_token():
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
         try:
-            with urllib.request.urlopen(req) as resp:
+            with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT) as resp:
                 new_tokens = json.loads(resp.read())
         except urllib.error.HTTPError as e:
             detail = e.read().decode(errors="replace")[:200] if hasattr(e, "read") else ""
@@ -112,7 +114,7 @@ def gmail_request(method, path, params=None, body=None):
         },
         method=method,
     )
-    with urllib.request.urlopen(req) as resp:
+    with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT) as resp:
         return json.loads(resp.read())
 
 

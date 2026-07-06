@@ -1,6 +1,6 @@
 """Librarian Agent — audits and improves other agents.
 
-Cron (manual — uses --mode args not supported by install-cron):
+Cron: both mode entries are owned by install-cron via cron_entries():
   0 6 * * 0    run-agent.sh librarian --mode audit    # Sunday full audit
   0 6 * * 1-6  run-agent.sh librarian --mode watch   # Mon-Sat failure check
 """

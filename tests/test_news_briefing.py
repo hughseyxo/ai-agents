@@ -513,3 +513,8 @@ class TestRunBriefingSendsDirectly:
 
         assert result == {"skipped": True, "reason": "no_news"}
         assert "called" not in sent
+
+
+def test_news_briefing_step_never_retries(agent):
+    step = next(s for s in agent.steps() if s["name"] == "news_briefing")
+    assert step.get("retries") == 0 and step.get("side_effects") is True

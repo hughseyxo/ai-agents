@@ -18,3 +18,26 @@ def test_send_email_posts_base64_mime(monkeypatch):
     assert captured["method"] == "POST" and captured["path"] == "/users/me/messages/send"
     raw = base64.urlsafe_b64decode(captured["body"]["raw"] + "==")
     assert b"Subject: Subj" in raw and b"to@x.ie" in raw
+
+
+def test_gmail_request_sets_urlopen_timeout(monkeypatch):
+    monkeypatch.setattr(gmail_client, "get_access_token", lambda: "tok")
+    captured = {}
+
+    class FakeResp:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self):
+            return b"{}"
+
+    def fake_urlopen(req, timeout=None):
+        captured["timeout"] = timeout
+        return FakeResp()
+
+    monkeypatch.setattr(gmail_client.urllib.request, "urlopen", fake_urlopen)
+    gmail_client.gmail_request("GET", "/users/me/profile")
+    assert captured["timeout"] is not None and captured["timeout"] > 0
