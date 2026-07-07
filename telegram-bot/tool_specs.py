@@ -25,6 +25,7 @@ from tools import (
     research_plant_watering,
     research_plant_sunlight,
     save_recipe,
+    save_youtube_playlist,
     get_plant,
     get_all_plants,
     save_plant_assessment,
@@ -235,6 +236,18 @@ SPECS = [
             "required": ["url"],
         },
         "func": save_recipe,
+    },
+    {
+        "name": "save_youtube_playlist",
+        "description": "Extract YouTube video recommendations from a TikTok photo slideshow and add them to the 'TikTok Finds' YouTube playlist. Use when the user sends a TikTok link recommending YouTube videos, or asks to save/add TikTok recommendations to their YouTube playlist. Only handles TikTok photo-slideshow posts, not regular videos.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "url": {"type": "string", "description": "The TikTok URL."}
+            },
+            "required": ["url"],
+        },
+        "func": save_youtube_playlist,
     },
     {
         "name": "get_plant",

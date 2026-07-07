@@ -71,6 +71,7 @@ The detailed file/module map is a **server-only** Obsidian MOC at `docs/_map/ind
 # Skills
 - Skills are Claude Code interactive commands in `skills/<name>/SKILL.md`
 - `mealsave` — save recipe URLs to Mealie (`/mealsave <url>`)
+- `ytsave` — extract YouTube video recommendations from a TikTok photo slideshow and add them to the "TikTok Finds" YouTube playlist (`/ytsave <url>`). No Google Cloud/OAuth — yt-dlp `ytsearch` for lookup (no key/quota) + `ytmusicapi` browser-cookie auth for playlist writes (avoids the official Data API's 7-day refresh-token expiry on an unpublished GCP app). v1 handles photo slideshows only, not regular video TikToks. Also exposed as the concierge tool `save_youtube_playlist` (`telegram-bot/tools.py`). Setup: `skills/ytsave/README.md`. Design: `docs/superpowers/specs/2026-07-07-ytsave-tiktok-youtube-playlist-design.md`.
 - `free-time` — suggest best tasks for a free time window ("I have 30 minutes free"); also available as a concierge MCP tool (`agents/free_time.py`) now that the standalone bot path is retired
 
 # Plant Watering Tracker

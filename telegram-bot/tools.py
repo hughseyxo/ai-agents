@@ -606,6 +606,34 @@ def save_recipe(url: str) -> str:
     return f"Recipe saved: {output}"
 
 
+YTSAVE_PY = REPO_ROOT / "skills" / "ytsave" / "ytsave.py"
+YTSAVE_PYTHON = REPO_ROOT / "skills" / "ytsave" / ".venv" / "bin" / "python"
+
+
+def save_youtube_playlist(url: str) -> str:
+    """Extract YouTube video recommendations from a TikTok slideshow and add them to the TikTok Finds playlist."""
+    err = _validate_http_url(url)
+    if err:
+        return err
+    python = str(YTSAVE_PYTHON) if YTSAVE_PYTHON.exists() else "python3"
+    try:
+        result = subprocess.run(
+            [python, str(YTSAVE_PY), url],
+            capture_output=True, text=True, timeout=300,
+            cwd=str(REPO_ROOT),
+        )
+    except subprocess.TimeoutExpired:
+        return "Timed out saving to YouTube playlist. Try again."
+    except FileNotFoundError:
+        return "ytsave not installed."
+
+    output = result.stdout.strip()
+    if result.returncode != 0 or not output:
+        import re as _re
+        err = result.stderr.strip()
+        m = _re.search(r'^ERROR:\s*(.*)$', err or output, _re.MULTILINE)
+        return f"Error: {m.group(1).strip() if m else (err or output)[-400:]}"
+    return output
 
 
 def get_travel_report() -> str:
