@@ -550,8 +550,12 @@ def main():
     playlist_name = config.get("playlist_name") or DEFAULT_PLAYLIST_NAME
     ytmusic = get_ytmusic_client()
     playlist_id = ensure_playlist(ytmusic, config, playlist_name)
-    playlist = ytmusic.get_playlist(playlist_id, limit=None)
-    existing = existing_video_ids(playlist)
+    try:
+        playlist = ytmusic.get_playlist(playlist_id, limit=None)
+        existing = existing_video_ids(playlist)
+    except Exception as e:
+        print(f"[ytsave] could not fetch existing playlist contents (treating as empty): {e}", file=sys.stderr)
+        existing = set()
 
     titles_only = [t["title"] for t in titles_with_candidates]
     new_ids, added_titles, skipped_titles = classify_matches(titles_only, aligned, existing)
