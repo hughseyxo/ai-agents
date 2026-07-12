@@ -215,6 +215,20 @@
 
         <!-- Tab Content: Info -->
         <div x-show="activeTab === 'info'" class="tab-pane">
+
+          <!-- Photo history timeline (visible payoff of stored photo history) -->
+          <div class="glass-panel info-box" x-show="photoHistory.length > 0" style="margin-bottom: 16px;">
+            <h3>Photo History</h3>
+            <div class="photo-timeline">
+              <template x-for="photo in photoHistory" :key="photo.id">
+                <div class="timeline-item">
+                  <img :src="photo.url" alt="" class="timeline-thumb" :class="'status-' + (photo.status || 'unknown').toLowerCase()">
+                  <span class="timeline-date" x-text="formatDate(photo.taken_at)"></span>
+                </div>
+              </template>
+            </div>
+          </div>
+
           <div class="detail-grid">
             
             <!-- Metadata Panel -->
@@ -401,6 +415,66 @@
       </section>
     </div>
 
+    <!-- View: Batch Photo Upload -->
+    <div x-show="currentView === 'batch'" x-transition:enter="transition-fade-in" class="view-pane">
+      <section class="photo-container glass-panel">
+        <button class="btn btn-back" @click="setView('dashboard')">← Back to Dashboard</button>
+
+        <h2>Batch Photo Upload</h2>
+        <p class="photo-desc">Upload photos of several plants at once — Claude identifies each one and runs a health assessment automatically.</p>
+
+        <div class="file-uploader" :class="batchItems.length > 0 ? 'has-file' : ''" x-show="!batchJobId">
+          <input type="file" id="batch-photo-input" accept="image/*" multiple @change="handleBatchPhotoSelect" class="file-input">
+
+          <div class="upload-prompt" x-show="batchItems.length === 0">
+            <span class="upload-icon">🗂️</span>
+            <p>Tap to select photos of multiple plants</p>
+          </div>
+
+          <div class="upload-preview-container" x-show="batchItems.length > 0">
+            <p x-text="batchItems.length + ' photo' + (batchItems.length === 1 ? '' : 's') + ' selected'"></p>
+          </div>
+        </div>
+
+        <div class="photo-actions" x-show="batchItems.length > 0 && !batchJobId">
+          <button class="btn btn-primary btn-block" :class="batchUploading ? 'loading' : ''" @click="submitBatch()" :disabled="batchUploading">
+            <span x-show="!batchUploading">🔍 Identify &amp; Assess All</span>
+            <span x-show="batchUploading" class="spinner-container">
+              <span class="spinner"></span>
+              <span class="spinner-text">Uploading…</span>
+            </span>
+          </button>
+        </div>
+
+        <div class="batch-pause-banner glass-panel" x-show="batchJob?.status === 'paused'">
+          ⏳ Claude usage limit reached — will retry automatically. <span x-text="batchResumeText()"></span>
+        </div>
+
+        <div class="batch-item-list" x-show="batchJob">
+          <template x-for="(item, i) in (batchJob?.items || [])" :key="i">
+            <div class="batch-item glass-panel">
+              <template x-if="batchItems[i]?.previewUrl">
+                <img :src="batchItems[i].previewUrl" alt="" class="batch-item-thumb">
+              </template>
+              <div class="batch-item-body">
+                <div class="batch-item-plant" x-text="item.matched_plant || 'Unidentified plant'"></div>
+                <div class="batch-item-status" x-text="batchItemStatusText(item)"></div>
+                <div class="batch-item-assign" x-show="item.status === 'unmatched'" x-data="{ assignTo: '' }">
+                  <select x-model="assignTo">
+                    <option value="">Select plant…</option>
+                    <template x-for="p in plants" :key="p.name">
+                      <option :value="p.name" x-text="p.name"></option>
+                    </template>
+                  </select>
+                  <button class="btn btn-secondary btn-sm" @click="assignBatchItem(i, assignTo)" :disabled="!assignTo">Assign</button>
+                </div>
+              </div>
+            </div>
+          </template>
+        </div>
+      </section>
+    </div>
+
     <!-- View: Garden Chat -->
     <div x-show="currentView === 'chat'" x-transition:enter="transition-fade-in" class="view-pane chat-view">
       <header class="chat-header glass-panel">
@@ -427,9 +501,17 @@
   <!-- Floating Action Buttons -->
   <div class="fab-group" x-show="currentView === 'dashboard'">
     <button class="fab btn-chat" @click="openChat('garden')" title="Garden chat">💬 Garden chat</button>
+    <button class="fab btn-water-all" @click="openBatchUpload()" title="Batch upload plant photos">🗂️ Batch Upload</button>
     <button class="fab btn-water-all" @click="waterAll('indoor')" title="Water all indoor plants">🏠 Water All Indoor</button>
     <button class="fab btn-water-all" @click="waterAll('outdoor')" title="Water all outdoor plants">☀️ Water All Outdoor</button>
     <button class="fab fab-add" @click="openAddForm()" title="Add a plant">+</button>
+  </div>
+
+  <!-- Toast notifications (batch upload + manual-assign feedback) -->
+  <div class="toast-container">
+    <template x-for="toast in toasts" :key="toast.id">
+      <div class="toast glass-panel" :class="'toast-' + toast.variant" x-text="toast.message" x-transition></div>
+    </template>
   </div>
 
   <!-- Modal: Weather adjusted details -->

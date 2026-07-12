@@ -1,7 +1,7 @@
 function plantApp() {
   return {
     // Views and navigation
-    currentView: 'dashboard', // dashboard, detail, form, photo
+    currentView: 'dashboard', // dashboard, detail, form, photo, batch, chat
     activeFilter: 'all', // all, indoor, outdoor
     
     // Data stores
@@ -37,6 +37,18 @@ function plantApp() {
     photoSelected: false,
     photoUploading: false,
     diagnosticResult: null,
+    photoHistory: [],
+
+    // Batch photo upload state
+    batchItems: [],       // [{file, previewUrl}] — client-side, mirrors upload order
+    batchJobId: null,
+    batchJob: null,       // polled job status: {status, items, current_index, next_ping_at, ...}
+    batchUploading: false,
+    batchPollTimer: null,
+
+    // Toast notifications (batch + manual-assign feedback only — other
+    // actions still use alert()/confirm(), see design doc)
+    toasts: [],
 
     // Attention panel
     attention: { watering_needed: [], photos_needed: [], care_tasks: [] },
@@ -159,10 +171,21 @@ function plantApp() {
         if (!response.ok) throw new Error('Failed to fetch plant detail');
         this.activePlant = await response.json();
         this.setView('detail');
+        this.loadPhotoHistory(name);
       } catch (err) {
         alert('Error loading plant details: ' + err.message);
       } finally {
         this.activePlantLoading = false;
+      }
+    },
+
+    async loadPhotoHistory(name) {
+      try {
+        const res = await fetch(`/api/plants/${encodeURIComponent(name)}/photos`);
+        this.photoHistory = res.ok ? await res.json() : [];
+      } catch (e) {
+        console.error('Failed to load photo history:', e);
+        this.photoHistory = [];
       }
     },
 
@@ -425,6 +448,134 @@ function plantApp() {
       if (this.diagnosticResult) {
         this.diagnosticResult.frequency_suggestion = null;
       }
+    },
+
+    // Batch photo upload: identify + assess several plants from one upload.
+    openBatchUpload() {
+      this.batchItems = [];
+      this.batchJobId = null;
+      this.batchJob = null;
+      this.batchUploading = false;
+      if (this.batchPollTimer) {
+        clearInterval(this.batchPollTimer);
+        this.batchPollTimer = null;
+      }
+      this.setView('batch');
+
+      setTimeout(() => {
+        const input = document.getElementById('batch-photo-input');
+        if (input) input.value = '';
+      }, 50);
+    },
+
+    handleBatchPhotoSelect(event) {
+      const files = Array.from(event.target.files || []);
+      this.batchItems = files.map(file => ({ file, previewUrl: null }));
+      this.batchItems.forEach((entry, i) => {
+        const reader = new FileReader();
+        reader.onload = (e) => { this.batchItems[i].previewUrl = e.target.result; };
+        reader.readAsDataURL(entry.file);
+      });
+    },
+
+    async submitBatch() {
+      if (!this.batchItems.length || this.batchUploading) return;
+      this.batchUploading = true;
+
+      const formData = new FormData();
+      this.batchItems.forEach(entry => formData.append('files', entry.file));
+
+      try {
+        const response = await fetch('/api/plants/batch-photos', { method: 'POST', body: formData });
+        if (!response.ok) {
+          const errData = await response.json();
+          throw new Error(errData.detail || 'Batch upload failed');
+        }
+        const result = await response.json();
+        this.batchJobId = result.job_id;
+        this.showToast(`Batch upload started — processing ${this.batchItems.length} photo(s)…`, 'info');
+        this.pollBatchJob();
+      } catch (err) {
+        this.showToast('Batch upload failed: ' + err.message, 'error');
+      } finally {
+        this.batchUploading = false;
+      }
+    },
+
+    async pollBatchJob() {
+      if (this.batchPollTimer) clearInterval(this.batchPollTimer);
+
+      const poll = async () => {
+        try {
+          const res = await fetch(`/api/plants/batch-photos/${this.batchJobId}`);
+          if (!res.ok) return;
+          this.batchJob = await res.json();
+
+          if (['done', 'failed'].includes(this.batchJob.status)) {
+            clearInterval(this.batchPollTimer);
+            this.batchPollTimer = null;
+            this.showToast(
+              this.batchJob.status === 'done' ? 'Batch upload complete.' : 'Batch upload failed — usage limit persisted too long.',
+              this.batchJob.status === 'done' ? 'success' : 'error',
+            );
+            this.fetchPlants();
+          }
+        } catch (e) {
+          console.error('Failed to poll batch job:', e);
+        }
+      };
+
+      await poll();
+      this.batchPollTimer = setInterval(poll, 3000);
+    },
+
+    batchItemStatusText(item) {
+      if (!item) return '';
+      switch (item.status) {
+        case 'pending': return 'Waiting…';
+        case 'unmatched': return "Couldn't identify — assign a plant below";
+        case 'done': return '✓ ' + (item.result?.status || 'Assessed');
+        case 'failed': return '✗ ' + (item.error || 'Failed');
+        default: return item.status;
+      }
+    },
+
+    batchResumeText() {
+      if (!this.batchJob?.next_ping_at) return '';
+      const mins = Math.max(0, Math.round((new Date(this.batchJob.next_ping_at) - new Date()) / 60000));
+      return `Retrying in ~${mins} min.`;
+    },
+
+    async assignBatchItem(index, plantName) {
+      if (!plantName || !this.batchJobId) return;
+      try {
+        const res = await fetch(`/api/plants/batch-photos/${this.batchJobId}/items/${index}/assign`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ plant_name: plantName }),
+        });
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.detail || 'Assignment failed');
+        }
+        const item = await res.json();
+        this.batchJob.items[index] = item;
+        this.showToast(`${plantName} assessed.`, item.status === 'done' ? 'success' : 'error');
+        this.fetchPlants();
+      } catch (err) {
+        this.showToast('Assign failed: ' + err.message, 'error');
+      }
+    },
+
+    // Toast notifications
+    showToast(message, variant = 'info') {
+      const id = `${Date.now()}-${Math.random()}`;
+      this.toasts.push({ id, message, variant });
+      setTimeout(() => this.dismissToast(id), 4000);
+    },
+
+    dismissToast(id) {
+      this.toasts = this.toasts.filter(t => t.id !== id);
     },
 
     async completeTask(plant, action) {

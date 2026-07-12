@@ -3,6 +3,7 @@ import os
 import logging
 import tempfile
 import asyncio
+from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Optional, Literal
@@ -19,9 +20,7 @@ sys.path.insert(0, str(REPO_ROOT / "telegram-bot"))
 
 from agents.plant_model import PlantStore, Plant, AssessmentRecord
 from agents.db import AgentDB
-from agents import garden_notes
 from agents.plant_profiles import (
-    write_health_assessment,
     append_frequency_history,
     append_intelligence_note,
     profile_path,
@@ -30,16 +29,25 @@ from agents.plant_profiles import (
 )
 from agents.plant_assessment import (
     load_species_context as _load_species_context,
-    format_care_actions_for_profile as _format_care_actions_for_profile,
     parse_assessment_response,
 )
-from claude_backend import assess_image
+from agents import photo_batch
+from claude_backend import assess_image, VISION_MODEL
 from plant_ui import chat_backend
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("plant_ui")
 
-app = FastAPI(title="Plant AI PWA")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Pick back up any batch job left running/paused across a service
+    # restart (systemd restart, deploy) rather than silently losing it.
+    photo_batch.resume_active_jobs()
+    yield
+
+
+app = FastAPI(title="Plant AI PWA", lifespan=lifespan)
 
 # Constants
 PLANT_ASSESSMENT_SYSTEM_PATH = REPO_ROOT / "agents" / "prompts" / "plant_photo_assessment.md"
@@ -53,7 +61,15 @@ PLANT_HEALTH_SYSTEM = (
 MAX_UPLOAD_BYTES = 8 * 1024 * 1024  # 8 MB
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
 # Magic-byte signatures for the allowed image types (defence beyond content-type).
-_IMAGE_MAGIC = (b"\xff\xd8\xff", b"\x89PNG\r\n\x1a\n", b"RIFF")
+_IMAGE_MAGIC = (b"\xff\xd8\xff", b"\x89PNG\r\n\x1a\n")
+
+
+def _is_valid_image_bytes(contents: bytes) -> bool:
+    if contents.startswith(_IMAGE_MAGIC):
+        return True
+    # WebP: RIFF container (bytes 0-3) + WEBP fourCC (bytes 8-11) — checking
+    # only the RIFF prefix would also accept unrelated RIFF formats (WAV, AVI).
+    return contents.startswith(b"RIFF") and contents[8:12] == b"WEBP"
 MAX_PROFILE_CHARS = 4000  # cap profile markdown folded into the vision prompt
 
 
@@ -376,7 +392,8 @@ async def chat_endpoint(req: ChatRequest):
 
 
 @app.post("/api/plants/{name}/photo")
-async def upload_photo(name: str, file: UploadFile = File(...), store: PlantStore = Depends(get_store)):
+async def upload_photo(name: str, file: UploadFile = File(...), store: PlantStore = Depends(get_store),
+                        db: AgentDB = Depends(get_db)):
     plant = store.get_plant(name)
     if not plant:
         raise HTTPException(status_code=404, detail=f"Plant '{name}' not found")
@@ -389,7 +406,7 @@ async def upload_photo(name: str, file: UploadFile = File(...), store: PlantStor
         raise HTTPException(status_code=400, detail="Empty upload.")
     if len(contents) > MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail="Image too large (max 8 MB).")
-    if not contents.startswith(_IMAGE_MAGIC):
+    if not _is_valid_image_bytes(contents):
         raise HTTPException(status_code=400, detail="Upload is not a valid image file.")
 
     # Replicate _analyze_plant_image logic
@@ -426,77 +443,141 @@ async def upload_photo(name: str, file: UploadFile = File(...), store: PlantStor
         f"{profile_context}"
     )
     
-    # Save upload to temp file and call assess_image
+    # Fold in the last few stored photos for this plant so the assessment can
+    # reason about trends (e.g. progressive wilting) rather than a single snapshot.
+    trend_paths = photo_batch.get_trend_photo_paths(db, plant.name)
+
+    # Save upload to temp file and call assess_image. Persistence (photo save +
+    # profile write) happens inside this block, before the temp file is cleaned up.
     with tempfile.TemporaryDirectory(prefix="plant_ui-") as tmpdir:
         tmp_img = Path(tmpdir) / "image.jpg"
         tmp_img.write_bytes(contents)
-        
+
         # Run assess_image from claude_backend in executor since it's blocking
         loop = asyncio.get_running_loop()
         try:
             raw_response = await loop.run_in_executor(
-                None, assess_image, str(tmp_img), system_prompt, user_text
+                None, assess_image, str(tmp_img), system_prompt, user_text, VISION_MODEL, plant.name, trend_paths
             )
         except Exception as e:
             logger.error(f"Image assessment failed: {e}")
             raw_response = None
-            
-    if not raw_response:
-        raise HTTPException(status_code=500, detail="Plant assessment is unavailable right now. Try again later.")
 
-    display_text, parsed = parse_assessment_response(raw_response, plant.name)
+        if not raw_response:
+            raise HTTPException(status_code=500, detail="Plant assessment is unavailable right now. Try again later.")
 
-    if parsed:
-        # Save structured notes to plant profile doc (## Health Assessments section),
-        # folding in the prioritised care actions so next steps persist over time.
-        profile_notes = parsed.get("profile_notes", "")
-        care_block = _format_care_actions_for_profile(parsed.get("care_actions") or [])
-        if profile_notes or care_block:
-            write_health_assessment(plant.name, (profile_notes + care_block).strip())
+        display_text, parsed = parse_assessment_response(raw_response, plant.name)
 
-        # Auto-create a standalone observation note when the assessment is noteworthy.
-        try:
-            garden_notes.maybe_create_observation_note(plant.name, parsed)
-        except Exception as e:
-            logger.warning("observation note creation failed: %s", e)
+        if parsed:
+            photo_batch.persist_assessment(store, db, plant, parsed, str(tmp_img))
+            freq_suggestion = parsed.get("frequency_suggestion")
+            return {
+                "status": "success",
+                "display_text": display_text,
+                "parsed": parsed,
+                "frequency_suggestion": freq_suggestion
+            }
+        else:
+            # Text only fallback — still worth keeping in the photo history, just
+            # without the structured profile/observation-note writes.
+            if not display_text.startswith("Plant assessment unavailable"):
+                photo_batch.save_plant_photo(
+                    db, plant.name, contents,
+                    assessment_summary=display_text, assessment_status="Assessment",
+                )
+                plant.last_assessment = AssessmentRecord(
+                    date=date.today(),
+                    summary=display_text,
+                    status="Assessment"
+                )
+                plant.needs_photo = False
+                store.update_plant(plant)
 
-        # Save assessment summary to DB
-        summary_to_save = parsed.get("summary", display_text)
-        status_to_save = parsed.get("status", "Assessment")
-        plant.last_assessment = AssessmentRecord(
-            date=date.today(),
-            summary=summary_to_save,
-            status=status_to_save
-        )
-        # Clear needs_photo flag if assessed
-        plant.needs_photo = False
-        store.update_plant(plant)
-        
-        # Suggest frequency change if any
-        freq_suggestion = parsed.get("frequency_suggestion")
-        return {
-            "status": "success",
-            "display_text": display_text,
-            "parsed": parsed,
-            "frequency_suggestion": freq_suggestion
+            return {
+                "status": "success",
+                "display_text": display_text,
+                "parsed": None,
+                "frequency_suggestion": None
+            }
+
+
+class AssignItemRequest(BaseModel):
+    plant_name: str
+
+
+def _validate_upload_bytes(contents: bytes, content_type: str | None) -> None:
+    if content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(status_code=400, detail="Only JPEG, PNG or WebP images are accepted.")
+    if not contents:
+        raise HTTPException(status_code=400, detail="Empty upload.")
+    if len(contents) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="Image too large (max 8 MB).")
+    if not _is_valid_image_bytes(contents):
+        raise HTTPException(status_code=400, detail="Upload is not a valid image file.")
+
+
+@app.post("/api/plants/batch-photos")
+async def upload_batch_photos(files: list[UploadFile] = File(...), db: AgentDB = Depends(get_db)):
+    if not files:
+        raise HTTPException(status_code=400, detail="No files uploaded.")
+
+    image_bytes_list = []
+    for file in files:
+        contents = await file.read()
+        _validate_upload_bytes(contents, file.content_type)
+        image_bytes_list.append(contents)
+
+    job_id = photo_batch.create_batch_job(db, image_bytes_list)
+    # Runs with its own AgentDB connection — this request's `db` closes when
+    # the response returns, but the job keeps processing in the background.
+    asyncio.create_task(photo_batch.run_batch_job(job_id))
+    return {"job_id": job_id}
+
+
+@app.get("/api/plants/batch-photos/{job_id}")
+def get_batch_photo_job(job_id: int, db: AgentDB = Depends(get_db)):
+    job = db.get_batch_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"Batch job {job_id} not found")
+    return job
+
+
+@app.post("/api/plants/batch-photos/{job_id}/items/{index}/assign")
+async def assign_batch_photo_item(job_id: int, index: int, req: AssignItemRequest,
+                                   db: AgentDB = Depends(get_db)):
+    try:
+        item = await photo_batch.assign_item(job_id, index, req.plant_name, db=db)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return item
+
+
+@app.get("/api/plants/{name}/photos")
+def list_plant_photos(name: str, store: PlantStore = Depends(get_store), db: AgentDB = Depends(get_db)):
+    if not store.get_plant(name):
+        raise HTTPException(status_code=404, detail=f"Plant '{name}' not found")
+    rows = db.get_plant_photo_history(name, limit=10)
+    return [
+        {
+            "id": r["id"], "taken_at": r["taken_at"],
+            "status": r["assessment_status"], "url": f"/api/plants/{name}/photos/{r['id']}",
         }
-    else:
-        # Text only fallback
-        if not display_text.startswith("Plant assessment unavailable"):
-            plant.last_assessment = AssessmentRecord(
-                date=date.today(),
-                summary=display_text,
-                status="Assessment"
-            )
-            plant.needs_photo = False
-            store.update_plant(plant)
-            
-        return {
-            "status": "success",
-            "display_text": display_text,
-            "parsed": None,
-            "frequency_suggestion": None
-        }
+        for r in rows
+    ]
+
+
+@app.get("/api/plants/{name}/photos/{photo_id}")
+def get_plant_photo(name: str, photo_id: int, store: PlantStore = Depends(get_store), db: AgentDB = Depends(get_db)):
+    if not store.get_plant(name):
+        raise HTTPException(status_code=404, detail=f"Plant '{name}' not found")
+    rows = db.get_plant_photo_history(name, limit=10)
+    match = next((r for r in rows if r["id"] == photo_id), None)
+    if not match:
+        raise HTTPException(status_code=404, detail="Photo not found")
+    path = Path(match["file_path"])
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Photo file missing on disk")
+    return FileResponse(path, media_type="image/jpeg")
 
 # Serve Frontend SPA
 @app.get("/", response_class=HTMLResponse)

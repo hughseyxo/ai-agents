@@ -17,6 +17,7 @@ from plant_ui.server import app, get_store, get_db
 from agents.plant_model import PlantStore, Plant, AssessmentRecord
 from agents.db import AgentDB
 from agents import plant_profiles as pp
+from agents import photo_batch
 
 @pytest.fixture
 def temp_db_path(tmp_path):
@@ -26,17 +27,23 @@ def temp_db_path(tmp_path):
 def mock_store_db(temp_db_path, monkeypatch, tmp_path):
     # Override profiles directory in plant_profiles helper
     monkeypatch.setattr(pp, "PLANTS_DIR", tmp_path / "plants")
-    
+    # Isolate photo storage — every photo upload path (single or batch) goes
+    # through photo_batch.save_plant_photo/create_batch_job, so without this
+    # every photo-upload test would write real files into the repo's own
+    # data/plant-photos/ and data/plant-photo-batches/ directories.
+    monkeypatch.setattr(photo_batch, "PHOTO_STORE_DIR", tmp_path / "plant-photos")
+    monkeypatch.setattr(photo_batch, "BATCH_TEMP_DIR", tmp_path / "plant-photo-batches")
+
     # Create stores with the test db path
     store = PlantStore(temp_db_path)
     db = AgentDB(temp_db_path)
-    
+
     # Apply dependency overrides for FastAPI app
     app.dependency_overrides[get_store] = lambda: PlantStore(temp_db_path)
     app.dependency_overrides[get_db] = lambda: AgentDB(temp_db_path)
-    
+
     yield store, db, tmp_path / "plants"
-    
+
     # Clean overrides
     app.dependency_overrides.clear()
     store.close()
@@ -307,7 +314,7 @@ def test_photo_noteworthy_creates_observation(client, mock_store_db, monkeypatch
 
     captured = {}
     monkeypatch.setattr(
-        srv.garden_notes,
+        srv.photo_batch.garden_notes,
         "maybe_create_observation_note",
         lambda slug, parsed: captured.setdefault("called", (slug, parsed)) or "docs/x.md",
     )
@@ -443,3 +450,124 @@ def test_photo_care_actions_persisted_to_profile(client, mock_store_db):
     profile = prof_path.read_text()
     assert "Remove the 3 yellow lower leaves" in profile
     assert "Yellowing observed" in profile
+
+
+# --- Batch photo upload ---
+
+
+@pytest.fixture(autouse=True)
+def _no_real_batch_jobs(monkeypatch):
+    # Prevent any test from accidentally kicking off a real background job
+    # (which would try to run the actual `claude` CLI as a subprocess).
+    async def _noop(*args, **kwargs):
+        return None
+    monkeypatch.setattr("plant_ui.server.photo_batch.run_batch_job", _noop)
+
+
+def test_upload_batch_photos_creates_job(client, mock_store_db):
+    from io import BytesIO
+    r = client.post(
+        "/api/plants/batch-photos",
+        files=[
+            ("files", ("a.jpg", BytesIO(_JPEG_BYTES), "image/jpeg")),
+            ("files", ("b.jpg", BytesIO(_JPEG_BYTES), "image/jpeg")),
+        ],
+    )
+    assert r.status_code == 200
+    job_id = r.json()["job_id"]
+
+    status = client.get(f"/api/plants/batch-photos/{job_id}")
+    assert status.status_code == 200
+    job = status.json()
+    assert job["status"] == "running"
+    assert len(job["items"]) == 2
+
+
+def test_upload_batch_photos_rejects_invalid_type(client, mock_store_db):
+    from io import BytesIO
+    r = client.post(
+        "/api/plants/batch-photos",
+        files=[("files", ("a.txt", BytesIO(b"not an image"), "text/plain"))],
+    )
+    assert r.status_code == 400
+
+
+def test_upload_batch_photos_requires_files(client, mock_store_db):
+    r = client.post("/api/plants/batch-photos", files=[])
+    assert r.status_code in (400, 422)
+
+
+def test_get_batch_photo_job_not_found(client, mock_store_db):
+    r = client.get("/api/plants/batch-photos/999")
+    assert r.status_code == 404
+
+
+def test_assign_batch_photo_item(client, mock_store_db, monkeypatch):
+    import plant_ui.server as srv
+    store, db, plants_dir = mock_store_db
+    plant_data = Plant(
+        name="Aloe", frequency_days=20, baseline_frequency_days=20,
+        last_watered=date.today() - timedelta(days=5), location="indoor",
+    )
+    store.save_plants([plant_data])
+    plants_dir.mkdir(parents=True, exist_ok=True)
+    (plants_dir / "aloe.md").write_text("# Aloe\n## Health Assessments\n")
+
+    job_id = srv.photo_batch.create_batch_job(db, [_JPEG_BYTES])
+    job = db.get_batch_job(job_id)
+    items = job["items"]
+    items[0]["status"] = "unmatched"
+    db.update_batch_job(job_id, items=items)
+
+    monkeypatch.setattr(
+        srv.photo_batch, "assess_image",
+        lambda *a, **k: json.dumps({
+            "status": "Healthy", "summary": "assigned via manual match",
+            "observations": [], "watering_recommendation": "on_schedule",
+            "care_actions": [], "noteworthy": False,
+        }),
+    )
+
+    r = client.post(f"/api/plants/batch-photos/{job_id}/items/0/assign", json={"plant_name": "Aloe"})
+    assert r.status_code == 200
+    data = r.json()
+    assert data["status"] == "done"
+    assert data["matched_plant"] == "Aloe"
+
+
+def test_assign_batch_photo_item_unknown_plant_returns_400(client, mock_store_db):
+    import plant_ui.server as srv
+    store, db, plants_dir = mock_store_db
+    job_id = srv.photo_batch.create_batch_job(db, [_JPEG_BYTES])
+
+    r = client.post(f"/api/plants/batch-photos/{job_id}/items/0/assign", json={"plant_name": "No Such Plant"})
+    assert r.status_code == 400
+
+
+def test_list_and_serve_plant_photos(client, mock_store_db):
+    import plant_ui.server as srv
+    store, db, plants_dir = mock_store_db
+    plant_data = Plant(
+        name="Aloe", frequency_days=20, baseline_frequency_days=20,
+        last_watered=date.today() - timedelta(days=5), location="indoor",
+    )
+    store.save_plants([plant_data])
+
+    srv.photo_batch.save_plant_photo(db, "Aloe", b"photo-bytes",
+                                      assessment_summary="Looking good", assessment_status="Healthy")
+
+    r = client.get("/api/plants/Aloe/photos")
+    assert r.status_code == 200
+    photos = r.json()
+    assert len(photos) == 1
+    assert photos[0]["status"] == "Healthy"
+
+    photo_id = photos[0]["id"]
+    img = client.get(f"/api/plants/Aloe/photos/{photo_id}")
+    assert img.status_code == 200
+    assert img.content == b"photo-bytes"
+
+
+def test_list_plant_photos_unknown_plant_404(client, mock_store_db):
+    r = client.get("/api/plants/No Such Plant/photos")
+    assert r.status_code == 404

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'yopflix-gardening-v2';
+const CACHE_NAME = 'yopflix-gardening-v3';
 const ASSETS_TO_CACHE = [
   '/',
   '/static/style.css',
@@ -6,8 +6,9 @@ const ASSETS_TO_CACHE = [
   '/static/manifest.json',
   '/static/icon-192.png',
   '/static/icon-512.png',
-  'https://cdn.jsdelivr.net/npm/marked/marked.min.js',
-  'https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js'
+  'https://cdn.jsdelivr.net/npm/marked@4.3.0/marked.min.js',
+  'https://cdn.jsdelivr.net/npm/dompurify@3.4.8/dist/purify.min.js',
+  'https://cdn.jsdelivr.net/npm/alpinejs@3.15.12/dist/cdn.min.js'
 ];
 
 // Install Service Worker and cache core shell assets
