@@ -169,10 +169,18 @@ def _plant_user_text(plant) -> str:
 # --- Batch job creation ---
 
 
-def create_batch_job(db: AgentDB, image_bytes_list: list[bytes]) -> int:
+def create_batch_job(db: AgentDB, image_bytes_list: list[bytes], plant_names: list[str] = None) -> int:
     """Create a new batch job for N uploaded photos, persisting each
     original to a job-scoped temp dir (survives a plant_ui service restart,
-    unlike a tempfile.TemporaryDirectory) and creating the AgentDB job row."""
+    unlike a tempfile.TemporaryDirectory) and creating the AgentDB job row.
+
+    plant_names, if given, is a parallel list (same length/order as
+    image_bytes_list) of user-picked plant names — a non-empty entry skips
+    the identify Opus call entirely for that photo (_process_item goes
+    straight to the trend-assessment call), since the user already knows
+    which plant it is. An empty string/None entry falls back to AI
+    auto-identification, same as before this parameter existed."""
+    plant_names = plant_names or [None] * len(image_bytes_list)
     placeholder_items = [{"status": "pending"} for _ in image_bytes_list]
     job_id = db.create_batch_job(placeholder_items)
     job_dir = BATCH_TEMP_DIR / str(job_id)
@@ -182,9 +190,11 @@ def create_batch_job(db: AgentDB, image_bytes_list: list[bytes]) -> int:
     for i, image_bytes in enumerate(image_bytes_list):
         path = job_dir / f"{i}.jpg"
         path.write_bytes(image_bytes)
+        preassigned = (plant_names[i] or "").strip() or None
         items.append({
             "temp_path": str(path), "status": "pending",
-            "matched_plant": None, "confidence": None, "result": None, "error": None,
+            "matched_plant": preassigned, "confidence": "user-assigned" if preassigned else None,
+            "result": None, "error": None,
         })
     db.update_batch_job(job_id, items=items)
     return job_id
@@ -200,33 +210,47 @@ def _cleanup_job_dir(job_id: int) -> None:
 
 
 def _process_item(item: dict, plants: list[dict], store: PlantStore, db: AgentDB) -> tuple[dict, bool]:
-    """Process one batch item: call 1 (identify+assess), and call 2
+    """Process one batch item: call 1 (identify+assess) unless the user
+    already picked a plant in the UI for this photo, then call 2
     (trend-refine) if matched. Returns (updated_item, usage_limit_hit).
     On a usage-limit hit, the item is returned unchanged so the caller
     retries the same item after the pause/ping."""
     temp_path = item["temp_path"]
-    parsed, usage_limit_hit = identify_and_assess(
-        temp_path, IDENTIFY_AND_ASSESS_SYSTEM, _identification_user_text(plants)
-    )
+    parsed = None
 
-    if usage_limit_hit:
-        return item, True
+    if item.get("matched_plant"):
+        # Pre-assigned by the user at upload time — skip the identify Opus
+        # call entirely, straight to the (single) trend-assessment call.
+        plant = store.get_plant(item["matched_plant"])
+        if not plant:
+            item["error"] = f"Assigned plant '{item['matched_plant']}' not found."
+            item["matched_plant"] = None
+            item["status"] = "unmatched"
+            return item, False
+        item["matched_plant"] = plant.name
+    else:
+        parsed, usage_limit_hit = identify_and_assess(
+            temp_path, IDENTIFY_AND_ASSESS_SYSTEM, _identification_user_text(plants)
+        )
 
-    if not parsed or not parsed.get("matched_plant"):
-        item["status"] = "unmatched"
-        item["result"] = parsed
-        return item, False
+        if usage_limit_hit:
+            return item, True
 
-    matched_name = parsed["matched_plant"]
-    plant = store.get_plant(matched_name)
-    if not plant:
-        item["status"] = "unmatched"
-        item["result"] = parsed
-        item["error"] = f"Identified as '{matched_name}' but no matching plant record found."
-        return item, False
+        if not parsed or not parsed.get("matched_plant"):
+            item["status"] = "unmatched"
+            item["result"] = parsed
+            return item, False
 
-    item["matched_plant"] = plant.name
-    item["confidence"] = parsed.get("confidence")
+        matched_name = parsed["matched_plant"]
+        plant = store.get_plant(matched_name)
+        if not plant:
+            item["status"] = "unmatched"
+            item["result"] = parsed
+            item["error"] = f"Identified as '{matched_name}' but no matching plant record found."
+            return item, False
+
+        item["matched_plant"] = plant.name
+        item["confidence"] = parsed.get("confidence")
 
     trend_paths = get_trend_photo_paths(db, plant.name)
     raw_response = assess_image(

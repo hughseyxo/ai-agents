@@ -96,6 +96,18 @@ def test_create_batch_job_persists_files_and_job_row(db):
         assert item["status"] == "pending"
 
 
+def test_create_batch_job_with_plant_names_preassigns_items(db):
+    job_id = pb.create_batch_job(
+        db, [b"photo-a", b"photo-b"], plant_names=["Monstera Deliciosa", ""]
+    )
+
+    job = db.get_batch_job(job_id)
+    assert job["items"][0]["matched_plant"] == "Monstera Deliciosa"
+    assert job["items"][0]["confidence"] == "user-assigned"
+    assert job["items"][1]["matched_plant"] is None
+    assert job["items"][1]["confidence"] is None
+
+
 # --- _process_item ---
 
 
@@ -160,6 +172,42 @@ def test_process_item_unmatched_when_matched_name_not_a_real_plant(db, store, se
 
     assert usage_limit_hit is False
     assert updated_item["status"] == "unmatched"
+
+
+def test_process_item_skips_identify_when_preassigned(db, store, seeded_plant, tmp_path):
+    temp_path = tmp_path / "photo.jpg"
+    temp_path.write_bytes(b"x")
+    item = {"temp_path": str(temp_path), "status": "pending",
+            "matched_plant": "Monstera Deliciosa", "confidence": "user-assigned"}
+
+    trend_response = (
+        '{"status": "Healthy", "summary": "Looking great", "observations": [], '
+        '"watering_recommendation": "on_schedule", "care_actions": [], "noteworthy": false}'
+    )
+
+    with patch.object(pb, "identify_and_assess") as mock_identify, \
+         patch.object(pb, "assess_image", return_value=trend_response):
+        updated_item, usage_limit_hit = pb._process_item(item, [seeded_plant.model_dump(mode="json")], store, db)
+
+    mock_identify.assert_not_called()
+    assert usage_limit_hit is False
+    assert updated_item["status"] == "done"
+    assert updated_item["matched_plant"] == "Monstera Deliciosa"
+
+
+def test_process_item_preassigned_unknown_plant_marks_unmatched(db, store, seeded_plant, tmp_path):
+    temp_path = tmp_path / "photo.jpg"
+    temp_path.write_bytes(b"x")
+    item = {"temp_path": str(temp_path), "status": "pending",
+            "matched_plant": "Some Unknown Plant", "confidence": "user-assigned"}
+
+    with patch.object(pb, "identify_and_assess") as mock_identify:
+        updated_item, usage_limit_hit = pb._process_item(item, [seeded_plant.model_dump(mode="json")], store, db)
+
+    mock_identify.assert_not_called()
+    assert usage_limit_hit is False
+    assert updated_item["status"] == "unmatched"
+    assert updated_item["matched_plant"] is None
 
 
 # --- run_batch_job (async state machine) ---

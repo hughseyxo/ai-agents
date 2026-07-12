@@ -483,6 +483,36 @@ def test_upload_batch_photos_creates_job(client, mock_store_db):
     assert len(job["items"]) == 2
 
 
+def test_upload_batch_photos_with_plant_names_preassigns_items(client, mock_store_db):
+    from io import BytesIO
+    r = client.post(
+        "/api/plants/batch-photos",
+        files=[
+            ("files", ("a.jpg", BytesIO(_JPEG_BYTES), "image/jpeg")),
+            ("files", ("b.jpg", BytesIO(_JPEG_BYTES), "image/jpeg")),
+        ],
+        data={"plant_names": ["Aloe", ""]},
+    )
+    assert r.status_code == 200
+    job_id = r.json()["job_id"]
+
+    status = client.get(f"/api/plants/batch-photos/{job_id}")
+    job = status.json()
+    assert job["items"][0]["matched_plant"] == "Aloe"
+    assert job["items"][0]["confidence"] == "user-assigned"
+    assert job["items"][1]["matched_plant"] is None
+
+
+def test_upload_batch_photos_plant_names_length_mismatch_returns_400(client, mock_store_db):
+    from io import BytesIO
+    r = client.post(
+        "/api/plants/batch-photos",
+        files=[("files", ("a.jpg", BytesIO(_JPEG_BYTES), "image/jpeg"))],
+        data={"plant_names": ["Aloe", ""]},
+    )
+    assert r.status_code == 400
+
+
 def test_upload_batch_photos_rejects_invalid_type(client, mock_store_db):
     from io import BytesIO
     r = client.post(

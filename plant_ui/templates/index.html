@@ -421,7 +421,7 @@
         <button class="btn btn-back" @click="setView('dashboard')">← Back to Dashboard</button>
 
         <h2>Batch Photo Upload</h2>
-        <p class="photo-desc">Upload photos of several plants at once — Claude identifies each one and runs a health assessment automatically.</p>
+        <p class="photo-desc">Upload photos of several plants at once. Pick a plant per photo to skip identification entirely (free, instant), or leave it on "Auto-identify" and Claude will work it out (and run the health assessment either way).</p>
 
         <div class="file-uploader" :class="batchItems.length > 0 ? 'has-file' : ''" x-show="!batchJobId">
           <input type="file" id="batch-photo-input" accept="image/*" multiple @change="handleBatchPhotoSelect" class="file-input">
@@ -436,9 +436,29 @@
           </div>
         </div>
 
+        <div class="batch-item-list" x-show="batchItems.length > 0 && !batchJobId">
+          <template x-for="(entry, i) in batchItems" :key="i">
+            <div class="batch-item glass-panel">
+              <template x-if="entry.previewUrl">
+                <img :src="entry.previewUrl" alt="" class="batch-item-thumb">
+              </template>
+              <div class="batch-item-body">
+                <div class="batch-item-assign">
+                  <select x-model="entry.plantName">
+                    <option value="">🔍 Auto-identify</option>
+                    <template x-for="p in plants" :key="p.name">
+                      <option :value="p.name" x-text="p.name"></option>
+                    </template>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </template>
+        </div>
+
         <div class="photo-actions" x-show="batchItems.length > 0 && !batchJobId">
           <button class="btn btn-primary btn-block" :class="batchUploading ? 'loading' : ''" @click="submitBatch()" :disabled="batchUploading">
-            <span x-show="!batchUploading">🔍 Identify &amp; Assess All</span>
+            <span x-show="!batchUploading">Assess All</span>
             <span x-show="batchUploading" class="spinner-container">
               <span class="spinner"></span>
               <span class="spinner-text">Uploading…</span>

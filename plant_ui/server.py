@@ -517,9 +517,13 @@ def _validate_upload_bytes(contents: bytes, content_type: str | None) -> None:
 
 
 @app.post("/api/plants/batch-photos")
-async def upload_batch_photos(files: list[UploadFile] = File(...), db: AgentDB = Depends(get_db)):
+async def upload_batch_photos(files: list[UploadFile] = File(...),
+                               plant_names: list[str] = Form(default=[]),
+                               db: AgentDB = Depends(get_db)):
     if not files:
         raise HTTPException(status_code=400, detail="No files uploaded.")
+    if plant_names and len(plant_names) != len(files):
+        raise HTTPException(status_code=400, detail="plant_names must match files 1:1 if provided.")
 
     image_bytes_list = []
     for file in files:
@@ -527,7 +531,7 @@ async def upload_batch_photos(files: list[UploadFile] = File(...), db: AgentDB =
         _validate_upload_bytes(contents, file.content_type)
         image_bytes_list.append(contents)
 
-    job_id = photo_batch.create_batch_job(db, image_bytes_list)
+    job_id = photo_batch.create_batch_job(db, image_bytes_list, plant_names=plant_names or None)
     # Runs with its own AgentDB connection — this request's `db` closes when
     # the response returns, but the job keeps processing in the background.
     asyncio.create_task(photo_batch.run_batch_job(job_id))

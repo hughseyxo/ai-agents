@@ -53,12 +53,13 @@ function plantApp() {
     // Attention panel
     attention: { watering_needed: [], photos_needed: [], care_tasks: [] },
 
-    init() {
+init() {
       this.fetchPlants();
       this.fetchWeather();
       this.fetchStatus();
       this.loadAttention();
       this.requestNotificationPermission();
+      this.resumeStoredBatchJob();
 
       // Auto refresh every 60s
       setInterval(() => {
@@ -67,6 +68,17 @@ function plantApp() {
           this.loadAttention().then(() => this.maybeNotify());
         }
       }, 60000);
+    },
+
+    // Batch job progress is server-side (survives closing/reloading the
+    // browser), but the client-side job id was only ever in-memory — a
+    // reload had no way to reconnect to a still-running job, which looked
+    // like the job had "broken" even though it kept processing fine.
+    resumeStoredBatchJob() {
+      const storedId = localStorage.getItem('yopflix-batch-job-id');
+      if (!storedId) return;
+      this.batchJobId = storedId;
+      this.pollBatchJob();
     },
 
     async requestNotificationPermission() {
@@ -452,6 +464,14 @@ function plantApp() {
 
     // Batch photo upload: identify + assess several plants from one upload.
     openBatchUpload() {
+      // A batch job keeps processing server-side regardless of the browser —
+      // don't wipe the reference to one that's still running/paused, or
+      // there'd be no way left in the UI to see its progress or result.
+      if (this.batchJobId && this.batchJob && !['done', 'failed'].includes(this.batchJob.status)) {
+        this.setView('batch');
+        return;
+      }
+
       this.batchItems = [];
       this.batchJobId = null;
       this.batchJob = null;
@@ -460,6 +480,7 @@ function plantApp() {
         clearInterval(this.batchPollTimer);
         this.batchPollTimer = null;
       }
+      localStorage.removeItem('yopflix-batch-job-id');
       this.setView('batch');
 
       setTimeout(() => {
@@ -470,7 +491,10 @@ function plantApp() {
 
     handleBatchPhotoSelect(event) {
       const files = Array.from(event.target.files || []);
-      this.batchItems = files.map(file => ({ file, previewUrl: null }));
+      // plantName '' means "auto-identify" (the Opus identify call); picking
+      // a plant here skips that call entirely — free and instant vs. paying
+      // for an identification call the user can usually answer themselves.
+      this.batchItems = files.map(file => ({ file, previewUrl: null, plantName: '' }));
       this.batchItems.forEach((entry, i) => {
         const reader = new FileReader();
         reader.onload = (e) => { this.batchItems[i].previewUrl = e.target.result; };
@@ -484,6 +508,7 @@ function plantApp() {
 
       const formData = new FormData();
       this.batchItems.forEach(entry => formData.append('files', entry.file));
+      this.batchItems.forEach(entry => formData.append('plant_names', entry.plantName || ''));
 
       try {
         const response = await fetch('/api/plants/batch-photos', { method: 'POST', body: formData });
@@ -493,6 +518,7 @@ function plantApp() {
         }
         const result = await response.json();
         this.batchJobId = result.job_id;
+        localStorage.setItem('yopflix-batch-job-id', String(result.job_id));
         this.showToast(`Batch upload started — processing ${this.batchItems.length} photo(s)…`, 'info');
         this.pollBatchJob();
       } catch (err) {
@@ -514,6 +540,7 @@ function plantApp() {
           if (['done', 'failed'].includes(this.batchJob.status)) {
             clearInterval(this.batchPollTimer);
             this.batchPollTimer = null;
+            localStorage.removeItem('yopflix-batch-job-id');
             this.showToast(
               this.batchJob.status === 'done' ? 'Batch upload complete.' : 'Batch upload failed — usage limit persisted too long.',
               this.batchJob.status === 'done' ? 'success' : 'error',
