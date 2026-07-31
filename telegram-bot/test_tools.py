@@ -1018,3 +1018,48 @@ def test_read_garden_note_not_found(monkeypatch):
 
     out = tools.read_garden_note(path="invalid.md")
     assert "Error" in out or "not found" in out
+
+
+# ---------------------------------------------------------------------------
+# note_plant_observation
+# ---------------------------------------------------------------------------
+
+def test_note_plant_observation_writes_dated_health_entry(monkeypatch):
+    """Should record via write_health_assessment (curated section), not a raw file append."""
+    import tools
+    fake_path = MagicMock()
+    fake_path.exists.return_value = True
+    monkeypatch.setattr(tools, "safe_profile_path", lambda name: fake_path)
+    calls = {}
+    def fake_write(name, entry):
+        calls["name"], calls["entry"] = name, entry
+        return True
+    monkeypatch.setattr(tools, "write_health_assessment", fake_write)
+
+    result = tools.note_plant_observation("Passionflower", "Unpotted, found root rot, trimmed affected roots.")
+
+    assert "Observation recorded for Passionflower" in result
+    assert calls["name"] == "Passionflower"
+    assert calls["entry"].startswith("### ")
+    assert date.today().isoformat() in calls["entry"]
+    assert "root rot" in calls["entry"]
+
+
+def test_note_plant_observation_invalid_name(monkeypatch):
+    import tools
+    def raise_err(name):
+        raise ValueError(f"profile path escapes PLANTS_DIR: {name!r}")
+    monkeypatch.setattr(tools, "safe_profile_path", raise_err)
+
+    result = tools.note_plant_observation("../../etc/passwd", "x")
+    assert "Invalid plant name" in result
+
+
+def test_note_plant_observation_missing_profile(monkeypatch):
+    import tools
+    fake_path = MagicMock()
+    fake_path.exists.return_value = False
+    monkeypatch.setattr(tools, "safe_profile_path", lambda name: fake_path)
+
+    result = tools.note_plant_observation("Ghost Plant", "x")
+    assert "No profile doc found" in result

@@ -22,7 +22,7 @@ from agents.db import AgentDB
 from agents.plant_model import AssessmentRecord, Plant, PlantStore
 from agents.plant_weather import weather_adjusted_frequency, MIN_FREQUENCY, MAX_FREQUENCY
 from agents.weather import fetch_weather
-from agents.plant_profiles import append_frequency_history, write_profile_atomic, upsert_frontmatter, parse_frontmatter, safe_profile_path
+from agents.plant_profiles import append_frequency_history, write_health_assessment, upsert_frontmatter, parse_frontmatter, safe_profile_path
 from agents import garden_notes
 
 AGENTS = ["daily-briefing", "news-briefing", "security-audit", "travel-agent", "librarian", "plant-agent", "agent-health"]
@@ -572,8 +572,9 @@ def note_plant_observation(name: str, notes: str) -> str:
         return f"Invalid plant name: {name!r}"
     if not profile_path.exists():
         return f"No profile doc found for {name}"
-    content = profile_path.read_text()
-    write_profile_atomic(profile_path, f"{content}\n{notes}")
+    today = date.today().isoformat()
+    entry = f"### {today} — Note\n{notes.strip()}"
+    write_health_assessment(name, entry)
     return f"Observation recorded for {name}"
 
 

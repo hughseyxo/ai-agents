@@ -35,6 +35,8 @@ _ALLOWED_TOOLS = [
     "mcp__concierge__get_plant_status",
     "mcp__concierge__get_all_plants",
     "mcp__concierge__get_plant",
+    "mcp__concierge__note_plant_observation",
+    "mcp__concierge__save_plant_assessment",
     "mcp__concierge__create_observation_note",
     "mcp__concierge__create_knowledge_note",
     "mcp__concierge__list_garden_notes",
@@ -61,6 +63,10 @@ def chat(message: str, scope: str = "garden", plant_name: str | None = None,
     reply is None on any failure, session_id is preserved or updated."""
     cmd = [
         "claude", "-p",
+        # Skip project settings/CLAUDE.md auto-discovery: cwd=REPO_ROOT would
+        # otherwise inject the whole project CLAUDE.md every turn (~35k cache
+        # tokens, ~10s of added latency, ~$0.18/msg for no benefit here).
+        "--setting-sources", "",
         "--dangerously-skip-permissions",
         "--output-format", "json",
         "--model", CHAT_MODEL,

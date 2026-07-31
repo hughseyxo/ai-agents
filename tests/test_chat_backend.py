@@ -22,6 +22,8 @@ def test_chat_builds_command_with_adddir_and_whitelist(monkeypatch):
     assert any("docs" in c for c in cmd)
     assert "--strict-mcp-config" in cmd
     assert "Read" in cmd and "Glob" in cmd
+    assert "mcp__concierge__note_plant_observation" in cmd
+    assert "mcp__concierge__save_plant_assessment" in cmd
     assert "--resume" not in cmd  # first turn
 
 
