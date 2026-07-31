@@ -600,3 +600,31 @@ class TestSendStatusEmail:
 def test_send_status_email_step_never_retries(agent):
     step = next(s for s in agent.steps() if s["name"] == "send_status_email")
     assert step.get("retries") == 0 and step.get("side_effects") is True
+
+
+class TestPushDigest:
+    """_push_digest is called after intelligence output is applied — it must
+    push a garden digest to Drive but never blow up the run on Drive failure."""
+
+    def test_pushes_digest_built_from_plants_and_weather_cache(self, agent, monkeypatch):
+        pushed = {}
+        monkeypatch.setattr(
+            "agents.plant_agent.upload_digest",
+            lambda content: pushed.update(content=content) or "file-id",
+        )
+        plant = _make_plant(name="Fern")
+
+        agent._push_digest([plant])
+
+        assert "Fern" in pushed["content"]
+
+    def test_drive_failure_is_non_fatal(self, agent, monkeypatch, capsys):
+        monkeypatch.setattr(
+            "agents.plant_agent.upload_digest",
+            MagicMock(side_effect=RuntimeError("drive down")),
+        )
+        plant = _make_plant(name="Fern")
+
+        agent._push_digest([plant])  # must not raise
+
+        assert "Digest push to Drive failed" in capsys.readouterr().err

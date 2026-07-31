@@ -9,7 +9,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .base import BaseAgent, REPO_ROOT
+from .drive_client import upload_digest
 from .gmail_client import send_email
+from .plant_digest import build_digest
 from .plant_model import PlantIntelligenceResult, PlantStore
 from .plant_weather import weather_adjusted_frequency, apply_frequency_step
 from .plant_profiles import (
@@ -270,8 +272,19 @@ class PlantAgent(BaseAgent):
         # Gate stays unmarked on failure (we never reach _mark_ran) → retries next run.
         output = self.synthesize(prompt)
         self._apply_intelligence_output(output, plants)
+        self._push_digest(plants)
         self._mark_ran("intelligence_run")
         return {"ran": True}
+
+    def _push_digest(self, plants: list):
+        """Push a consolidated garden digest to Drive, so a Claude.ai Project
+        linked to that Drive folder stays current. Best-effort — a Drive
+        failure must not block the intelligence run or its profile writes."""
+        try:
+            weather_cache_list = self.db.get_plant_weather_cache()
+            upload_digest(build_digest(plants, weather_cache_list))
+        except Exception as e:
+            print(f"[{self.name}] Digest push to Drive failed (non-fatal): {e}", file=sys.stderr)
 
     def _apply_intelligence_output(self, output: str, plants: list):
         today = datetime.now(timezone.utc).date().isoformat()
