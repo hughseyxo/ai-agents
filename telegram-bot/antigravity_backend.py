@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CONCIERGE_MD = Path(__file__).parent / "CONCIERGE.md"
 
-TIMEOUT_SECONDS = 120
+TIMEOUT_SECONDS = 330  # must exceed save_youtube_playlist's 300s internal ceiling (tools.py)
 
 _SYSTEM_PROMPT = CONCIERGE_MD.read_text() if CONCIERGE_MD.exists() else (
     "You are a concierge assistant for Cian's home server. Be concise and direct."

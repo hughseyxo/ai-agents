@@ -4,6 +4,7 @@ After=network.target
 
 [Service]
 Type=simple
+Environment=PATH=/home/cian/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin
 WorkingDirectory=/home/cian/git/ai-agents/telegram-bot
 EnvironmentFile=/home/cian/git/ai-agents/telegram-bot/.env
 ExecStart=/home/cian/git/ai-agents/telegram-bot/.venv/bin/python -u bot.py
