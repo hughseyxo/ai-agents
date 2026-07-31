@@ -165,3 +165,60 @@ class TestFetchWeather:
         assert "daily=" in url
         assert "temperature_2m_max" in url
         assert "precipitation_sum" in url
+
+
+SAMPLE_WTTR_RESPONSE = {
+    "current_condition": [
+        {"temp_C": "19", "humidity": "83", "precipMM": "0.0"},
+    ],
+    "weather": [
+        {
+            "date": "2026-07-09",
+            "maxtempC": "24",
+            "hourly": [{"precipMM": "0.0"}, {"precipMM": "1.5"}],
+        },
+        {
+            "date": "2026-07-10",
+            "maxtempC": "26",
+            "hourly": [{"precipMM": "0.0"}, {"precipMM": "0.0"}],
+        },
+        {
+            "date": "2026-07-11",
+            "maxtempC": "24",
+            "hourly": [{"precipMM": "0.0"}, {"precipMM": "0.0"}],
+        },
+    ],
+}
+
+
+class TestWttrFallback:
+    @patch("agents.weather.urlopen")
+    def test_falls_back_to_wttr_on_open_meteo_failure(self, mock_urlopen):
+        mock_urlopen.side_effect = [
+            Exception("HTTP Error 503: Service Unavailable"),
+            _mock_response(SAMPLE_WTTR_RESPONSE),
+        ]
+
+        result = fetch_weather()
+
+        assert result["current"]["temp_c"] == 19.0
+        assert result["current"]["humidity_pct"] == 83.0
+        assert result["forecast"][0]["temp_max_c"] == 24.0
+        assert result["forecast"][0]["precip_mm"] == pytest.approx(1.5)
+        assert len(result["forecast"]) == 3
+
+    @patch("agents.weather.urlopen")
+    def test_returns_none_when_both_providers_fail(self, mock_urlopen):
+        mock_urlopen.side_effect = Exception("Connection refused")
+
+        result = fetch_weather()
+
+        assert result is None
+
+    @patch("agents.weather.urlopen")
+    def test_does_not_call_wttr_when_open_meteo_succeeds(self, mock_urlopen):
+        mock_urlopen.return_value = _mock_response(SAMPLE_API_RESPONSE)
+
+        fetch_weather()
+
+        assert mock_urlopen.call_count == 1
