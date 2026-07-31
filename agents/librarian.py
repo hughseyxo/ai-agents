@@ -250,6 +250,10 @@ class LibrarianAgent(BaseAgent):
     name = "librarian"
     schedule = ""
     model = "claude-haiku-4-5"
+    # The HTML report is built in Python; the LLM only dispatches it
+    # (agents/prompts/librarian_report.md). Nothing else is needed.
+    mcp_config = ".mcp.json"
+    allowed_tools = ["ToolSearch", "mcp__gmail__gmail_send"]
 
     @classmethod
     def cron_entries(cls) -> list[tuple[str, str]]:

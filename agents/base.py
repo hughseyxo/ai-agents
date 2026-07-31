@@ -5,11 +5,36 @@ import re
 import subprocess
 import sys
 import time
+from collections.abc import Sequence
 from pathlib import Path
 
 from .db import AgentDB, DEFAULT_DB_PATH
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+
+# Tools denied to every agent unless it explicitly opts back in via
+# `allowed_tools`. Agent prompts embed external content — RSS items, web pages,
+# email subjects — so a prompt injection that reaches Bash or Write is a host
+# compromise, not a bad briefing. The CLI runs with --dangerously-skip-permissions,
+# so these flags are the only thing enforcing the boundary.
+DENIED_TOOLS = [
+    # Code execution and file mutation.
+    "Bash", "Write", "Edit", "NotebookEdit", "Task",
+    # Outbound fetches steered by prompt content.
+    "WebFetch", "WebSearch",
+    # Persistence and out-of-band messaging. An injection's goal is to survive
+    # the run or reach someone else, and none of these need Bash to do it.
+    "CronCreate", "CronDelete", "ScheduleWakeup", "RemoteTrigger",
+    "SendMessage", "PushNotification",
+    # ToolSearch unlocks every deferred tool above, so denying those without
+    # denying it achieves nothing. Agents that need MCP re-enable it via
+    # allowed_tools — MCP tools are themselves deferred.
+    "ToolSearch", "Skill",
+    # Gmail beyond sending. No agent reads mail; read access would turn a
+    # prompt injection into mailbox exfiltration.
+    "mcp__gmail__gmail_list_messages", "mcp__gmail__gmail_get_message",
+    "mcp__gmail__gmail_create_draft", "mcp__gmail__gmail_get_profile",
+]
 
 
 class LLMTimeoutError(RuntimeError):
@@ -29,6 +54,17 @@ class BaseAgent:
     model: str | None = None  # Claude model override (e.g. "claude-sonnet-4-6"); None = CLI default
     providers: list | None = None  # Override provider order/set; None = use PROVIDERS class default
     untrusted_input: bool = False  # True → prompt embeds external content; never route to agy (no tool allowlist there)
+
+    # --- LLM tool surface (claude provider only; agy has no equivalent flags) ---
+    # Path to an MCP config relative to REPO_ROOT. None (the default) means the
+    # CLI is launched with --strict-mcp-config and no config, i.e. zero MCP
+    # servers — an agent that doesn't need Gmail/Todoist/Calendar can't reach them.
+    mcp_config: str | None = None
+    # Tools to allow back in on top of the read-only defaults, e.g.
+    # ["mcp__gmail__gmail_send"] or ["WebSearch"]. Anything listed here is
+    # removed from DENIED_TOOLS for this agent. Tuple so the shared class-level
+    # default can never be mutated by one agent on behalf of all the others.
+    allowed_tools: Sequence[str] = ()
 
     @classmethod
     def cron_entries(cls) -> list[tuple[str, str]]:
@@ -149,6 +185,23 @@ class BaseAgent:
     # Errors that will fail on any provider — don't bother retrying
     _NON_RETRIABLE = ["context_length", "invalid_request", "too long"]
 
+    def _tool_restriction_flags(self) -> list[str]:
+        """Confine the claude CLI to the tools this agent actually needs.
+
+        --strict-mcp-config is unconditional: without it the CLI also loads the
+        user's global MCP servers, so an agent would silently inherit whatever
+        is configured outside this repo.
+        """
+        flags = ["--strict-mcp-config"]
+        if self.mcp_config:
+            flags += ["--mcp-config", str(REPO_ROOT / self.mcp_config)]
+        denied = [t for t in DENIED_TOOLS if t not in self.allowed_tools]
+        if denied:
+            flags += ["--disallowedTools", *denied]
+        if self.allowed_tools:
+            flags += ["--allowedTools", *self.allowed_tools]
+        return flags
+
     def synthesize(self, prompt: str) -> str:
         """Invoke LLM CLI with MCP access. Tries Antigravity first, falls back to Claude.
 
@@ -165,9 +218,12 @@ class BaseAgent:
         last_error = None
         providers = self.providers or self.PROVIDERS
         if self.untrusted_input:
-            # Hard-exclude the unsandboxed agy path from whatever list is in
-            # play (class default or per-agent override) — prompts embedding
-            # external content must only reach sandboxed providers.
+            # Hard-exclude agy from whatever list is in play (class default or
+            # per-agent override): it has no --allowedTools/--strict-mcp-config
+            # equivalent, so its tool surface cannot be confined at all. The
+            # remaining claude path is NOT sandboxed either — it is constrained
+            # by _tool_restriction_flags(), which is what actually contains a
+            # prompt injection carried in external content.
             providers = [p for p in providers if p["name"] != "antigravity"]
             if not providers:
                 msg = (
@@ -180,8 +236,10 @@ class BaseAgent:
             p_prompt = self._adapt_prompt_for_antigravity(prompt) if provider["adapt_prompt"] else prompt
             cmd = list(provider["cmd_prefix"]) + list(provider["cmd_suffix"])
 
-            if provider["name"] == "claude" and self.model:
-                cmd += ["--model", self.model]
+            if provider["name"] == "claude":
+                if self.model:
+                    cmd += ["--model", self.model]
+                cmd += self._tool_restriction_flags()
 
             # For each provider, we allow up to 3 attempts for transient CLI failures
             for attempt in range(3):

@@ -21,6 +21,10 @@ class TravelAgent(BaseAgent):
     name = "travel-agent"
     schedule = ""  # on-demand only
     model = "claude-haiku-4-5"
+    # Researches flights/hotels via web search, then emails the report
+    # (agents/prompts/travel_agent_{search,plan}.md).
+    mcp_config = ".mcp.json"
+    allowed_tools = ["ToolSearch", "mcp__gmail__gmail_send", "WebSearch", "WebFetch"]
 
     def configure(self, args):
         """Accept CLI args before run()."""

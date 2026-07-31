@@ -16,6 +16,13 @@ class DailyBriefingAgent(BaseAgent):
     name = "daily-briefing"
     schedule = "5 4 * * *"
     model = "claude-haiku-4-5"
+    # Reads calendar + todoist and sends the briefing itself (see _run_briefing).
+    # Gmail is scoped to send only — this agent never needs to read mail.
+    mcp_config = ".mcp.json"
+    # ToolSearch is required: MCP tools are deferred, so without it gmail_send
+    # is never reachable and the briefing silently never sends.
+    allowed_tools = ["ToolSearch", "mcp__todoist", "mcp__google-calendar",
+                     "mcp__gmail__gmail_send"]
 
     def configure(self, args):
         if getattr(args, "force", False):

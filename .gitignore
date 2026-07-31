@@ -15,9 +15,18 @@ agents/__pycache__/
 data/agents.db
 data/agents.db*
 data/*.corrupt-bak
+# Plant photo store + batch scratch dirs — hundreds of MB of personal photos
+# carrying camera/EXIF metadata. Never publish to the public remote.
+data/plant-photos/
+data/plant-photo-batches/
 docs/agent-notes.md
 docs/security-audit-agent.md
 docs/_map/
+# LLM-written, unreviewed. Daily notes carry work topics, open threads and
+# absolute host paths; agent-learnings is read back into agent prompts.
+# Both stay on disk and keep syncing to Obsidian — they just aren't published.
+docs/daily/
+docs/agent-learnings/
 *.mp4
 *.mkv
 *.avi

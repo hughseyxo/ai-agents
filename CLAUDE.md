@@ -53,6 +53,13 @@ The detailed file/module map is a **server-only** Obsidian MOC at `docs/_map/ind
 - **LLM failover & Timeouts:** `BaseAgent.synthesize()` tries providers in order, adapting prompts for Antigravity at runtime.
   - **Timeouts:** A 600s timeout is applied to LLM calls. If a step marked with `side_effects: True` times out, the agent skips retries to avoid duplicate actions (e.g. sending multiple emails).
 - **On-demand agents:** Set `schedule = ""` — they won't appear in crontab but can be triggered manually or via Telegram bot. Pass extra args via `configure(args)` called by `cmd_run` in runner.py.
+- **LLM tool surface (security-critical):** `synthesize()` runs the claude CLI with `--dangerously-skip-permissions`, and agent prompts embed external content (RSS, web pages, calendar/email text). Two class attributes confine it — see `BaseAgent._tool_restriction_flags()`:
+  - `mcp_config` — path relative to REPO_ROOT. **Default `None` means `--strict-mcp-config` with no config, i.e. zero MCP servers.** Only `daily-briefing`, `librarian` and `travel-agent` set it (`.mcp.json`); everything else reaches no MCP tools at all.
+  - `allowed_tools` — tools re-enabled on top of the read-only defaults; anything listed is removed from the module-level `DENIED_TOOLS`.
+  - **`--allowedTools` does NOT restrict** — verified against the real CLI: allowlisting only `gmail_send` still exposed every Gmail tool. **`--disallowedTools` is the only mechanism that enforces**, so new capabilities must be added to `DENIED_TOOLS`, not merely left off `allowed_tools`.
+  - **MCP tools are deferred behind `ToolSearch`**, so agents needing MCP must list `ToolSearch` in `allowed_tools` or they silently never send. `ToolSearch` is denied by default because it also unlocks `CronCreate`/`SendMessage`/`RemoteTrigger` — persistence and egress without ever touching Bash.
+  - `news-briefing` (`untrusted_input = True`) deliberately gets **no MCP and no tools**: it only translates/scores, and its email is built and sent in Python by `_send_report()`.
+  - Residual by design: `Read`/`Glob`/`Grep` remain, so an injection can read repo files; output only reaches your own inbox. `agy` has no equivalent flags, which is why `untrusted_input` excludes it entirely.
 
 # Security & Git Workflow
 - **Security Audit Before Push:** Antigravity MUST run the security audit agent (`run-agent.sh security-audit`) before every `git push` to a public branch. If any "Critical" or "High" severity findings are found in unpushed or staged changes (Check 16), the push MUST be aborted until fixed or explicitly exempted by the user.
@@ -81,11 +88,15 @@ The detailed file/module map is a **server-only** Obsidian MOC at `docs/_map/ind
   - Weather cache written to `plant_weather_cache` table; `get_plant_status()` in the concierge bot reads from it
   - Indoor: ±1-2 days adjustment based on temp/humidity; Outdoor: ±1-3 days based on rain/heatwaves
   - Weather fetch failure is non-fatal — cache not updated, bot falls back to base schedule
+  - `agents/weather.py`: Open-Meteo is primary, wttr.in is an automatic fallback (Open-Meteo had a ~24h 502/503 outage on 2026-07-08/09). Both return the same dict shape; wttr.in approximates `recent_precip_mm` with the current hour's reading only (no past-24h endpoint on its free tier).
 - **Plant profiles:** `docs/plants/<slug>.md` — created automatically, updated by intelligence runs. Contain observed behaviour, health assessments, frequency history, LLM notes, and a `## Linked Notes` section listing observation notes created for that plant.
 - **Garden observation notes:** `docs/plant-observations/<slug>/YYYY-MM-DD-<title>.md` — auto-created on noteworthy photo assessments (both Telegram bot and PWA photo paths) and via concierge MCP tools. Linked from plant profiles' `## Linked Notes`.
 - **Garden knowledge notes:** `docs/garden-knowledge/<topic>.md` — general gardening knowledge captured via concierge tools or chat. Not plant-specific.
 - Both new note directories sync to CouchDB ~30s (same livesync-bridge as the rest of `docs/`).
 - **When adding a plant without an explicit frequency:** search the web for recommended indoor watering cadence, check at least 3 sources, and use the consensus value. Do NOT default to 7 days.
+- **Garden digest → Claude.ai Project sync (one-way):** `agents/plant_digest.py` (`build_digest()`) assembles a single consolidated "Plant Health Digest" Markdown doc (summary table + per-plant section combining core fields, weather-adjusted next-water date, and `read_profile_context()`). `PlantAgent._push_digest` (`agents/plant_agent.py`) pushes it to Google Drive at the end of each intelligence run (~daily) via `agents/drive_client.py`, so a Claude.ai Project on mobile/web with that Drive folder linked as knowledge always has current garden data. Push is best-effort — a Drive failure is logged to stderr and never blocks the intelligence run.
+  - **Drive OAuth is separate from Gmail/Calendar:** `agents/drive_client.py` uses its own token file (`~/.google_tokens_drive.json`, `drive.file` scope) rather than the shared `~/.google_tokens.json`, so a Drive re-consent can never disturb the working Gmail/Calendar tokens. Same OAuth client (`GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` in `.env`) as Gmail/Calendar, just a different scope grant. One-time setup: `python3 scripts/setup_drive_oauth.py`.
+  - **Manual, one-time, outside this repo:** in the Claude.ai Project (mobile or web), add Google Drive as a knowledge source and select the "Plant Health Digest" folder. This cannot be automated — Claude.ai's consumer Project knowledge base has no API for pushing files directly.
 
 # Available MCP Integrations
 Configured for both Claude (`.mcp.json`) and Antigravity (`mcp_config.json`):

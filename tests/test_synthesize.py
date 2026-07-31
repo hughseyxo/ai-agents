@@ -390,6 +390,144 @@ class TestSynthesize:
         assert prompt == "Do a thing"
 
 
+class TestToolRestrictions:
+    """The claude provider runs with --dangerously-skip-permissions, so the only
+    thing standing between a prompt injection and Bash/Gmail is these flags."""
+
+    def _claude_cmd(self, mock_run, agent, prompt="test"):
+        agent.providers = [p for p in BaseAgent.PROVIDERS if p["name"] == "claude"]
+        agent.synthesize(prompt)
+        return mock_run.call_args[0][0]
+
+    @patch("agents.base.subprocess.run")
+    def test_claude_always_gets_strict_mcp_config(self, mock_run):
+        """Without this the CLI inherits the user's global MCP servers."""
+        mock_run.return_value = mock_result(stdout="output")
+        cmd = self._claude_cmd(mock_run, make_agent())
+        assert "--strict-mcp-config" in cmd
+
+    @patch("agents.base.subprocess.run")
+    def test_default_agent_loads_no_mcp_servers(self, mock_run):
+        """--strict-mcp-config with no --mcp-config means zero MCP servers."""
+        mock_run.return_value = mock_result(stdout="output")
+        cmd = self._claude_cmd(mock_run, make_agent())
+        assert "--mcp-config" not in cmd
+
+    @patch("agents.base.subprocess.run")
+    def test_default_agent_denies_execution_tools(self, mock_run):
+        mock_run.return_value = mock_result(stdout="output")
+        cmd = self._claude_cmd(mock_run, make_agent())
+        assert "--disallowedTools" in cmd
+        denied = cmd[cmd.index("--disallowedTools") + 1:]
+        for tool in ("Bash", "Write", "Edit"):
+            assert tool in denied
+
+    @patch("agents.base.subprocess.run")
+    def test_mcp_config_is_passed_when_agent_opts_in(self, mock_run):
+        mock_run.return_value = mock_result(stdout="output")
+
+        class A(BaseAgent):
+            name = "t-mcp"
+            mcp_config = ".mcp.json"
+
+        cmd = self._claude_cmd(mock_run, A(db_path=":memory:"))
+        assert "--mcp-config" in cmd
+        assert cmd[cmd.index("--mcp-config") + 1].endswith(".mcp.json")
+
+    @patch("agents.base.subprocess.run")
+    def test_allowed_tools_are_passed(self, mock_run):
+        mock_run.return_value = mock_result(stdout="output")
+
+        class A(BaseAgent):
+            name = "t-allow"
+            allowed_tools = ["mcp__gmail__gmail_send"]
+
+        cmd = self._claude_cmd(mock_run, A(db_path=":memory:"))
+        assert "--allowedTools" in cmd
+        assert "mcp__gmail__gmail_send" in cmd
+
+    @patch("agents.base.subprocess.run")
+    def test_opted_in_tool_is_not_also_denied(self, mock_run):
+        """travel-agent needs WebSearch; it must not appear in both lists."""
+        mock_run.return_value = mock_result(stdout="output")
+
+        class A(BaseAgent):
+            name = "t-websearch"
+            allowed_tools = ["WebSearch"]
+
+        cmd = self._claude_cmd(mock_run, A(db_path=":memory:"))
+        denied = cmd[cmd.index("--disallowedTools") + 1:cmd.index("--allowedTools")]
+        assert "WebSearch" not in denied
+        assert "Bash" in denied
+
+    @patch("agents.base.subprocess.run")
+    def test_toolsearch_denied_by_default(self, mock_run):
+        """MCP tools are deferred behind ToolSearch, and so are CronCreate,
+        SendMessage and RemoteTrigger. Denying those without denying ToolSearch
+        achieves nothing."""
+        mock_run.return_value = mock_result(stdout="output")
+        cmd = self._claude_cmd(mock_run, make_agent())
+        denied = cmd[cmd.index("--disallowedTools") + 1:]
+        for tool in ("ToolSearch", "CronCreate", "SendMessage", "RemoteTrigger"):
+            assert tool in denied
+
+    @patch("agents.base.subprocess.run")
+    def test_gmail_read_tools_denied_by_default(self, mock_run):
+        """--allowedTools does not scope MCP servers (verified against the real
+        CLI: allowlisting gmail_send still exposed every gmail tool), so read
+        access has to be denied explicitly."""
+        mock_run.return_value = mock_result(stdout="output")
+        cmd = self._claude_cmd(mock_run, make_agent())
+        denied = cmd[cmd.index("--disallowedTools") + 1:]
+        assert "mcp__gmail__gmail_list_messages" in denied
+        assert "mcp__gmail__gmail_get_message" in denied
+
+    @patch("agents.base.subprocess.run")
+    def test_mcp_agents_regain_toolsearch(self, mock_run):
+        """Without this the briefing agents can never reach gmail_send."""
+        from agents.daily_briefing import DailyBriefingAgent
+
+        mock_run.return_value = mock_result(stdout="output")
+        cmd = self._claude_cmd(mock_run, DailyBriefingAgent(db_path=":memory:"))
+        denied = cmd[cmd.index("--disallowedTools") + 1:cmd.index("--allowedTools")]
+        assert "ToolSearch" not in denied
+        assert "ToolSearch" in cmd[cmd.index("--allowedTools") + 1:]
+        # ...but sending is still the only gmail capability it keeps.
+        assert "mcp__gmail__gmail_list_messages" in denied
+
+    @patch("agents.base.subprocess.run")
+    def test_agy_command_is_unchanged(self, mock_run):
+        """agy has no equivalent flags — passing them would break the CLI."""
+        mock_run.return_value = mock_result(stdout="output")
+        agent = make_agent()
+        agent.synthesize("test")
+        cmd = mock_run.call_args[0][0]
+        assert cmd[0] == "agy"
+        for flag in ("--strict-mcp-config", "--mcp-config",
+                     "--allowedTools", "--disallowedTools"):
+            assert flag not in cmd
+
+    @patch("agents.base.subprocess.run")
+    def test_untrusted_agent_gets_no_tools_at_all(self, mock_run):
+        """news-briefing ingests attacker-submittable RSS. It must reach the CLI
+        with zero MCP servers and no execution tools."""
+        mock_run.return_value = mock_result(stdout="output")
+
+        class A(BaseAgent):
+            name = "t-untrusted-tools"
+            untrusted_input = True
+
+        agent = A(db_path=":memory:")
+        agent.synthesize("summarise this feed item")
+        cmd = mock_run.call_args[0][0]
+        assert cmd[0] == "claude"
+        assert "--strict-mcp-config" in cmd
+        assert "--mcp-config" not in cmd
+        denied = cmd[cmd.index("--disallowedTools") + 1:]
+        for tool in ("Bash", "Write", "Edit", "WebFetch"):
+            assert tool in denied
+
+
 def test_untrusted_input_skips_antigravity(monkeypatch):
     from agents.base import BaseAgent
 

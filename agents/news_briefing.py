@@ -31,6 +31,10 @@ class NewsBriefingAgent(BaseAgent):
     # Prompts embed untrusted RSS content; belt-and-braces with the Claude-first
     # providers override above (untrusted_input alone would hard-exclude agy).
     untrusted_input = True
+    # Deliberately no mcp_config and no allowed_tools. Feeds include hnrss.org
+    # and Google News queries — attacker-submittable text goes straight into the
+    # prompt. The LLM only translates and scores; the email is built and sent in
+    # Python by _send_report(), so it needs no tools at all.
 
     FEEDS = {
         "International": [
