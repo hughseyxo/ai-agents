@@ -9,7 +9,7 @@ This project implements FloraPulse, a mobile-first Progressive Web App (PWA) ser
 4. Auto-completion/syncing of Todoist tasks.
 
 ## Design Decisions
-- **Authentication**: Bound to Tailscale only (`100.96.86.73:8765`). Since it operates on a secure, private Tailscale mesh, no login screen or credentials are required.
+- **Authentication**: Bound to Tailscale only (`<TAILSCALE_IP>:8765`). Since it operates on a secure, private Tailscale mesh, no login screen or credentials are required.
 - **Tech Stack**:
   - **FastAPI**: Lightweight REST API + static file serving (no complex server-side render).
   - **Alpine.js**: Ultra-lightweight SPA framework loaded via CDN (no Node.js build step).

@@ -1,8 +1,11 @@
 # Obsidian Vault — Device Setup
 
 CouchDB + livesync-bridge run in the yopflix seedbox stack (started by `run-seedbox.sh`),
-Tailscale-only (`100.96.86.73:5984`). Agents keep writing plain `.md`; the bridge mirrors
+Tailscale-only (`<TAILSCALE_IP>:5984`). Agents keep writing plain `.md`; the bridge mirrors
 disk ⇄ CouchDB, and Obsidian clients sync against CouchDB.
+
+`<TAILSCALE_IP>` is this host's Tailscale IP, kept out of tracked files — see `TAILSCALE_IP`
+in `.env` (gitignored, in the `ai-agents` repo root), or run `tailscale ip -4` on the host.
 
 ## Credential model (how it actually wires up)
 
@@ -40,18 +43,18 @@ The stack is run as root (traefik/container-owned files):
 
 ```bash
 cd ~/git/yopflix/seedbox && sudo ./run-seedbox.sh --no-pull
-sudo ss -tlnp | grep 5984      # MUST show 100.96.86.73:5984, never 0.0.0.0
+sudo ss -tlnp | grep 5984      # MUST show <TAILSCALE_IP>:5984, never 0.0.0.0
 ```
 
 No `_cluster_setup` call is needed — `single_node=true` is preset in `local.ini`, and the
 `obsidian-vault` database already exists in the data volume. (To create it from scratch:
-`curl -X PUT http://100.96.86.73:5984/obsidian-vault -u admin:PASS`.)
+`curl -X PUT http://<TAILSCALE_IP>:5984/obsidian-vault -u admin:PASS`.)
 
 ## Obsidian device setup (phone/PC on Tailscale)
 
 1. Install Obsidian + **Self-hosted LiveSync** community plugin.
 2. Remote Database settings:
-   - URI: `http://100.96.86.73:5984`
+   - URI: `http://<TAILSCALE_IP>:5984`
    - Username/Password: as set in `.env.custom`
    - Database name: `obsidian-vault`
 3. Initial sync direction: **Remote → Local**.
@@ -62,7 +65,7 @@ No `_cluster_setup` call is needed — `single_node=true` is preset in `local.in
 ```bash
 echo "sync test" > docs/daily/_synctest.md
 # wait ~30s, then check CouchDB:
-curl -s "http://100.96.86.73:5984/obsidian-vault/_all_docs" -u admin:PASS | grep synctest
+curl -s "http://<TAILSCALE_IP>:5984/obsidian-vault/_all_docs" -u admin:PASS | grep synctest
 rm docs/daily/_synctest.md
 ```
 
@@ -76,8 +79,8 @@ deletions do not propagate live** — the bridge reconciles removals on its offl
 (`sudo docker restart livesync-bridge`) or delete the doc directly in CouchDB:
 
 ```bash
-rev=$(curl -s -u admin:PASS "http://100.96.86.73:5984/obsidian-vault/<docid>" | jq -r ._rev)
-curl -s -X DELETE -u admin:PASS "http://100.96.86.73:5984/obsidian-vault/<docid>?rev=$rev"
+rev=$(curl -s -u admin:PASS "http://<TAILSCALE_IP>:5984/obsidian-vault/<docid>" | jq -r ._rev)
+curl -s -X DELETE -u admin:PASS "http://<TAILSCALE_IP>:5984/obsidian-vault/<docid>?rev=$rev"
 ```
 
 `<docid>` is the path relative to the peer baseDir (e.g. `daily/2026-06-21.md` for the

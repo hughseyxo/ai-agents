@@ -15,7 +15,7 @@
 - **TDD** — write the failing test first (memory `feedback_tdd`).
 - **Dual-CLI rule** — agent Python must run under both Claude and Antigravity; no CLI-specific deps.
 - **No secrets in git** — CouchDB creds in gitignored `.env`.
-- **CouchDB never binds `0.0.0.0`** — Tailscale IP (`100.96.86.73`) only.
+- **CouchDB never binds `0.0.0.0`** — Tailscale IP (`<TAILSCALE_IP>`) only.
 - **Commit after each task.** Do not push (security-audit-before-push rule applies separately).
 - Spec: `docs/superpowers/specs/2026-06-19-obsidian-vault-backend-design.md`.
 
@@ -567,12 +567,12 @@ git commit -m "feat(vault): Dataview dashboards + Eagna Home MOC + folder indexe
 
 - [ ] **Step 2: Fetch upstream config** — read the Self-hosted LiveSync "Setup CouchDB" docs (vrtmrz/obsidian-livesync) for the required `seedbox/services/couchdb/local.ini` (CORS, `single_node`, `require_valid_user`, `max_http_request_size`). Cite the URL in a comment.
 
-- [ ] **Step 3: Add the `couchdb` service** — image `couchdb:3`, mount `seedbox/services/couchdb/local.ini` → `/opt/couchdb/etc/local.d/`, named volume `couchdb_data` → `/opt/couchdb/data`, admin creds from the seedbox env file, restart policy matching siblings, and **port published to the Tailscale IP only**: `ports: ["100.96.86.73:5984:5984"]` (never `0.0.0.0`).
+- [ ] **Step 3: Add the `couchdb` service** — image `couchdb:3`, mount `seedbox/services/couchdb/local.ini` → `/opt/couchdb/etc/local.d/`, named volume `couchdb_data` → `/opt/couchdb/data`, admin creds from the seedbox env file, restart policy matching siblings, and **port published to the Tailscale IP only**: `ports: ["<TAILSCALE_IP>:5984:5984"]` (never `0.0.0.0`).
 
 - [ ] **Step 4: Bring up + verify bind**
 
 Run: `cd ~/git/yopflix && ./run-seedbox.sh up -d couchdb && ss -tlnp | grep 5984`
-Expected: bound to `100.96.86.73:5984`, **not** `0.0.0.0:5984`. If `0.0.0.0` appears, fix the port mapping before proceeding.
+Expected: bound to `<TAILSCALE_IP>:5984`, **not** `0.0.0.0:5984`. If `0.0.0.0` appears, fix the port mapping before proceeding.
 
 - [ ] **Step 5: Apply LiveSync DB init** — run the LiveSync-documented one-time CouchDB setup (`curl` the `_cluster_setup` / config endpoints per docs).
 
@@ -614,11 +614,11 @@ cd ~/git/yopflix && git add seedbox/docker-compose.yaml seedbox/services/livesyn
 
 - [ ] **Step 1: Gitignore Obsidian config** — add `docs/.obsidian/` and `docs/.trash/` to the ai-agents `.gitignore` (the bridge already excludes them from sync, but a device's first connect can still drop them on disk).
 
-- [ ] **Step 2: Write device setup doc** — `docs/obsidian-vault-setup.md`: install Obsidian on phone/PC, install Self-hosted LiveSync plugin, point at `https://100.96.86.73:5984` over Tailscale, DB name + passphrase, initial sync direction. Note the stack is part of the yopflix seedbox (started by `run-seedbox.sh`). Cite the LiveSync quick-setup URL.
+- [ ] **Step 2: Write device setup doc** — `docs/obsidian-vault-setup.md`: install Obsidian on phone/PC, install Self-hosted LiveSync plugin, point at `https://<TAILSCALE_IP>:5984` over Tailscale, DB name + passphrase, initial sync direction. Note the stack is part of the yopflix seedbox (started by `run-seedbox.sh`). Cite the LiveSync quick-setup URL.
 
 - [ ] **Step 3: Full round-trip verification** — edit a plant profile on phone → appears on disk → run the plant intelligence step, confirm it reads the edit; trigger an agent write → appears on phone. Confirm `docs/.obsidian/` is gitignored and not committed.
 
-- [ ] **Step 4: Update CLAUDE.md** — replace the "In-Progress" section with a permanent "Obsidian Vault" section: vault layout, Tailscale port `100.96.86.73:5984`, **services live in the yopflix seedbox stack** (`~/git/yopflix/seedbox/docker-compose.yaml`, started by `run-seedbox.sh`), and "frontmatter is a projection — don't hand-edit."
+- [ ] **Step 4: Update CLAUDE.md** — replace the "In-Progress" section with a permanent "Obsidian Vault" section: vault layout, Tailscale port `<TAILSCALE_IP>:5984`, **services live in the yopflix seedbox stack** (`~/git/yopflix/seedbox/docker-compose.yaml`, started by `run-seedbox.sh`), and "frontmatter is a projection — don't hand-edit."
 
 - [ ] **Step 5: Commit (ai-agents repo)**
 

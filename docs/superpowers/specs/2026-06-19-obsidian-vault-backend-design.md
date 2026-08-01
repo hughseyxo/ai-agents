@@ -56,14 +56,14 @@ Every structure optimizes for cheap parsing + minimal context tokens:
 ```
 
 - **CouchDB** (Docker) — the sync hub. Published **bound to the Tailscale IP only**
-  (`-p 100.96.86.73:5984:5984`), never `0.0.0.0`. Apply Self-hosted LiveSync's documented
+  (`-p <TAILSCALE_IP>:5984:5984`), never `0.0.0.0`. Apply Self-hosted LiveSync's documented
   CouchDB config (CORS, `single_node`, `require_valid_user`, `max_http_request_size`) — exact
   values per LiveSync upstream docs at implementation time. Admin password in gitignored `.env`.
 - **livesync-bridge** (vrtmrz/livesync-bridge, Docker) — bridges on-disk vault folders ⇄ CouchDB
   so agents keep writing plain files while devices run native Obsidian. Config (`dat/config.json`)
   maps storage paths → one CouchDB database; exact schema per upstream docs. Ignores
   `.obsidian/`, `.trash/`, `__pycache__/`.
-- **Devices** — native Obsidian + Self-hosted LiveSync plugin → `https://100.96.86.73:5984` over Tailscale.
+- **Devices** — native Obsidian + Self-hosted LiveSync plugin → `https://<TAILSCALE_IP>:5984` over Tailscale.
 - **Service** — added as two services to the **existing yopflix seedbox Docker stack**
   (`~/git/yopflix/seedbox/docker-compose.yaml`, private repo), started by its `run-seedbox.sh`.
   No standalone stack and no new systemd unit; they come up with the rest of the seedbox.
