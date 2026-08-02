@@ -90,6 +90,17 @@ Genuine wins, for balance: `agent-health` in a pod is better isolated than a cro
 
 Unit tests green each phase · `kubeconform --ignore-missing-schemas` in CI · `kind` smoke test before touching the real cluster · negative exposure test from off-Tailscale (Phase 2) · Obsidian round-trip proven twice, Docker then in-cluster (Phase 0, Phase 5) · a real write to wedding-ui at dry run, not just a read (Phase 3) · a week of `agent-health` cluster-only runs with its host crontab line gone (Phase 4) · exactly one `success` row and one email per manual Job run · seedbox regression check after every phase that touches it · rollback drills actually executed before each cutover is called done, not just documented.
 
+## Capacity (measured 2026-08-02)
+
+| Resource | Total | Used | Available | Note |
+|---|---|---|---|---|
+| Disk (`/`) | 11T | 9.0T (88%) | 1.4T | Plenty of headroom despite the high %; don't let the percentage alone drive sizing decisions. |
+| Memory | 31Gi | 3.8Gi + 23Gi cache | 26Gi available | Matches the design doc's earlier "26 GB" figure. Size k8s resource limits generously — over-tight limits cause OOMKills, not safety. |
+| CPU | 8 cores | — | — | |
+| `data/` | 229M | — | — | hostPath mount size for agent pods. |
+| `docs/` | 1.5M | — | — | hostPath mount size for the Obsidian-synced subdirectories. |
+| Docker images | — | 17.04GB / 21 images | — | Existing footprint before any k3s/GHCR images are added. |
+
 ## Related
 
 - `docs/superpowers/specs/2026-06-19-obsidian-vault-backend-design.md` — the CouchDB/livesync-bridge stack this migrates out of yopflix.
