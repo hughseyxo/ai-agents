@@ -149,3 +149,21 @@ def test_negative_guests_rejected(client):
 def test_unknown_item_404(client):
     assert client.patch("/api/items/nope", json={"unit_cost": 1}).status_code == 404
     assert client.delete("/api/items/nope").status_code == 404
+
+
+# --- health check ---
+
+def test_healthz_ok(client):
+    resp = client.get("/healthz")
+    assert resp.status_code == 200
+    assert resp.json() == {"status": "ok"}
+
+
+def test_healthz_reports_db_failure(client):
+    class BrokenStore:
+        def get_config(self):
+            raise RuntimeError("db unreachable")
+
+    app.dependency_overrides[get_store] = lambda: BrokenStore()
+    resp = client.get("/healthz")
+    assert resp.status_code == 503

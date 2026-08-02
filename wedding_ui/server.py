@@ -108,6 +108,15 @@ def reset_budget(store: BudgetStore = Depends(get_store)):
     return compute_budget(store.get_config(), store.get_items())
 
 
+@app.get("/healthz")
+def healthz(store: BudgetStore = Depends(get_store)):
+    try:
+        store.get_config()
+    except Exception:
+        raise HTTPException(status_code=503, detail="unhealthy")
+    return {"status": "ok"}
+
+
 # --- Frontend SPA ---
 
 @app.get("/", response_class=HTMLResponse)
