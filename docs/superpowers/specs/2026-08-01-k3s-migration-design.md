@@ -19,6 +19,20 @@ Two independent review passes (architectural, security) against the first draft 
 
 **Phase 0, task 7 — Obsidian round-trip (CouchDB → disk) — PASS (2026-08-02):** disk → CouchDB was proven earlier (task 1, backlog drain). Confirmed the other direction: a note ("Phase-0-rountriptest.md", content "Hello world") created on a phone/laptop Obsidian client landed on this host's disk within seconds — `livesync-bridge` logs show `[couchdb-docs] --> Phase-0-rountriptest.md change detected` followed by `[fs-docs] <-- /data/docs/Phase-0-rountriptest.md saved`, a genuine remote-origin write (no matching `[fs-docs] Changes detected` precursor, unlike this session's own edits). File content verified to match. **Phase 0 is now complete** — Phase 1 (images + CI) can get its own plan. Note: an incidental `Untitled.md delete detected` from the same device session failed with `NotFound` (the bridge tried to remove a file it never wrote) — harmless (nothing to clean up), but worth knowing the bridge doesn't always cleanly no-op a delete-of-nonexistent.
 
+**Phase 1 — Images + CI — in progress (2026-08-02):** `wedding_ui/Dockerfile` hardened to multi-stage/non-root; `Dockerfile.runner` added for `ai-agents-runner` (`claude` CLI pinned `2.1.92`, matching the Phase 0 spike); `k8s/base/namespace.yaml` + parameterised overlay skeleton added; `.github/workflows/ci.yml` added (PR: pytest + kubeconform + build-only; `main` push: build, push to GHCR by digest, `actions/attest-build-provenance` for SBOM + SLSA provenance).
+
+**GHCR visibility:** `ghcr.io/hughseyxo/ai-agents-*` inherits the parent repo's visibility. `hughseyxo/ai-agents` is public, so the images are public by default — no `imagePullSecret` needed for the k3s cluster to pull them. If visibility is ever flipped to private, a `kubernetes.io/dockerconfigjson` Secret (from a GHCR PAT with `read:packages`) must be created in the `ai-agents` namespace and referenced as `imagePullSecrets` on every workload — not done here since it isn't needed yet.
+
+**Verifying an image's provenance attestation** (once a `main` push has actually run this pipeline):
+```bash
+cosign verify-attestation \
+  --type slsaprovenance \
+  --certificate-identity-regexp "^https://github.com/hughseyxo/ai-agents" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  ghcr.io/hughseyxo/ai-agents-runner@sha256:<digest>
+```
+This confirms the image was built by this repo's GitHub Actions workflow (not pushed by hand with a stolen token) — `actions/attest-build-provenance` signs it keylessly via Sigstore/Fulcio using the workflow's own OIDC identity, which is what the `--certificate-identity-regexp`/`--certificate-oidc-issuer` pair checks.
+
 **Phase 0, task 1 — done (2026-08-01):** `livesync-bridge` was crash-looping (765 restarts) with `"Remote database is encrypted but no passphrase provided"`. Root cause: the remote CouchDB database has E2EE enabled but `services/livesync-bridge/config.json` (in the separate `~/git/yopflix/seedbox` repo) had empty `passphrase` fields on all three CouchDB peers. Fixed by adding `LIVESYNC-BRIDGE_PASSPHRASE` to `.env.custom` (gitignored, matches the existing `LIVESYNC-BRIDGE_COUCHDB_*` pattern) and referencing it as `${PASSPHRASE}` in `config.json` — the bridge's `main.ts` substitutes `${VAR}` from its own process env at startup, the same mechanism already used for the CouchDB username/password. Applied via `sudo ./run-seedbox.sh` (idempotent full-stack redeploy; only `livesync-bridge` was recreated, the other 21 containers were untouched). Confirmed stable post-fix — no restarts, and logs show it actively draining the sync backlog (files from `docs/superpowers/specs/`, `docs/daily/`, `docs/agent-learnings/` all observed syncing). Still to prove for the Phase 0 checkpoint proper: a write originating in CouchDB (i.e. from another Obsidian device) landing back on this host's disk, not just disk→CouchDB.
 
 ## The fact that reshaped the design
