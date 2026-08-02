@@ -1,0 +1,17 @@
+# .dockerignore — repo-root build context exclusions.
+# Personal data and secrets that must never reach a Docker build context,
+# even though a Dockerfile's explicit COPY list wouldn't otherwise pick
+# them up — this is a second, independent boundary.
+.venv/
+__pycache__/
+*.pyc
+.git/
+.env
+.env.*
+data/
+docs/daily/
+docs/agent-learnings/
+docs/plant-observations/
+output/
+*.db
+*.db-journal

@@ -15,6 +15,10 @@ Two independent review passes (architectural, security) against the first draft 
 
 **Phases 0–8 (the k3s migration itself) are parked** — not started, except one Phase 0 prerequisite fixed opportunistically (see below). This document is the persisted form of that plan so it survives context resets; `superpowers:writing-plans` turns each phase into a bite-sized execution plan when we reach it (not all at once — Phase 0's spikes can change decisions baked into later phases).
 
+**Phase 0, task 6 — claude CLI credential-isolation spike — PASS (2026-08-02), container-level test:** A bare-host run (`HOME=/srv/k3s-claude-home claude -p ...`) turned out not to prove anything — same OS user, same mount namespace, so its `Read`/`Glob` tools could still reach `/home/cian/.claude.json` directly. That's expected and not a design flaw: the actual isolation boundary is decision 3's container mount policy (never bind-mount `~/.claude`), which only a real container can validate. Re-ran inside `node:20-slim` (`docker run --rm -u 1001:1001 -v /srv/k3s-claude-home:/srv/k3s-claude-home -e HOME=/srv/k3s-claude-home ...`, nothing else mounted, `npx @anthropic-ai/claude-code@2.1.92`) with the same isolation-proof prompt. Result: `.claude.json` resolved only to `/srv/k3s-claude-home/.claude.json`; `ls /home` showed only the base image's `node` user dir, no `/home/cian`; the only `claude/projects` content found was the isolated session's own fresh transcript — no trace of the real host's leaked-secret transcript history. Confirms the Phase 3+ pod design (never mount real `~/.claude`) is sound, **provided the spike methodology used here — container-only, nothing from `/home/cian` mounted — is what Phase 3's actual pod spec follows**, not a bare-process `HOME=` swap.
+
+**Phase 0, task 7 — Obsidian round-trip (CouchDB → disk) — PASS (2026-08-02):** disk → CouchDB was proven earlier (task 1, backlog drain). Confirmed the other direction: a note ("Phase-0-rountriptest.md", content "Hello world") created on a phone/laptop Obsidian client landed on this host's disk within seconds — `livesync-bridge` logs show `[couchdb-docs] --> Phase-0-rountriptest.md change detected` followed by `[fs-docs] <-- /data/docs/Phase-0-rountriptest.md saved`, a genuine remote-origin write (no matching `[fs-docs] Changes detected` precursor, unlike this session's own edits). File content verified to match. **Phase 0 is now complete** — Phase 1 (images + CI) can get its own plan. Note: an incidental `Untitled.md delete detected` from the same device session failed with `NotFound` (the bridge tried to remove a file it never wrote) — harmless (nothing to clean up), but worth knowing the bridge doesn't always cleanly no-op a delete-of-nonexistent.
+
 **Phase 0, task 1 — done (2026-08-01):** `livesync-bridge` was crash-looping (765 restarts) with `"Remote database is encrypted but no passphrase provided"`. Root cause: the remote CouchDB database has E2EE enabled but `services/livesync-bridge/config.json` (in the separate `~/git/yopflix/seedbox` repo) had empty `passphrase` fields on all three CouchDB peers. Fixed by adding `LIVESYNC-BRIDGE_PASSPHRASE` to `.env.custom` (gitignored, matches the existing `LIVESYNC-BRIDGE_COUCHDB_*` pattern) and referencing it as `${PASSPHRASE}` in `config.json` — the bridge's `main.ts` substitutes `${VAR}` from its own process env at startup, the same mechanism already used for the CouchDB username/password. Applied via `sudo ./run-seedbox.sh` (idempotent full-stack redeploy; only `livesync-bridge` was recreated, the other 21 containers were untouched). Confirmed stable post-fix — no restarts, and logs show it actively draining the sync backlog (files from `docs/superpowers/specs/`, `docs/daily/`, `docs/agent-learnings/` all observed syncing). Still to prove for the Phase 0 checkpoint proper: a write originating in CouchDB (i.e. from another Obsidian device) landing back on this host's disk, not just disk→CouchDB.
 
 ## The fact that reshaped the design
@@ -89,6 +93,17 @@ Genuine wins, for balance: `agent-health` in a pod is better isolated than a cro
 ## Verification
 
 Unit tests green each phase · `kubeconform --ignore-missing-schemas` in CI · `kind` smoke test before touching the real cluster · negative exposure test from off-Tailscale (Phase 2) · Obsidian round-trip proven twice, Docker then in-cluster (Phase 0, Phase 5) · a real write to wedding-ui at dry run, not just a read (Phase 3) · a week of `agent-health` cluster-only runs with its host crontab line gone (Phase 4) · exactly one `success` row and one email per manual Job run · seedbox regression check after every phase that touches it · rollback drills actually executed before each cutover is called done, not just documented.
+
+## Capacity (measured 2026-08-02)
+
+| Resource | Total | Used | Available | Note |
+|---|---|---|---|---|
+| Disk (`/`) | 11T | 9.0T (88%) | 1.4T | Plenty of headroom despite the high %; don't let the percentage alone drive sizing decisions. |
+| Memory | 31Gi | 3.8Gi + 23Gi cache | 26Gi available | Matches the design doc's earlier "26 GB" figure. Size k8s resource limits generously — over-tight limits cause OOMKills, not safety. |
+| CPU | 8 cores | — | — | |
+| `data/` | 229M | — | — | hostPath mount size for agent pods. |
+| `docs/` | 1.5M | — | — | hostPath mount size for the Obsidian-synced subdirectories. |
+| Docker images | — | 17.04GB / 21 images | — | Existing footprint before any k3s/GHCR images are added. |
 
 ## Related
 
