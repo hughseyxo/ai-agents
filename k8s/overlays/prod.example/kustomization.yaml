@@ -1,0 +1,7 @@
+# Copy this directory to k8s/overlays/prod/ (gitignored) and fill in
+# host-specific values there. Never commit k8s/overlays/prod/ — see
+# CLAUDE.md's <TAILSCALE_IP> pattern for why.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base

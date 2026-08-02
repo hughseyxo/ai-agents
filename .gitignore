@@ -45,3 +45,7 @@ mcp-servers/.env.bridge
 # Antigravity CLI per-repo conversation cache
 cache/
 data/wedding.db*
+
+# k8s: base + prod.example are committed; the real overlay has host-specific
+# values (Tailscale IP, etc.) and must never land in a tracked file.
+k8s/overlays/prod/
