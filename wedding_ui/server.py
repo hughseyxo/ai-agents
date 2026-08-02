@@ -12,6 +12,7 @@ from fastapi import FastAPI, HTTPException, Depends
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse
 from pydantic import BaseModel, Field
+from prometheus_client import Counter, make_asgi_app
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
@@ -21,6 +22,18 @@ from wedding_ui.budget_model import (
 )
 
 app = FastAPI(title="Wedding Budget PWA")
+
+REQUEST_COUNT = Counter(
+    "wedding_ui_requests_total", "Total HTTP requests", ["method", "path", "status"]
+)
+
+
+@app.middleware("http")
+async def _count_requests(request, call_next):
+    response = await call_next(request)
+    REQUEST_COUNT.labels(request.method, request.url.path, response.status_code).inc()
+    return response
+
 
 STATIC_DIR = REPO_ROOT / "wedding_ui" / "static"
 INDEX_PATH = REPO_ROOT / "wedding_ui" / "templates" / "index.html"
@@ -136,3 +149,4 @@ def serve_sw():
 
 STATIC_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+app.mount("/metrics", make_asgi_app())

@@ -167,3 +167,11 @@ def test_healthz_reports_db_failure(client):
     app.dependency_overrides[get_store] = lambda: BrokenStore()
     resp = client.get("/healthz")
     assert resp.status_code == 503
+
+
+def test_metrics_exposes_request_counter(client):
+    client.get("/api/budget")  # generate at least one counted request
+    resp = client.get("/metrics")
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("text/plain")
+    assert "wedding_ui_requests_total" in resp.text
