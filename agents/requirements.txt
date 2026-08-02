@@ -1,0 +1,10 @@
+# Runtime dependencies for agents/, telegram-bot/, and mcp-servers/ — the
+# packages the ai-agents-runner image installs. Pinned to versions already
+# proven working in .venv, not floor ranges. pytest is deliberately excluded:
+# it's a dev/CI-only dependency, not part of the runtime image.
+psutil==7.2.2
+pydantic==2.13.4
+python-dotenv==1.2.2
+python-telegram-bot==22.8
+PyYAML==6.0.3
+requests==2.34.2
