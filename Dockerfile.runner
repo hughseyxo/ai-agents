@@ -1,0 +1,35 @@
+# ai-agents-runner — runs the cron agents (agents/) plus the MCP servers
+# they call (mcp-servers/). Does NOT include telegram-bot/ or plant_ui/ —
+# those stay host-side (see the k3s migration design doc's Migration modes
+# table). Based on node:20-slim (not python:3.12-slim) because the `claude`
+# CLI install is what's actually proven working (Phase 0's credential-
+# isolation spike used this exact base + `npm install -g
+# @anthropic-ai/claude-code@2.1.92` successfully); adding Python on top via
+# apt is one `apt-get install`, versus reconstructing Node's install layout
+# by hand via a fragile multi-stage COPY.
+# Build context = the ai-agents repo root:
+#   docker build -f Dockerfile.runner -t ai-agents-runner .
+FROM node:20-slim
+RUN npm install -g @anthropic-ai/claude-code@2.1.92
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      python3 python3-pip && rm -rf /var/lib/apt/lists/*
+
+RUN groupadd --gid 1001 cian && \
+    useradd --uid 1001 --gid 1001 --create-home --shell /bin/bash cian
+
+WORKDIR /home/cian/git/ai-agents
+ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
+
+COPY agents/requirements.txt /home/cian/git/ai-agents/agents/requirements.txt
+RUN pip install --no-cache-dir --break-system-packages -r agents/requirements.txt
+
+COPY agents/ /home/cian/git/ai-agents/agents/
+COPY mcp-servers/ /home/cian/git/ai-agents/mcp-servers/
+COPY .mcp.json /home/cian/git/ai-agents/.mcp.json
+
+RUN mkdir -p /home/cian/git/ai-agents/data /home/cian/git/ai-agents/output && \
+    chown -R cian:cian /home/cian/git/ai-agents /home/cian
+
+USER cian
+ENTRYPOINT ["python3", "-m", "agents"]
