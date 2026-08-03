@@ -1,0 +1,78 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: news-briefing
+  namespace: ai-agents
+spec:
+  schedule: "0 4 * * *"
+  concurrencyPolicy: Forbid
+  suspend: true
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 1800
+      template:
+        spec:
+          restartPolicy: Never
+          imagePullSecrets:
+            - name: ghcr-pull-secret
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1001
+            runAsGroup: 1001
+            seccompProfile:
+              type: RuntimeDefault
+          initContainers:
+            - name: check-google-token
+              image: ghcr.io/hughseyxo/ai-agents-runner@sha256:7060d27e35444c3e549c0f27d0e8e6543bd8d10eadd86465b4a77e61a833c6c8
+              command: ["bash", "scripts/check-google-token.sh"]
+              envFrom:
+                - secretRef:
+                    name: news-briefing-secrets
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
+              volumeMounts:
+                - name: google-token
+                  mountPath: /home/cian/.google_tokens.json
+                - name: google-token-drive
+                  mountPath: /home/cian/.google_tokens_drive.json
+          containers:
+            - name: news-briefing
+              image: ghcr.io/hughseyxo/ai-agents-runner@sha256:7060d27e35444c3e549c0f27d0e8e6543bd8d10eadd86465b4a77e61a833c6c8
+              args: ["news-briefing"]
+              envFrom:
+                - secretRef:
+                    name: news-briefing-secrets
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
+              volumeMounts:
+                - name: agents-data
+                  mountPath: /home/cian/git/ai-agents/data
+                - name: google-token
+                  mountPath: /home/cian/.google_tokens.json
+                - name: google-token-drive
+                  mountPath: /home/cian/.google_tokens_drive.json
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 128Mi
+                limits:
+                  cpu: 500m
+                  memory: 512Mi
+          volumes:
+            - name: agents-data
+              hostPath:
+                path: /home/cian/git/ai-agents/data
+                type: Directory
+            - name: google-token
+              hostPath:
+                path: /home/cian/.google_tokens.json
+                type: File
+            - name: google-token-drive
+              hostPath:
+                path: /home/cian/.google_tokens_drive.json
+                type: File

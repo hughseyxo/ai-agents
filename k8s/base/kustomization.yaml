@@ -4,3 +4,4 @@ resources:
   - namespace.yaml
   - networkpolicy.yaml
   - wedding-ui
+  - cronjobs
