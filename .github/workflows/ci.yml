@@ -69,7 +69,6 @@ jobs:
           file: ${{ matrix.dockerfile }}
           push: ${{ github.event_name == 'push' }}
           tags: ghcr.io/hughseyxo/ai-agents-${{ matrix.image }}:latest
-          outputs: type=image,name=ghcr.io/hughseyxo/ai-agents-${{ matrix.image }},push-by-digest=true,name-canonical=true,push=${{ github.event_name == 'push' }}
       - name: Attest build provenance
         if: github.event_name == 'push'
         uses: actions/attest-build-provenance@v1
