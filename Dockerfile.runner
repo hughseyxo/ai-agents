@@ -13,7 +13,7 @@ FROM node:20-slim
 RUN npm install -g @anthropic-ai/claude-code@2.1.92
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      python3 python3-pip && rm -rf /var/lib/apt/lists/*
+      python3 python3-pip curl && rm -rf /var/lib/apt/lists/*
 
 RUN groupadd --gid 1001 cian && \
     useradd --uid 1001 --gid 1001 --create-home --shell /bin/bash cian
@@ -27,6 +27,7 @@ RUN pip install --no-cache-dir --break-system-packages -r agents/requirements.tx
 COPY agents/ /home/cian/git/ai-agents/agents/
 COPY mcp-servers/ /home/cian/git/ai-agents/mcp-servers/
 COPY .mcp.json /home/cian/git/ai-agents/.mcp.json
+COPY scripts/check-google-token.sh /home/cian/git/ai-agents/scripts/check-google-token.sh
 
 RUN mkdir -p /home/cian/git/ai-agents/data /home/cian/git/ai-agents/output && \
     chown -R cian:cian /home/cian/git/ai-agents /home/cian
