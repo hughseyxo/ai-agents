@@ -17,7 +17,7 @@
 - Secrets are scoped per agent — never a blanket mount of the whole `.env`.
 - `data/agents.db` and the Google token files are hostPath-mounted, not PVC-backed copies.
 - Only `agent-health`'s CronJob has `suspend: false`. All six others (`plant-agent`, `daily-briefing`, `news-briefing`, `security-audit`, `librarian-audit`, `librarian-watch`) stay `suspend: true`.
-- Real GHCR digest for `ai-agents-runner`, already pushed by CI run `30830541756`: `sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0` (verified 64 hex chars).
+- Real GHCR digest for `ai-agents-runner`, pushed by CI run `30833749005` (rebuilt after Task 1's `curl`/`scripts/` change — the image that existed before Task 1 lacked both, and would have made the `check-google-token.sh` initContainer fail): `sha256:7060d27e35444c3e549c0f27d0e8e6543bd8d10eadd86465b4a77e61a833c6c8` (verified 64 hex chars).
 - Exact agent names (the `python3 -m agents <name>` CLI argument, from each class's `name = "..."` attribute): `agent-health`, `plant-agent`, `daily-briefing`, `news-briefing`, `security-audit`, `librarian` (librarian additionally takes `--mode audit` or `--mode watch`).
 - Exact schedules (from each agent's `schedule` / `cron_entries()`): `agent-health` `0 * * * *`, `plant-agent` `0 * * * *`, `daily-briefing` `5 4 * * *`, `news-briefing` `0 4 * * *`, `security-audit` `0 6 * * 0`, `librarian --mode audit` `0 6 * * 0`, `librarian --mode watch` `0 6 * * 1-6`.
 - Secret env vars actually needed, verified by grep across `agents/`, `mcp-servers/`, and `.mcp.json`: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (used by `check-google-token.sh`, `agents/gmail_client.py`, `agents/drive_client.py`, `mcp-servers/calendar_server.py`), and `TODOIST_API_TOKEN` (used only by the remote Todoist MCP server's `Authorization` header in `.mcp.json`). No other secret env vars are read anywhere in the cron-agent code path.
@@ -121,7 +121,7 @@ spec:
               type: RuntimeDefault
           initContainers:
             - name: check-google-token
-              image: ghcr.io/hughseyxo/ai-agents-runner@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0
+              image: ghcr.io/hughseyxo/ai-agents-runner@sha256:7060d27e35444c3e549c0f27d0e8e6543bd8d10eadd86465b4a77e61a833c6c8
               command: ["bash", "scripts/check-google-token.sh"]
               envFrom:
                 - secretRef:
@@ -137,7 +137,7 @@ spec:
                   mountPath: /home/cian/.google_tokens_drive.json
           containers:
             - name: agent-health
-              image: ghcr.io/hughseyxo/ai-agents-runner@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0
+              image: ghcr.io/hughseyxo/ai-agents-runner@sha256:7060d27e35444c3e549c0f27d0e8e6543bd8d10eadd86465b4a77e61a833c6c8
               args: ["agent-health"]
               envFrom:
                 - secretRef:
@@ -484,7 +484,7 @@ git commit -m "docs: record Phase 4 (CronJobs cutover) completion"
 
 **Spec coverage:** spec's "Scope" (all 7 created, only agent-health live) ✓ Task 2; "Shared state: hostPath" ✓ Task 2 Step 1's volumes, applied uniformly across Step 2/3's table; "Secrets: scoped per agent" ✓ Task 3; "CronJob spec mechanics" (no `timeZone:`, `concurrencyPolicy: Forbid`, `backoffLimit: 0`, per-agent `activeDeadlineSeconds`, `check-google-token.sh` initContainer on all 7, `--strict-mcp-config` already enforced by existing Python) ✓ Task 2; "Cutover procedure" (apply → bake → crontab removal → rollback drill) ✓ Tasks 6-9; design doc completion note ✓ Task 10.
 
-**Placeholder scan:** the runner image digest is a real, already-verified value (`sha256:2cf067c...`, extracted from CI run `30830541756`, unlike Phase 3 where the digest was genuinely unknown until that phase's own first push) — not a placeholder. `kind` smoke test in Task 5 uses fake secret values (`x`) deliberately, since the goal there is validating manifest structure, not real credentials — explicitly noted as such, not an oversight.
+**Placeholder scan:** the runner image digest is a real, verified value (`sha256:7060d27e...`, extracted from CI run `30833749005` — the rebuild triggered by Task 1's `Dockerfile.runner` change, pushed to `main` directly with the human partner's go-ahead since it invalidated the previously-pinned digest) — not a placeholder. `kind` smoke test in Task 5 uses fake secret values (`x`) deliberately, since the goal there is validating manifest structure, not real credentials — explicitly noted as such, not an oversight.
 
 **Type/interface consistency:** agent names (`agent-health`, `plant-agent`, `daily-briefing`, `news-briefing`, `security-audit`, `librarian`) match verbatim between Global Constraints, Task 2's manifests, and Task 3's Secret names. Secret names (`agent-health-secrets`, etc.) match between Task 2's `envFrom` references, Task 3's creation commands, and Task 5's kind-test fakes. Schedules match verbatim between Global Constraints and Task 2's `spec.schedule` fields.
 
