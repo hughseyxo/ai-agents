@@ -33,7 +33,7 @@ jobs:
       - name: kubeconform
         run: |
           docker run --rm -v "$(pwd)/k8s:/k8s" ghcr.io/yannh/kubeconform:latest \
-            -ignore-missing-schemas -summary -recursive /k8s/base
+            -ignore-missing-schemas -summary /k8s/base
 
   build:
     needs: [test, validate-manifests]
