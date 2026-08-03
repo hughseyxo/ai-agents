@@ -2,7 +2,7 @@ apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: librarian-watch
-  namespace: ai-agents
+  namespace: ai-agents-cron
 spec:
   schedule: "0 6 * * 1-6"
   concurrencyPolicy: Forbid

@@ -2,7 +2,7 @@ apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: daily-briefing
-  namespace: ai-agents
+  namespace: ai-agents-cron
 spec:
   schedule: "5 4 * * *"
   concurrencyPolicy: Forbid

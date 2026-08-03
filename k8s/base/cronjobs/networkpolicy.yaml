@@ -1,0 +1,23 @@
+# Default-deny egress for the ai-agents-cron namespace, same shape as
+# k8s/base/networkpolicy.yaml's ai-agents policy — DNS + outbound HTTPS
+# allow-listed, everything else unreachable even if a pod is compromised.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-egress
+  namespace: ai-agents-cron
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - ports:
+        - protocol: TCP
+          port: 443

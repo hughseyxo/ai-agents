@@ -4,12 +4,13 @@
 
 **Goal:** Move `agent-health` from the host crontab to a real k3s `CronJob`, while creating (but leaving `suspend: true`) CronJob manifests for the other six cron-triggered resources so later phases reuse this phase's infrastructure instead of inventing it again.
 
-**Architecture:** Reuse the existing `ai-agents-runner` image and `ai-agents` namespace (PSA `baseline`, already compatible with hostPath volumes). Both `data/agents.db` and the two Google OAuth token files are hostPath-mounted so the pod and the still-running host-cron agents share one source of truth. Secrets are scoped per agent (least privilege), not a blanket `.env` mount. `agent-health`'s CronJob is the only one with `suspend: false`.
+**Architecture:** Reuse the existing `ai-agents-runner` image. A new `ai-agents-cron` namespace (PSA `privileged`) hosts all 7 CronJobs — not the existing `ai-agents` namespace (PSA `baseline`), since `baseline` forbids `hostPath` volumes outright (discovered via `kind` smoke test; see Task 5). Both `data/agents.db` and the two Google OAuth token files are hostPath-mounted so the pod and the still-running host-cron agents share one source of truth. Secrets are scoped per agent (least privilege), not a blanket `.env` mount. `agent-health`'s CronJob is the only one with `suspend: false`.
 
 **Tech Stack:** k3s (`CronJob`, `Secret`, `initContainer`), `kubeconform`, `kustomize`, existing `agents/` Python package.
 
 ## Global Constraints
 
+- All 7 CronJobs live in a dedicated `ai-agents-cron` namespace (PSA `privileged`), created by `k8s/base/cronjobs/namespace.yaml` — **not** the existing `ai-agents` namespace (PSA `baseline`, which forbids `hostPath` volumes). `k8s/base/cronjobs/networkpolicy.yaml` adds an equivalent default-deny-egress policy for this new namespace (DNS + outbound TCP/443), since `NetworkPolicy` is namespace-scoped and the existing `ai-agents` one doesn't cover it.
 - No `timeZone:` field on any CronJob — all `cron_entries()` schedules are UTC already.
 - `concurrencyPolicy: Forbid` on every CronJob.
 - `backoffLimit: 0` on every CronJob (no Job-level retries).
@@ -99,7 +100,7 @@ apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: agent-health
-  namespace: ai-agents
+  namespace: ai-agents-cron
 spec:
   schedule: "0 * * * *"
   concurrencyPolicy: Forbid
@@ -244,28 +245,28 @@ Ask the human partner to run this themselves (via the `!` prefix), so `.env`'s r
 ```bash
 source .env
 sudo k3s kubectl create secret generic agent-health-secrets \
-  --namespace=ai-agents \
+  --namespace=ai-agents-cron \
   --from-literal=GOOGLE_CLIENT_ID="$GOOGLE_CLIENT_ID" \
   --from-literal=GOOGLE_CLIENT_SECRET="$GOOGLE_CLIENT_SECRET"
 sudo k3s kubectl create secret generic plant-agent-secrets \
-  --namespace=ai-agents \
+  --namespace=ai-agents-cron \
   --from-literal=GOOGLE_CLIENT_ID="$GOOGLE_CLIENT_ID" \
   --from-literal=GOOGLE_CLIENT_SECRET="$GOOGLE_CLIENT_SECRET"
 sudo k3s kubectl create secret generic daily-briefing-secrets \
-  --namespace=ai-agents \
+  --namespace=ai-agents-cron \
   --from-literal=GOOGLE_CLIENT_ID="$GOOGLE_CLIENT_ID" \
   --from-literal=GOOGLE_CLIENT_SECRET="$GOOGLE_CLIENT_SECRET" \
   --from-literal=TODOIST_API_TOKEN="$TODOIST_API_TOKEN"
 sudo k3s kubectl create secret generic news-briefing-secrets \
-  --namespace=ai-agents \
+  --namespace=ai-agents-cron \
   --from-literal=GOOGLE_CLIENT_ID="$GOOGLE_CLIENT_ID" \
   --from-literal=GOOGLE_CLIENT_SECRET="$GOOGLE_CLIENT_SECRET"
 sudo k3s kubectl create secret generic security-audit-secrets \
-  --namespace=ai-agents \
+  --namespace=ai-agents-cron \
   --from-literal=GOOGLE_CLIENT_ID="$GOOGLE_CLIENT_ID" \
   --from-literal=GOOGLE_CLIENT_SECRET="$GOOGLE_CLIENT_SECRET"
 sudo k3s kubectl create secret generic librarian-secrets \
-  --namespace=ai-agents \
+  --namespace=ai-agents-cron \
   --from-literal=GOOGLE_CLIENT_ID="$GOOGLE_CLIENT_ID" \
   --from-literal=GOOGLE_CLIENT_SECRET="$GOOGLE_CLIENT_SECRET"
 ```
@@ -276,7 +277,7 @@ Expected: seven `secret/<name> created` lines.
 - [ ] **Step 2: Verify (without printing contents)**
 
 ```bash
-sudo k3s kubectl get secrets -n ai-agents | grep -- -secrets
+sudo k3s kubectl get secrets -n ai-agents-cron | grep -- -secrets
 ```
 Expected: seven rows, `TYPE` = `Opaque`.
 
@@ -294,7 +295,7 @@ Expected: seven rows, `TYPE` = `Opaque`.
 read -rsp "GHCR PAT (read:packages): " GHCR_PAT
 echo
 sudo k3s kubectl create secret docker-registry ghcr-pull-secret \
-  --namespace=ai-agents \
+  --namespace=ai-agents-cron \
   --docker-server=ghcr.io \
   --docker-username=hughseyxo \
   --docker-password="$GHCR_PAT"
@@ -305,7 +306,7 @@ Expected: `secret/ghcr-pull-secret created`.
 - [ ] **Step 2: Verify**
 
 ```bash
-sudo k3s kubectl get secret -n ai-agents ghcr-pull-secret
+sudo k3s kubectl get secret -n ai-agents-cron ghcr-pull-secret
 ```
 Expected: shows the secret, `TYPE kubernetes.io/dockerconfigjson`.
 
@@ -327,16 +328,16 @@ Expected: summary line shows 0 errors, resource count includes the 7 new CronJob
 
 ```bash
 kind create cluster --name phase4-smoke 2>&1 | tail -5
-kubectl --context kind-phase4-smoke apply -f k8s/base/namespace.yaml
-kubectl --context kind-phase4-smoke create secret generic agent-health-secrets -n ai-agents --from-literal=GOOGLE_CLIENT_ID=x --from-literal=GOOGLE_CLIENT_SECRET=x
-kubectl --context kind-phase4-smoke create secret generic plant-agent-secrets -n ai-agents --from-literal=GOOGLE_CLIENT_ID=x --from-literal=GOOGLE_CLIENT_SECRET=x
-kubectl --context kind-phase4-smoke create secret generic daily-briefing-secrets -n ai-agents --from-literal=GOOGLE_CLIENT_ID=x --from-literal=GOOGLE_CLIENT_SECRET=x --from-literal=TODOIST_API_TOKEN=x
-kubectl --context kind-phase4-smoke create secret generic news-briefing-secrets -n ai-agents --from-literal=GOOGLE_CLIENT_ID=x --from-literal=GOOGLE_CLIENT_SECRET=x
-kubectl --context kind-phase4-smoke create secret generic security-audit-secrets -n ai-agents --from-literal=GOOGLE_CLIENT_ID=x --from-literal=GOOGLE_CLIENT_SECRET=x
-kubectl --context kind-phase4-smoke create secret generic librarian-secrets -n ai-agents --from-literal=GOOGLE_CLIENT_ID=x --from-literal=GOOGLE_CLIENT_SECRET=x
-kubectl --context kind-phase4-smoke create secret docker-registry ghcr-pull-secret -n ai-agents --docker-server=ghcr.io --docker-username=x --docker-password=x
+kubectl --context kind-phase4-smoke apply -f k8s/base/cronjobs/namespace.yaml
+kubectl --context kind-phase4-smoke create secret generic agent-health-secrets -n ai-agents-cron --from-literal=GOOGLE_CLIENT_ID=x --from-literal=GOOGLE_CLIENT_SECRET=x
+kubectl --context kind-phase4-smoke create secret generic plant-agent-secrets -n ai-agents-cron --from-literal=GOOGLE_CLIENT_ID=x --from-literal=GOOGLE_CLIENT_SECRET=x
+kubectl --context kind-phase4-smoke create secret generic daily-briefing-secrets -n ai-agents-cron --from-literal=GOOGLE_CLIENT_ID=x --from-literal=GOOGLE_CLIENT_SECRET=x --from-literal=TODOIST_API_TOKEN=x
+kubectl --context kind-phase4-smoke create secret generic news-briefing-secrets -n ai-agents-cron --from-literal=GOOGLE_CLIENT_ID=x --from-literal=GOOGLE_CLIENT_SECRET=x
+kubectl --context kind-phase4-smoke create secret generic security-audit-secrets -n ai-agents-cron --from-literal=GOOGLE_CLIENT_ID=x --from-literal=GOOGLE_CLIENT_SECRET=x
+kubectl --context kind-phase4-smoke create secret generic librarian-secrets -n ai-agents-cron --from-literal=GOOGLE_CLIENT_ID=x --from-literal=GOOGLE_CLIENT_SECRET=x
+kubectl --context kind-phase4-smoke create secret docker-registry ghcr-pull-secret -n ai-agents-cron --docker-server=ghcr.io --docker-username=x --docker-password=x
 kubectl --context kind-phase4-smoke apply -k k8s/base/cronjobs
-kubectl --context kind-phase4-smoke get cronjobs -n ai-agents
+kubectl --context kind-phase4-smoke get cronjobs -n ai-agents-cron
 ```
 Expected: `apply -k` reports all 7 CronJobs `created`, no errors; `get cronjobs` lists all 7 with `SUSPEND` = `False` for `agent-health` only, `True` for the other 6. (The kind cluster has no `/home/cian` hostPath data, no real GHCR image, and fake secret values — the pods themselves are not expected to run successfully here, only the CronJob objects to be accepted as valid.)
 
@@ -370,7 +371,7 @@ Expected: `cronjob.batch/agent-health created` plus 6 more `created` lines.
 - [ ] **Step 3: Verify suspend state**
 
 ```bash
-kubectl get cronjobs -n ai-agents
+kubectl get cronjobs -n ai-agents-cron
 ```
 Expected: `agent-health` shows `SUSPEND=False`; the other 6 show `SUSPEND=True`.
 
@@ -392,8 +393,8 @@ Note the number returned — call it `N0`.
 - [ ] **Step 2: After each of the next 3 scheduled hourly ticks (`:00` UTC), check the CronJob's last run**
 
 ```bash
-kubectl get cronjobs agent-health -n ai-agents
-kubectl get jobs -n ai-agents -l "job-name" --sort-by=.status.startTime | tail -3
+kubectl get cronjobs agent-health -n ai-agents-cron
+kubectl get jobs -n ai-agents-cron -l "job-name" --sort-by=.status.startTime | tail -3
 sqlite3 data/agents.db "SELECT COUNT(*) FROM runs WHERE agent='agent-health';"
 ```
 Expected each time: `LAST SCHEDULE` on the CronJob advances by one hour; the matching Job shows `COMPLETIONS 1/1`; the `runs` row count increases by 1 over the previous check. Repeat this step 3 times total (i.e. across 3 separate hourly ticks) before moving to Task 8. If any run fails, stop and diagnose before continuing — do not proceed to the crontab cutover on an unproven CronJob.
@@ -434,8 +435,8 @@ Matching every prior phase's bar: run the rollback drill for real, right after T
 ```bash
 ( crontab -l; echo "0 * * * * cd /home/cian/git/ai-agents && ./run-agent.sh agent-health >> /home/cian/git/ai-agents/logs/agent-health.log 2>&1" ) | crontab -
 crontab -l | grep agent-health
-kubectl patch cronjob agent-health -n ai-agents -p '{"spec":{"suspend":true}}'
-kubectl get cronjob agent-health -n ai-agents
+kubectl patch cronjob agent-health -n ai-agents-cron -p '{"spec":{"suspend":true}}'
+kubectl get cronjob agent-health -n ai-agents-cron
 ```
 Expected: the crontab line is back; `SUSPEND` shows `True`.
 
@@ -451,8 +452,8 @@ Note the count, wait for the next `:00` UTC tick, then re-run the same query. Ex
 ```bash
 crontab -l | grep -v 'agents agent-health' | crontab -
 crontab -l | grep agent-health
-kubectl patch cronjob agent-health -n ai-agents -p '{"spec":{"suspend":false}}'
-kubectl get cronjob agent-health -n ai-agents
+kubectl patch cronjob agent-health -n ai-agents-cron -p '{"spec":{"suspend":false}}'
+kubectl get cronjob agent-health -n ai-agents-cron
 ```
 Expected: crontab line gone again; `SUSPEND` shows `False` — back to the post-Task-8 state, drill complete.
 

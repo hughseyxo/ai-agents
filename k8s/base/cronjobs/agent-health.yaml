@@ -2,7 +2,7 @@ apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: agent-health
-  namespace: ai-agents
+  namespace: ai-agents-cron
 spec:
   schedule: "0 * * * *"
   concurrencyPolicy: Forbid
