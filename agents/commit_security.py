@@ -121,7 +121,10 @@ class CommitSecurityAgent(BaseAgent):
             return []
 
         try:
-            data = json.loads(text)
+            # raw_decode parses only the leading JSON value and ignores anything
+            # after it — the model sometimes appends explanatory prose past the
+            # JSON despite being told not to, which json.loads() rejects outright.
+            data, _ = json.JSONDecoder().raw_decode(text)
         except (json.JSONDecodeError, ValueError) as e:
             print(f"[commit-security] Could not parse LLM response ({e}).", file=sys.stderr)
             return None
