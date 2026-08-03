@@ -1,0 +1,25 @@
+# k8s/base/networkpolicy.yaml
+# Default-deny egress for the ai-agents namespace (design decision 2), with
+# DNS resolution and outbound HTTPS allow-listed — everything else (the
+# Docker bridge networks, CouchDB, Portainer, sshd, etc.) stays unreachable
+# from any pod in this namespace even if a pod is compromised.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-egress
+  namespace: ai-agents
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - ports:
+        - protocol: TCP
+          port: 443
