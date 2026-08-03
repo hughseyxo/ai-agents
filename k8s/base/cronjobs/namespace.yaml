@@ -1,3 +1,9 @@
+# PSA privileged is required here, not a default left too loose: hostPath
+# volumes (data/agents.db, OAuth token files — see the cron cutover design
+# doc) are forbidden outright under both `baseline` and `restricted`, only
+# `privileged` allows them. Scoped narrowly to this namespace alone rather
+# than loosening the existing `ai-agents` namespace (still `baseline`),
+# so the blast radius is just these 7 CronJobs.
 apiVersion: v1
 kind: Namespace
 metadata:
