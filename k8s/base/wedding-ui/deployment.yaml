@@ -23,7 +23,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: wedding-ui
-          image: ghcr.io/hughseyxo/ai-agents-wedding-ui@sha256:0000000000000000000000000000000000000000000000000000000000000
+          image: ghcr.io/hughseyxo/ai-agents-wedding-ui@sha256:df2c2710c99251c69bd26705dade7ce43d1b642a59e589b34dd79a02b3858eb1
           ports:
             - containerPort: 8000
           securityContext:
