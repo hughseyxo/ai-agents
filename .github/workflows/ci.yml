@@ -20,7 +20,7 @@ jobs:
           python-version: "3.12"
       - name: Install dependencies
         run: |
-          pip install -r wedding_ui/requirements.txt -r agents/requirements.txt pytest
+          pip install -r wedding_ui/requirements.txt -r agents/requirements.txt -r plant_ui/requirements.txt pytest
       - name: Run tests
         run: pytest tests/ -v
 
