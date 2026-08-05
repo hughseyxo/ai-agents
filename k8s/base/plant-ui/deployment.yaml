@@ -1,0 +1,95 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: plant-ui
+  namespace: plant-ui
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: plant-ui
+  template:
+    metadata:
+      labels:
+        app: plant-ui
+    spec:
+      imagePullSecrets:
+        - name: ghcr-pull-secret
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: plant-ui
+          image: ghcr.io/hughseyxo/ai-agents-plant-ui@sha256:PLACEHOLDER
+          ports:
+            - containerPort: 8765
+          env:
+            - name: HOME
+              value: /srv/k3s-claude-home
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8765
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8765
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          volumeMounts:
+            - name: agents-data
+              mountPath: /home/cian/git/ai-agents/data
+            - name: docs-readonly
+              mountPath: /home/cian/git/ai-agents/docs
+              readOnly: true
+            - name: docs-plants
+              mountPath: /home/cian/git/ai-agents/docs/plants
+            - name: docs-plant-observations
+              mountPath: /home/cian/git/ai-agents/docs/plant-observations
+            - name: docs-garden-knowledge
+              mountPath: /home/cian/git/ai-agents/docs/garden-knowledge
+            - name: claude-home
+              mountPath: /srv/k3s-claude-home
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+      volumes:
+        - name: agents-data
+          hostPath:
+            path: /home/cian/git/ai-agents/data
+            type: Directory
+        - name: docs-readonly
+          hostPath:
+            path: /home/cian/git/ai-agents/docs
+            type: Directory
+        - name: docs-plants
+          hostPath:
+            path: /home/cian/git/ai-agents/docs/plants
+            type: Directory
+        - name: docs-plant-observations
+          hostPath:
+            path: /home/cian/git/ai-agents/docs/plant-observations
+            type: Directory
+        - name: docs-garden-knowledge
+          hostPath:
+            path: /home/cian/git/ai-agents/docs/garden-knowledge
+            type: Directory
+        - name: claude-home
+          hostPath:
+            path: /srv/k3s-claude-home
+            type: Directory

@@ -1,0 +1,24 @@
+# Default-deny egress for the plant-ui namespace, same shape as
+# k8s/base/networkpolicy.yaml's ai-agents policy — DNS + outbound HTTPS
+# allow-listed (the claude CLI needs 443 to reach the Anthropic API),
+# everything else unreachable even if this pod is compromised.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-egress
+  namespace: plant-ui
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - ports:
+        - protocol: TCP
+          port: 443

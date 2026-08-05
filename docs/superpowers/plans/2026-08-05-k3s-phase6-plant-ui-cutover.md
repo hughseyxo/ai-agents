@@ -572,29 +572,45 @@ Expected: summary shows the 4 new resources under `plant-ui`, 0 errors.
 
 - [ ] **Step 7: Validate the nested-mount pattern against a local `kind` cluster**
 
+**Two `kind`-specific gotchas found while actually running this** (not obvious from the manifest alone): (1) `kind` nodes are themselves Docker containers, so hostPath sources must be created *inside the node container* (`docker exec <node> mkdir ...`), not on the real host — `/tmp/...` on the real host isn't visible there. (2) A naive `sed` that replaces the literal path string everywhere rewrites `mountPath:` (the container-side destination, must stay `/home/cian/git/ai-agents/...`) as well as `hostPath.path:` (the source, the only thing that should change) — anchor the substitution to lines starting with `path:` specifically, or it silently produces a pod that mounts everything at the wrong location inside the container.
+
 ```bash
 kind create cluster --name phase6-smoke
 kubectl --context kind-phase6-smoke apply -f k8s/base/plant-ui/namespace.yaml
 kubectl --context kind-phase6-smoke create secret docker-registry ghcr-pull-secret \
   -n plant-ui --docker-server=ghcr.io --docker-username=x --docker-password=x
-mkdir -p /tmp/phase6-smoke/{data,docs/plants,docs/plant-observations,docs/garden-knowledge,claude-home}
-echo '{"test":"ok"}' > /tmp/phase6-smoke/docs/plants/probe.md
-# Point kind's node at the smoke dirs via a scratch kustomization overlay
-# rather than editing the real manifest — swap hostPath sources only:
-sed 's#/home/cian/git/ai-agents/data#/tmp/phase6-smoke/data#; s#/home/cian/git/ai-agents/docs#/tmp/phase6-smoke/docs#g; s#/srv/k3s-claude-home#/tmp/phase6-smoke/claude-home#' \
+
+# Directories must exist inside the kind node container, not the real host.
+docker exec phase6-smoke-control-plane mkdir -p \
+  /tmp/phase6-smoke/{data,docs/plants,docs/plant-observations,docs/garden-knowledge,claude-home}
+docker exec phase6-smoke-control-plane sh -c 'echo "{\"test\":\"ok\"}" > /tmp/phase6-smoke/docs/plants/probe.md'
+# uid 1001 (the container's runAsUser) needs write access — root-owned by default.
+docker exec phase6-smoke-control-plane chown -R 1001:1001 \
+  /tmp/phase6-smoke/data /tmp/phase6-smoke/claude-home /tmp/phase6-smoke/docs
+
+# Swap hostPath *sources* only — anchored to "path:" at line start so
+# "mountPath:" lines (container-side, must stay /home/cian/git/ai-agents/...)
+# are never touched.
+sed -E '/^[[:space:]]+path: \/home\/cian\/git\/ai-agents\/data$/s#/home/cian/git/ai-agents/data#/tmp/phase6-smoke/data#;
+     /^[[:space:]]+path: \/home\/cian\/git\/ai-agents\/docs/s#/home/cian/git/ai-agents/docs#/tmp/phase6-smoke/docs#;
+     /^[[:space:]]+path: \/srv\/k3s-claude-home$/s#/srv/k3s-claude-home#/tmp/phase6-smoke/claude-home#' \
   k8s/base/plant-ui/deployment.yaml > /tmp/phase6-smoke/deployment.yaml
+sed -i 's#image:.*#image: ai-agents-plant-ui:local#' /tmp/phase6-smoke/deployment.yaml
+
 kind load docker-image ai-agents-plant-ui:local --name phase6-smoke
-sed -i 's#image:.*#image: ai-agents-plant-ui:local#; s#imagePullPolicy.*##' /tmp/phase6-smoke/deployment.yaml
 kubectl --context kind-phase6-smoke apply -f /tmp/phase6-smoke/deployment.yaml
 kubectl --context kind-phase6-smoke -n plant-ui wait --for=condition=ready pod -l app=plant-ui --timeout=60s
+
 kubectl --context kind-phase6-smoke -n plant-ui exec deploy/plant-ui -- cat /home/cian/git/ai-agents/docs/plants/probe.md
 kubectl --context kind-phase6-smoke -n plant-ui exec deploy/plant-ui -- sh -c "echo write-test > /home/cian/git/ai-agents/docs/plants/write-probe.md"
-cat /tmp/phase6-smoke/docs/plants/write-probe.md
+docker exec phase6-smoke-control-plane cat /tmp/phase6-smoke/docs/plants/write-probe.md
 kubectl --context kind-phase6-smoke -n plant-ui exec deploy/plant-ui -- sh -c "echo blocked > /home/cian/git/ai-agents/docs/should-fail.md" 2>&1 || echo "correctly read-only"
+
 kind delete cluster --name phase6-smoke
 rm -rf /tmp/phase6-smoke
+kubectl config use-context default
 ```
-Expected: `probe.md` content readable from inside the pod (proves the read-only `docs/` mount works); `write-probe.md` appears on the host at `/tmp/phase6-smoke/docs/plants/` (proves the nested read-write mount overlays correctly); the write to `docs/should-fail.md` (outside the three writable subdirs) fails with a read-only-filesystem error, printing `correctly read-only`.
+Expected: `probe.md` content readable from inside the pod (proves the read-only `docs/` mount works); `write-probe.md` appears back on the kind node at `/tmp/phase6-smoke/docs/plants/` (proves the nested read-write mount overlays correctly); the write to `docs/should-fail.md` (outside the three writable subdirs) fails with a read-only-filesystem error, printing `correctly read-only`. **Actually run 2026-08-05 — all three confirmed**, plus `kubectl config current-context` confirmed back on `default` (the real cluster) afterward, not left stuck on the deleted kind context (a real bug hit earlier in this migration, on Phase 5).
 
 - [ ] **Step 8: Commit**
 

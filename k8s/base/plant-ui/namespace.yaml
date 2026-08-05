@@ -1,0 +1,12 @@
+# PSA privileged is required here, not a default left too loose: every
+# hostPath mount below (data/, three docs/ subdirs, /srv/k3s-claude-home)
+# is forbidden outright under both `baseline` and `restricted`, only
+# `privileged` allows them. Same reasoning as the ai-agents-cron namespace
+# (Phase 4). Scoped narrowly to this one workload.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: plant-ui
+  labels:
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/warn: privileged
