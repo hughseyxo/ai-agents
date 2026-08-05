@@ -25,7 +25,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: plant-ui
-          image: ghcr.io/hughseyxo/ai-agents-plant-ui@sha256:PLACEHOLDER
+          image: ghcr.io/hughseyxo/ai-agents-plant-ui@sha256:5ca3d16b1617c1217effbf83b3524baf218b0fcf9e192adbfd378022d2b7aa15
           ports:
             - containerPort: 8765
           env:
