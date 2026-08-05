@@ -1,7 +1,8 @@
 # ai-agents-runner — runs the cron agents (agents/) plus the MCP servers
 # they call (mcp-servers/). Does NOT include telegram-bot/ or plant_ui/ —
-# those stay host-side (see the k3s migration design doc's Migration modes
-# table). Based on node:20-slim (not python:3.12-slim) because the `claude`
+# plant-ui gets its own image (plant_ui/Dockerfile, Phase 6); the rest of
+# telegram-bot/ (the Telegram concierge bot itself) still stays host-side.
+# Based on node:20-slim (not python:3.12-slim) because the `claude`
 # CLI install is what's actually proven working (Phase 0's credential-
 # isolation spike used this exact base + `npm install -g
 # @anthropic-ai/claude-code@2.1.92` successfully); adding Python on top via
