@@ -601,3 +601,19 @@ def test_list_and_serve_plant_photos(client, mock_store_db):
 def test_list_plant_photos_unknown_plant_404(client, mock_store_db):
     r = client.get("/api/plants/No Such Plant/photos")
     assert r.status_code == 404
+
+
+def test_healthz_ok(client):
+    resp = client.get("/healthz")
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "ok"
+
+
+def test_healthz_reports_db_failure(client, monkeypatch):
+    import plant_ui.server as srv
+
+    def broken_get_state(self, agent, key, default=None):
+        raise RuntimeError("db down")
+    monkeypatch.setattr(srv.AgentDB, "get_state", broken_get_state)
+    resp = client.get("/healthz")
+    assert resp.status_code == 503

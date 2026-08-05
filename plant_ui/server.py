@@ -583,6 +583,15 @@ def get_plant_photo(name: str, photo_id: int, store: PlantStore = Depends(get_st
         raise HTTPException(status_code=404, detail="Photo file missing on disk")
     return FileResponse(path, media_type="image/jpeg")
 
+
+@app.get("/healthz")
+def healthz(db: AgentDB = Depends(get_db)):
+    try:
+        db.get_state("plant-ui", "healthz-check")
+    except Exception:
+        raise HTTPException(status_code=503, detail="unhealthy")
+    return {"status": "ok"}
+
 # Serve Frontend SPA
 @app.get("/", response_class=HTMLResponse)
 def serve_index():
