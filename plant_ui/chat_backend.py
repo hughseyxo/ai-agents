@@ -43,6 +43,35 @@ _ALLOWED_TOOLS = [
     "mcp__concierge__read_garden_note",
 ]
 
+# Every mcp__concierge__* tool NOT in _ALLOWED_TOOLS above. --allowedTools
+# alone does not restrict the CLI's actual tool surface (verified against
+# the real CLI elsewhere in this project — see agents/base.py's
+# DENIED_TOOLS for the same finding); --disallowedTools does. Without this,
+# garden chat could reach the full concierge toolset (travel agent, recipe/
+# playlist saving, plant removal, system health) via an adversarial prompt.
+_DISALLOWED_TOOLS = [
+    "mcp__concierge__get_agent_status",
+    "mcp__concierge__get_yopflix_status",
+    "mcp__concierge__get_system_health",
+    "mcp__concierge__get_cron_schedule",
+    "mcp__concierge__get_agent_logs",
+    "mcp__concierge__run_travel_agent",
+    "mcp__concierge__research_plant_watering",
+    "mcp__concierge__research_plant_sunlight",
+    "mcp__concierge__research_plant_water_sensitivity",
+    "mcp__concierge__research_plant_traits",
+    "mcp__concierge__add_plant",
+    "mcp__concierge__update_plant",
+    "mcp__concierge__water_plant",
+    "mcp__concierge__water_plants",
+    "mcp__concierge__remove_plant",
+    "mcp__concierge__save_recipe",
+    "mcp__concierge__save_youtube_playlist",
+    "mcp__concierge__get_travel_report",
+    "mcp__concierge__set_plant_frequency",
+    "mcp__concierge__suggest_free_time_tasks",
+]
+
 
 def _build_prompt(message: str, scope: str, plant_name: str | None) -> str:
     parts = []
@@ -75,7 +104,7 @@ def chat(message: str, scope: str = "garden", plant_name: str | None = None,
         "--strict-mcp-config",
         "--add-dir", "docs",
         "--allowedTools", *_ALLOWED_TOOLS,
-        "--disallowedTools", "Write", "Edit", "Bash",
+        "--disallowedTools", "Write", "Edit", "Bash", *_DISALLOWED_TOOLS,
     ]
     if session_id:
         cmd += ["--resume", session_id]
