@@ -269,3 +269,113 @@ class TestShodanExposure:
         assert len(agent.findings) == 1
         assert agent.findings[0]["severity"] == "High"
         assert "22" in agent.findings[0]["detail"]
+
+
+class TestK8sExposure:
+    def test_flags_nodeport_addresses_reverted_to_cluster_wide(self, agent):
+        unit_file = "ExecStart=/usr/local/bin/k3s server \\\n  --node-ip=100.96.86.73\n"
+        with patch("agents.security_audit._run") as mock_run, \
+             patch("agents.security_audit.Path.read_text", return_value=unit_file), \
+             patch("agents.security_audit.Path.exists", return_value=True), \
+             patch("agents.security_audit.Path.stat") as mock_stat:
+            mock_stat.return_value.st_mode = 0o100600
+            mock_run.return_value = MagicMock(returncode=0, stdout=json.dumps({"items": []}))
+            agent._check_k8s_exposure()
+
+        nodeport_findings = [f for f in agent.findings if "NodePort" in f["check"]]
+        assert len(nodeport_findings) == 1
+        assert nodeport_findings[0]["severity"] == "Critical"
+
+    def test_passes_when_nodeport_addresses_restricted(self, agent):
+        unit_file = "ExecStart=/usr/local/bin/k3s server \\\n  --kube-proxy-arg=nodeport-addresses=100.96.86.73/32 \\\n"
+        with patch("agents.security_audit._run") as mock_run, \
+             patch("agents.security_audit.Path.read_text", return_value=unit_file), \
+             patch("agents.security_audit.Path.exists", return_value=True), \
+             patch("agents.security_audit.Path.stat") as mock_stat:
+            mock_stat.return_value.st_mode = 0o100600
+            mock_run.return_value = MagicMock(returncode=0, stdout=json.dumps({"items": []}))
+            agent._check_k8s_exposure()
+
+        nodeport_findings = [f for f in agent.findings if "NodePort" in f["check"]]
+        assert nodeport_findings == []
+
+    def test_flags_permissive_kubeconfig(self, agent):
+        unit_file = "--kube-proxy-arg=nodeport-addresses=100.96.86.73/32"
+        with patch("agents.security_audit._run") as mock_run, \
+             patch("agents.security_audit.Path.read_text", return_value=unit_file), \
+             patch("agents.security_audit.Path.exists", return_value=True), \
+             patch("agents.security_audit.Path.stat") as mock_stat:
+            mock_stat.return_value.st_mode = 0o100644  # world/group-readable
+            mock_run.return_value = MagicMock(returncode=0, stdout=json.dumps({"items": []}))
+            agent._check_k8s_exposure()
+
+        kubeconfig_findings = [f for f in agent.findings if "kubeconfig" in f["check"].lower()]
+        assert len(kubeconfig_findings) == 1
+        assert kubeconfig_findings[0]["severity"] == "High"
+
+    def test_flags_unexpected_cluster_admin_binding(self, agent):
+        crb_json = json.dumps({
+            "items": [
+                {
+                    "metadata": {"name": "cluster-admin"},
+                    "roleRef": {"name": "cluster-admin"},
+                    "subjects": [{"kind": "Group", "name": "system:masters"}],
+                },
+                {
+                    "metadata": {"name": "argocd-suspicious-binding"},
+                    "roleRef": {"name": "cluster-admin"},
+                    "subjects": [{"kind": "ServiceAccount", "name": "argocd-application-controller", "namespace": "argocd"}],
+                },
+            ]
+        })
+        with patch("agents.security_audit._run") as mock_run, \
+             patch("agents.security_audit.Path.read_text", return_value="--kube-proxy-arg=nodeport-addresses=100.96.86.73/32"), \
+             patch("agents.security_audit.Path.exists", return_value=True), \
+             patch("agents.security_audit.Path.stat") as mock_stat:
+            mock_stat.return_value.st_mode = 0o100600
+
+            # _check_k8s_exposure calls _run multiple times (RBAC query,
+            # namespace list, NetworkPolicy list) — key responses off the
+            # command itself rather than a fixed-order list.
+            def fake_run(cmd, **kw):
+                if "clusterrolebindings" in cmd:
+                    return MagicMock(returncode=0, stdout=crb_json)
+                if "get" in cmd and "namespaces" in cmd:
+                    return MagicMock(returncode=0, stdout=json.dumps({"items": [{"metadata": {"name": "monitoring"}}]}))
+                if "networkpolicies" in cmd:
+                    return MagicMock(returncode=0, stdout=json.dumps({"items": [{"metadata": {"namespace": "monitoring"}}]}))
+                return MagicMock(returncode=0, stdout="")
+            mock_run.side_effect = fake_run
+            agent._check_k8s_exposure()
+
+        rbac_findings = [f for f in agent.findings if "RBAC" in f["check"]]
+        assert len(rbac_findings) == 1
+        assert "argocd-suspicious-binding" in rbac_findings[0]["detail"]
+        assert "cluster-admin" not in rbac_findings[0]["detail"].split(":")[0]
+
+    def test_flags_namespace_missing_networkpolicy(self, agent):
+        with patch("agents.security_audit._run") as mock_run, \
+             patch("agents.security_audit.Path.read_text", return_value="--kube-proxy-arg=nodeport-addresses=100.96.86.73/32"), \
+             patch("agents.security_audit.Path.exists", return_value=True), \
+             patch("agents.security_audit.Path.stat") as mock_stat:
+            mock_stat.return_value.st_mode = 0o100600
+
+            def fake_run(cmd, **kw):
+                if "clusterrolebindings" in cmd:
+                    return MagicMock(returncode=0, stdout=json.dumps({"items": []}))
+                if "get" in cmd and "namespaces" in cmd:
+                    return MagicMock(returncode=0, stdout=json.dumps({
+                        "items": [{"metadata": {"name": "wedding-ui"}}, {"metadata": {"name": "plant-ui"}}]
+                    }))
+                if "networkpolicies" in cmd:
+                    # plant-ui has none — wedding-ui does.
+                    return MagicMock(returncode=0, stdout=json.dumps({
+                        "items": [{"metadata": {"namespace": "wedding-ui"}}]
+                    }))
+                return MagicMock(returncode=0, stdout="")
+            mock_run.side_effect = fake_run
+            agent._check_k8s_exposure()
+
+        netpol_findings = [f for f in agent.findings if "NetworkPolicy" in f["check"]]
+        assert len(netpol_findings) == 1
+        assert "plant-ui" in netpol_findings[0]["detail"]

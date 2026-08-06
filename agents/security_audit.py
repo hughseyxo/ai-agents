@@ -37,6 +37,18 @@ SERVER_CONTEXT = {
     },
 }
 
+K8S_CONTEXT = {
+    "k3s_unit_file": Path("/etc/systemd/system/k3s.service"),
+    "kubeconfig_paths": [
+        Path("/etc/rancher/k3s/k3s.yaml"),
+        Path.home() / ".kube" / "config",
+    ],
+    "kubectl": ["sudo", "k3s", "kubectl"],
+    # ClusterRoleBindings expected to carry cluster-admin — anything else
+    # granting it is a finding, not an assumption baked into the check.
+    "expected_cluster_admin_subjects": {"system:masters"},
+}
+
 
 def _run(cmd: list[str], **kwargs) -> subprocess.CompletedProcess:
     """Run a read-only system command, returning result even on failure."""
@@ -72,6 +84,7 @@ class SecurityAuditAgent(BaseAgent):
             {"name": "git_secret_scan", "fn": self._check_git_secrets},
             {"name": "cloudflare_ips", "fn": self._check_cloudflare_ips},
             {"name": "shodan_exposure", "fn": self._check_shodan_exposure},
+            {"name": "k8s_exposure", "fn": self._check_k8s_exposure},
         ]
 
     def report(self) -> str:
@@ -1279,6 +1292,128 @@ class SecurityAuditAgent(BaseAgent):
             )
         else:
             self._pass(f"External exposure: Shodan sees only expected ports (80, 443) for {public_ip}")
+
+    # --- Check: cluster-side exposure surfaces (Phase 7) ---
+    def _check_k8s_exposure(self):
+        self._check_nodeport_binding()
+        self._check_kubeconfig_permissions()
+        self._check_rbac_cluster_admin()
+        self._check_networkpolicy_presence()
+
+    def _check_nodeport_binding(self):
+        unit_file = K8S_CONTEXT["k3s_unit_file"]
+        if not unit_file.exists():
+            self._finding(
+                severity="Medium",
+                check="k8s NodePort binding",
+                detail=f"{unit_file} not found — cannot verify nodeport-addresses restriction",
+                context="Every NodePort Service in this cluster relies on kube-proxy's nodeport-addresses flag being restricted to the Tailscale IP",
+                risk="If the flag were ever reverted, every NodePort (Grafana, wedding-ui, plant-ui) would be reachable from the public internet",
+                impact="No change — this is a verification-only check",
+            )
+            return
+        content = unit_file.read_text()
+        if "--kube-proxy-arg=nodeport-addresses=" not in content:
+            self._finding(
+                severity="Critical",
+                check="k8s NodePort binding",
+                detail="k3s.service no longer sets --kube-proxy-arg=nodeport-addresses — every NodePort Service is now reachable on all interfaces, including the public IP",
+                context="This flag is what makes every NodePort (Grafana :30802, wedding-ui :30800, plant-ui :30801) Tailscale-only by construction",
+                risk="Public exposure of every NodePort-backed service on this cluster",
+                impact="Re-adding the flag and restarting k3s restores the restriction; brief NodePort service interruption during restart",
+                fix_commands=["sudo systemctl edit k3s.service", "sudo systemctl restart k3s"],
+            )
+        else:
+            self._pass("k8s NodePort binding: kube-proxy nodeport-addresses restriction present")
+
+    def _check_kubeconfig_permissions(self):
+        issues = []
+        for path in K8S_CONTEXT["kubeconfig_paths"]:
+            if not path.exists():
+                continue
+            mode = path.stat().st_mode & 0o777
+            if mode != 0o600:
+                issues.append(f"{path} is {oct(mode)}, expected 0600")
+        if issues:
+            self._finding(
+                severity="High",
+                check="kubeconfig permissions",
+                detail="; ".join(issues),
+                context="A kubeconfig grants full cluster access — this cluster's kubeconfig should never be group/world-readable",
+                risk="Any local user able to read a loosely-permissioned kubeconfig gets full cluster-admin access",
+                impact="chmod 600 has no functional impact on the owning user",
+                fix_commands=[f"sudo chmod 600 {p}" for p in K8S_CONTEXT["kubeconfig_paths"]],
+            )
+        else:
+            self._pass("kubeconfig permissions: all present kubeconfig files are 0600")
+
+    def _check_rbac_cluster_admin(self):
+        result = _run(K8S_CONTEXT["kubectl"] + ["get", "clusterrolebindings", "-o", "json"])
+        if result.returncode != 0:
+            self._finding(
+                severity="Medium",
+                check="RBAC cluster-admin audit",
+                detail="Could not query ClusterRoleBindings",
+                context="Unable to verify no unexpected identity holds cluster-admin",
+                risk="An overly-permissive binding could go unnoticed",
+                impact="No change — verification-only check",
+            )
+            return
+        try:
+            bindings = json.loads(result.stdout).get("items", [])
+        except json.JSONDecodeError:
+            return
+        unexpected = []
+        for b in bindings:
+            role = b.get("roleRef", {}).get("name", "")
+            if role != "cluster-admin":
+                continue
+            for subject in b.get("subjects") or []:
+                if subject.get("name") not in K8S_CONTEXT["expected_cluster_admin_subjects"]:
+                    unexpected.append(f"{b['metadata']['name']}: {subject.get('kind')}/{subject.get('name')}")
+        if unexpected:
+            self._finding(
+                severity="High",
+                check="RBAC cluster-admin audit",
+                detail="; ".join(unexpected),
+                context="cluster-admin grants unrestricted access to every namespace and resource — this is exactly the scope Phase 8's ArgoCD RBAC design must avoid",
+                risk="Any compromised identity holding this binding controls the entire cluster",
+                impact="Review and scope down to a namespaced Role/RoleBinding if the access isn't actually needed cluster-wide",
+            )
+        else:
+            self._pass("RBAC cluster-admin audit: no unexpected cluster-admin bindings")
+
+    def _check_networkpolicy_presence(self):
+        ns_result = _run(K8S_CONTEXT["kubectl"] + ["get", "namespaces", "-o", "json"])
+        netpol_result = _run(K8S_CONTEXT["kubectl"] + ["get", "networkpolicies", "-A", "-o", "json"])
+        if ns_result.returncode != 0 or netpol_result.returncode != 0:
+            self._finding(
+                severity="Medium",
+                check="NetworkPolicy presence",
+                detail="Could not query namespaces or NetworkPolicies",
+                context="Unable to verify every namespace has a default-deny-egress policy",
+                risk="A namespace without one has unrestricted egress if a pod in it is ever compromised",
+                impact="No change — verification-only check",
+            )
+            return
+        try:
+            all_ns = {n["metadata"]["name"] for n in json.loads(ns_result.stdout).get("items", [])}
+            covered_ns = {p["metadata"]["namespace"] for p in json.loads(netpol_result.stdout).get("items", [])}
+        except (json.JSONDecodeError, KeyError):
+            return
+        system_ns = {"kube-system", "kube-public", "kube-node-lease", "default"}
+        missing = sorted((all_ns - system_ns) - covered_ns)
+        if missing:
+            self._finding(
+                severity="Medium",
+                check="NetworkPolicy presence",
+                detail=f"Namespace(s) missing a NetworkPolicy: {', '.join(missing)}",
+                context="Every workload namespace in this migration has consistently gotten a default-deny-egress NetworkPolicy — this check enforces that convention rather than leaving it as convention only",
+                risk="A pod in an uncovered namespace has unrestricted egress if compromised",
+                impact="Adding a default-deny-egress NetworkPolicy (same shape as every other namespace's) has no impact on already-allow-listed traffic",
+            )
+        else:
+            self._pass("NetworkPolicy presence: every non-system namespace has at least one NetworkPolicy")
 
     # --- Interactive fix mode ---
 
