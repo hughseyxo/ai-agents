@@ -1,0 +1,83 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: phase7-alerts
+  namespace: monitoring
+  labels:
+    # kube-prometheus-stack's Prometheus only picks up PrometheusRules
+    # matching its ruleSelector, which defaults to requiring this label
+    # (release name) unless overridden — matches the chart's own
+    # convention so this rule is actually discovered.
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: pod-availability
+      rules:
+        - alert: DeploymentDown
+          expr: |
+            kube_deployment_status_replicas_available{namespace=~"wedding-ui|plant-ui"} == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.deployment }} in {{ $labels.namespace }} has 0 available replicas"
+        - alert: PodCrashLooping
+          expr: |
+            increase(kube_pod_container_status_restarts_total{namespace=~"wedding-ui|plant-ui"}[15m]) > 3
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.pod }} in {{ $labels.namespace }} is restarting repeatedly"
+    - name: agent-health-staleness
+      rules:
+        - alert: AgentHealthStale
+          # agent-health runs hourly (0 * * * *); 2x its own interval plus
+          # slack is the same STALE_FACTOR=2 threshold agent_health.py
+          # itself uses to judge every OTHER agent it monitors — applying
+          # the identical bar to agent-health's own liveness keeps the
+          # semantics consistent rather than inventing a new threshold.
+          expr: |
+            time() - agent_health_last_success_timestamp > 7200
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "agent-health has not completed successfully in over 2 hours"
+    - name: node-resources
+      rules:
+        - alert: NodeMemoryPressure
+          expr: |
+            (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > 0.9
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Node memory usage above 90%"
+        - alert: NodeDiskPressure
+          expr: |
+            (1 - node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) > 0.9
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Root filesystem usage above 90%"
+    - name: service-storage
+      rules:
+        - alert: WeddingPVCNearlyFull
+          expr: |
+            kubelet_volume_stats_available_bytes{namespace="wedding-ui"}
+              / kubelet_volume_stats_capacity_bytes{namespace="wedding-ui"} < 0.1
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "wedding-ui's PVC has less than 10% free space"
+        - alert: ServiceHasNoEndpoints
+          expr: |
+            kube_endpoint_address_available{namespace=~"wedding-ui|plant-ui"} == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.endpoint }} in {{ $labels.namespace }} has no available endpoints"
