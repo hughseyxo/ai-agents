@@ -6,7 +6,7 @@
 
 **Goal:** Move `plant-ui` from its current systemd service onto k3s permanently — dedicated image, hostPath onto the real shared `data/`/`docs/` (not a PVC copy, since host-side cron agents still write the same SQLite db), Traefik cutover to a new Tailscale-only hostname — proven with real writes (chat continuity across a pod restart, a photo assessment, a watering record) before the live switch, and a rollback path proven to actually work.
 
-**Architecture:** New namespace `plant-ui`, PSA `privileged` (required by the hostPath mounts — no way around it, unlike wedding-ui which is PVC-backed and fully `restricted`). New dedicated image `ai-agents-plant-ui`, not an extension of `ai-agents-runner`. Storage is entirely hostPath onto the real `data/`, three specific `docs/` subdirectories, and the already-provisioned `/srv/k3s-claude-home` identity — no PVC anywhere in this phase, because `data/agents.db` is still live shared state with host-side cron agents that haven't cut over. Networking is a `NodePort` Service (Traefik, still running in Docker on the host, can only reach a node-bound port — the same mechanism wedding-ui's cutover already proved) fronted by a new Traefik route at `plants.yopflix.world`, restricted to Tailscale-only via a new `ipAllowList` middleware rather than reusing the exact `<TAILSCALE_IP>:8765` address (accepting a PWA-reinstall cost across every device, per explicit preference during design).
+**Architecture:** New namespace `plant-ui`, PSA `privileged` (required by the hostPath mounts — no way around it, unlike wedding-ui which is PVC-backed and fully `restricted`). New dedicated image `ai-agents-plant-ui`, not an extension of `ai-agents-runner`. Storage is entirely hostPath onto the real `data/`, three specific `docs/` subdirectories, and the already-provisioned `/srv/k3s-claude-home` identity — no PVC anywhere in this phase, because `data/agents.db` is still live shared state with host-side cron agents that haven't cut over. Networking is a `NodePort` Service (Traefik, still running in Docker on the host, can only reach a node-bound port — the same mechanism wedding-ui's cutover already proved) fronted by a new Traefik route at `plants.internal.yopflix.world`, restricted to Tailscale-only via a new `ipAllowList` middleware rather than reusing the exact `<TAILSCALE_IP>:8765` address (accepting a PWA-reinstall cost across every device, per explicit preference during design).
 
 **Tech Stack:** Kubernetes Deployment/Service/Namespace/NetworkPolicy/Secret, k3s NodePort (bound cluster-wide to `<TAILSCALE_IP>` since Phase 2), GitHub Actions (`ci.yml`'s existing build matrix, extended), GHCR private image + `imagePullSecret`, Traefik `file` provider (separate repo `~/git/yopflix/seedbox`) + a new `ipAllowList` middleware, `kind` for local manifest smoke-testing before the real cluster.
 
@@ -20,7 +20,7 @@
 - **User:** `runAsUser`/`runAsGroup`: `1001` (migration decision 7 — matches `ai-agents-runner`'s existing convention, distinct from `wedding_ui`'s `1000`).
 - **NodePort:** `30801` — `30800` is wedding-ui's, confirmed via `kubectl get svc -A` showing only that one NodePort in use before this phase.
 - **Traefik config lives in a separate repo**, `~/git/yopflix/seedbox` (not `ai-agents`). The `ipAllowList` middleware goes in the already-tracked `~/git/yopflix/seedbox/traefik/custom/middlewares.yaml` (alongside the existing `common-auth`/`redirect-to-https` middlewares) since the CIDR it uses (`100.64.0.0/10`, Tailscale's global CGNAT range) isn't host-specific and is safe to track. The router+service definition goes in a **new, gitignored** `~/git/yopflix/seedbox/traefik/custom/custom-plant-ui-k8s.yaml` (matches the existing `custom-*.yaml` gitignore pattern — keeps the literal `<TAILSCALE_IP>` backend URL out of tracked files).
-- **`plants.yopflix.world` resolves via Tailscale MagicDNS or a hosts-file entry, never public DNS** — the whole point of the `ipAllowList` middleware is that this route must not be publicly reachable even though Traefik itself listens on the public IP (confirmed: `services/traefik.yaml` publishes `80:80`/`443:443` with no host-IP restriction).
+- **`plants.internal.yopflix.world` resolves via Tailscale MagicDNS or a hosts-file entry, never public DNS** — the whole point of the `ipAllowList` middleware is that this route must not be publicly reachable even though Traefik itself listens on the public IP (confirmed: `services/traefik.yaml` publishes `80:80`/`443:443` with no host-IP restriction).
 - **No basic auth on this route.** Plant-ui has no auth layer today (Tailscale reachability is the access control); the `ipAllowList` middleware replicates that exact trust boundary rather than adding new friction.
 - **Existing CI (`​.github/workflows/ci.yml`) already installs `plant_ui/requirements.txt` and runs `pytest tests/`** — Task 1/2's new tests run in that existing job with no CI changes needed for the test step itself, only the `build` job's matrix (Task 4) is new.
 - Every STOP task requires the human partner's own explicit go-ahead, given separately per task.
@@ -785,7 +785,7 @@ Create `~/git/yopflix/seedbox/traefik/custom/custom-plant-ui-k8s.yaml`:
 http:
   routers:
     plant-ui-k8s:
-      rule: 'Host(`plants.yopflix.world`)'
+      rule: 'Host(`plants.internal.yopflix.world`)'
       middlewares:
         - tailscale-only@file
       service: plant-ui-k8s
@@ -805,16 +805,16 @@ docker logs traefik --tail 20 2>&1 | grep -i "plant-ui\|error"
 ```
 Expected: no error lines; if Traefik logs router additions at this level, `plant-ui-k8s` appears.
 
-- [ ] **Step 6: Resolve `plants.yopflix.world` for testing on this host**
+- [ ] **Step 6: Resolve `plants.internal.yopflix.world` for testing on this host**
 
 ```bash
-grep -q plants.yopflix.world /etc/hosts || echo "<TAILSCALE_IP> plants.yopflix.world" | sudo tee -a /etc/hosts
+grep -q plants.internal.yopflix.world /etc/hosts || echo "<TAILSCALE_IP> plants.internal.yopflix.world" | sudo tee -a /etc/hosts
 ```
 
 - [ ] **Step 7: Positive check — Tailscale-side reachability**
 
 ```bash
-curl -sf http://plants.yopflix.world/healthz
+curl -sf http://plants.internal.yopflix.world/healthz
 ```
 Expected: `{"status":"ok"}`.
 
@@ -822,11 +822,11 @@ Expected: `{"status":"ok"}`.
 
 From a device NOT on the tailnet (e.g. the same off-Tailscale Windows laptop used in Phase 2's negative exposure test, or a mobile connection with Tailscale disabled), attempt:
 ```
-curl -sf http://plants.yopflix.world/healthz
+curl -sf http://plants.internal.yopflix.world/healthz
 ```
-Expected: connection fails or times out (public DNS doesn't resolve `plants.yopflix.world` at all, since it was never added there — this is belt-and-suspenders on top of the `ipAllowList`). Additionally, from any machine, test the `ipAllowList` itself directly against the public IP with a forged Host header:
+Expected: connection fails or times out (public DNS doesn't resolve `plants.internal.yopflix.world` at all, since it was never added there — this is belt-and-suspenders on top of the `ipAllowList`). Additionally, from any machine, test the `ipAllowList` itself directly against the public IP with a forged Host header:
 ```bash
-curl -sf -H "Host: plants.yopflix.world" https://37.187.226.57/healthz -k
+curl -sf -H "Host: plants.internal.yopflix.world" https://37.187.226.57/healthz -k
 ```
 Expected: `403 Forbidden` (proves the `ipAllowList` middleware itself blocks non-Tailscale source IPs, not just DNS obscurity).
 
@@ -857,7 +857,7 @@ systemctl --user stop plant_ui.service
 - [ ] **Step 3: Confirm the k8s pod is now the only thing serving requests**
 
 ```bash
-curl -sf http://plants.yopflix.world/healthz
+curl -sf http://plants.internal.yopflix.world/healthz
 systemctl --user status plant_ui.service | head -3
 ```
 Expected: `/healthz` still returns `{"status":"ok"}` (from the k8s pod, since `plant_ui.service` is now stopped and both share the same `data/`/`docs/` — this proves the pod alone is now authoritative), `systemctl status` shows `inactive (dead)`.
@@ -914,7 +914,7 @@ Expected: real plant list, including the watering-record update from Task 7 Step
 ```bash
 systemctl --user stop plant_ui.service
 systemctl --user disable plant_ui.service
-curl -sf http://plants.yopflix.world/healthz
+curl -sf http://plants.internal.yopflix.world/healthz
 ```
 Expected: `{"status":"ok"}`, confirming the pod is serving again after the rollback-and-recut sequence.
 
