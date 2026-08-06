@@ -32,7 +32,7 @@ spec:
             # owner. Runs as root briefly, overriding the pod-level
             # runAsNonRoot — chown is the one thing here that requires it.
             - name: fix-textfile-collector-ownership
-              image: ghcr.io/hughseyxo/ai-agents-runner@sha256:7060d27e35444c3e549c0f27d0e8e6543bd8d10eadd86465b4a77e61a833c6c8
+              image: ghcr.io/hughseyxo/ai-agents-runner@sha256:4c903f85cb2b07acd0acda1dfda5b6cb2de285d8126fa11da616b4cedd163091
               command: ["chown", "1001:1001", "/var/lib/node_exporter/textfile_collector"]
               securityContext:
                 runAsNonRoot: false
@@ -50,7 +50,7 @@ spec:
                   mountPath: /var/lib/node_exporter/textfile_collector
           containers:
             - name: agent-health
-              image: ghcr.io/hughseyxo/ai-agents-runner@sha256:7060d27e35444c3e549c0f27d0e8e6543bd8d10eadd86465b4a77e61a833c6c8
+              image: ghcr.io/hughseyxo/ai-agents-runner@sha256:4c903f85cb2b07acd0acda1dfda5b6cb2de285d8126fa11da616b4cedd163091
               args: ["agent-health"]
               envFrom:
                 - secretRef:
