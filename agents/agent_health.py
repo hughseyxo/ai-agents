@@ -11,15 +11,17 @@ quickly.
 """
 
 import os
+import tempfile
 from datetime import datetime, timezone
-
-import requests
+from pathlib import Path
 
 from .base import BaseAgent
+from .telegram_client import send_telegram
 
 STALE_FACTOR = 2
 # Statuses that mean the agent actually executed to completion.
 HEALTHY_STATUSES = ("success", "partial_failure")
+TEXTFILE_COLLECTOR_DIR = Path("/var/lib/node_exporter/textfile_collector")
 
 
 def cron_interval_seconds(schedule: str) -> int:
@@ -160,25 +162,30 @@ class AgentHealthAgent(BaseAgent):
         # is left unrecorded so the next run retries it instead of going silent.
         still_alerted = [n for n in stale if n in previously] + sent_names
         self.set_state("alerted", still_alerted)
+        write_health_metric(TEXTFILE_COLLECTOR_DIR, now.timestamp())
         return {"checked": len(monitored), "stale": stale, "alerts_sent": len(sent_names)}
 
     # --- telegram ---
 
     def _send_telegram(self, text: str) -> bool:
-        token, chat_id = _telegram_creds()
-        if not token or not chat_id:
-            print("[agent-health] Missing Telegram creds; skipping push")
-            return False
-        try:
-            resp = requests.post(
-                f"https://api.telegram.org/bot{token}/sendMessage",
-                json={"chat_id": chat_id, "text": text, "parse_mode": "Markdown"},
-                timeout=10,
-            )
-            return resp.status_code == 200
-        except requests.RequestException as e:
-            print(f"[agent-health] Telegram send failed: {e}")
-            return False
+        return send_telegram(text)
+
+
+def write_health_metric(directory: Path, timestamp: float) -> None:
+    """Write agent-health's own last-success timestamp for node-exporter's
+    textfile collector to scrape. Atomic (tempfile + os.replace) — safe here
+    because the target is a whole-directory hostPath mount, not the
+    single-file `type: File` mount that caused Phase 4's EBUSY bug."""
+    directory.mkdir(parents=True, exist_ok=True)
+    target = directory / "agent_health.prom"
+    fd, tmp_path = tempfile.mkstemp(dir=directory, prefix=".agent_health-")
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.write(f"agent_health_last_success_timestamp {int(timestamp)}\n")
+        os.replace(tmp_path, target)
+    except BaseException:
+        os.unlink(tmp_path)
+        raise
 
 
 def _parse_ts(s: str):
@@ -190,12 +197,3 @@ def _parse_ts(s: str):
         return datetime.strptime(s, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
     except ValueError:
         return None
-
-
-def _telegram_creds():
-    """Telegram bot token + chat id, injected into the environment by
-    run-agent.sh (from the repo-root .env). Mirrors plant_agent's sender."""
-    return (
-        os.environ.get("CONCIERGE_BOT_TOKEN", ""),
-        os.environ.get("TELEGRAM_USER_ID", ""),
-    )

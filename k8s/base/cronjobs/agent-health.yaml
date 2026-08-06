@@ -36,6 +36,8 @@ spec:
               volumeMounts:
                 - name: agents-data
                   mountPath: /home/cian/git/ai-agents/data
+                - name: node-exporter-textfile
+                  mountPath: /var/lib/node_exporter/textfile_collector
               resources:
                 requests:
                   cpu: 50m
@@ -48,3 +50,7 @@ spec:
               hostPath:
                 path: /home/cian/git/ai-agents/data
                 type: Directory
+            - name: node-exporter-textfile
+              hostPath:
+                path: /var/lib/node_exporter/textfile_collector
+                type: DirectoryOrCreate
