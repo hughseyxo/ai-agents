@@ -59,7 +59,25 @@ Phase 5 (Obsidian/CouchDB+livesync-bridge) is separately paused on an unrelated 
 - Positive-reachability regression check on the rest of the seedbox stack (Jellyfin/Traefik) immediately after the Traefik config change, same as every other phase that's touched Traefik.
 - A rollback drill actually executed (not just documented): revert to the systemd service, confirm it still serves the real untouched data, then re-cut-over — same pattern as every prior phase's rollback drill.
 
+## Status: complete (2026-08-06)
+
+All 11 tasks of the implementation plan executed. `plant-ui` runs in k3s (`Deployment`/`Service`/`NetworkPolicy` in the `plant-ui` namespace, PSA `privileged`, `ghcr.io/hughseyxo/ai-agents-plant-ui` pinned by digest), serving real production traffic via `NodePort 30801` + Tailscale MagicDNS. The old `plant_ui.service` systemd unit is stopped and disabled (unit file still present/loadable for a future rollback if ever needed).
+
+**Deviations from the original design, found during implementation:**
+- `Service` type is `NodePort`, not `ClusterIP` as first drafted — Traefik runs as a Docker container outside the pod network and can only reach a node-bound port (same constraint wedding-ui already proved in Phase 3).
+- The `telegram-bot/` dependency is three files (`claude_backend.py`, `tool_specs.py`, `tools.py`), not one — traced via import chain during plan-writing.
+- `chat_backend.py`'s tool-surface confinement bug (decision 7) was real and pre-existing: `--allowedTools` alone doesn't restrict the CLI's tool surface; fixed via `--disallowedTools` before cutover (Task 1).
+- The originally planned Traefik + custom-hostname (`plants.internal.yopflix.world`) + Tailscale Split DNS networking layer (decision 4, Task 8) was built, deployed, verified from the server, and then abandoned after real cross-device verification (Task 6 of the separate Split DNS plan) turned up unresolved per-device DNS reachability failures on both a Windows laptop and an Android phone. Final state is direct `NodePort` access via Tailscale MagicDNS — see decision 4 above and `docs/superpowers/specs/2026-08-06-tailscale-split-dns-internal-yopflix-design.md` for the full investigation. The underlying `NodePort`-is-already-Tailscale-only security property (migration decision 1) held throughout and needed no additional middleware once the Traefik layer was dropped.
+
+**Verification evidence (Tasks 7-10):**
+- Real chat write + `--resume` continuity survived a pod restart (the FROBNICATE test).
+- Real photo upload produced a genuine `docs/plant-observations/` note on the real host disk (hostPath, not a PVC copy).
+- Real watering-record write landed in the same `data/agents.db` file read by host-side cron agents (`sqlite3` query confirmed `last_watered` updated).
+- Traefik cutover's positive/negative reachability checks passed at the time (before the approach was abandoned); positive-reachability regression checks on the rest of the seedbox stack passed at every checkpoint.
+- Rollback drill actually executed 2026-08-06: reverted to systemd (`/healthz` OK, real plant data confirmed intact and unforked), then re-cut-over to the k8s pod (`/healthz` OK via the current direct-NodePort address).
+
 ## Related
 
 - `docs/superpowers/specs/2026-08-01-k3s-migration-design.md` — parent migration design; Phase 6 entry, decisions 1/3/7/8/9/11, storage/pod-security architecture sections.
 - `docs/superpowers/specs/2026-07-12-batch-plant-photo-upload-design.md` — batch photo job resume mechanism this phase must keep working under k8s pod restarts.
+- `docs/superpowers/specs/2026-08-06-tailscale-split-dns-internal-yopflix-design.md` — the Split DNS attempt, its abandonment, and the final direct-NodePort-access decision.
