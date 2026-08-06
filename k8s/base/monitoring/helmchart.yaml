@@ -1,0 +1,43 @@
+# k3s's built-in helm-controller watches HelmChart resources cluster-wide;
+# convention is to create them in kube-system regardless of where the
+# chart's own resources land (targetNamespace below). No separate `helm`
+# CLI install needed on the host.
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  name: kube-prometheus-stack
+  namespace: kube-system
+spec:
+  chart: kube-prometheus-stack
+  repo: https://prometheus-community.github.io/helm-charts
+  targetNamespace: monitoring
+  valuesContent: |-
+    # k3s's datastore is SQLite (no etcd), and kube-proxy metrics aren't
+    # exposed by k3s's embedded kube-proxy — both scrape targets would
+    # sit permanently down otherwise.
+    kubeEtcd:
+      enabled: false
+    kubeProxy:
+      enabled: false
+    prometheus:
+      prometheusSpec:
+        retention: 15d
+        storageSpec:
+          volumeClaimTemplate:
+            spec:
+              accessModes: ["ReadWriteOnce"]
+              resources:
+                requests:
+                  storage: 10Gi
+    grafana:
+      service:
+        type: NodePort
+        nodePort: 30802
+    prometheus-node-exporter:
+      extraArgs:
+        - --collector.textfile.directory=/host/textfile_collector
+      extraHostVolumeMounts:
+        - name: textfile-collector
+          hostPath: /var/lib/node_exporter/textfile_collector
+          mountPath: /host/textfile_collector
+          readOnly: false
