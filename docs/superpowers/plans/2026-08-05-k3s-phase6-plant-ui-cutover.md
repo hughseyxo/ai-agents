@@ -851,22 +851,29 @@ Do not proceed without the human partner's explicit go-ahead, given separately f
 - [ ] **Step 2: Stop the systemd service**
 
 ```bash
-sudo systemctl stop plant_ui.service
+systemctl --user stop plant_ui.service
 ```
 
 - [ ] **Step 3: Confirm the k8s pod is now the only thing serving requests**
 
 ```bash
 curl -sf http://plants.yopflix.world/healthz
-sudo systemctl status plant_ui.service | head -3
+systemctl --user status plant_ui.service | head -3
 ```
 Expected: `/healthz` still returns `{"status":"ok"}` (from the k8s pod, since `plant_ui.service` is now stopped and both share the same `data/`/`docs/` — this proves the pod alone is now authoritative), `systemctl status` shows `inactive (dead)`.
 
 - [ ] **Step 4: Disable the systemd service so it doesn't restart on next boot**
 
 ```bash
-sudo systemctl disable plant_ui.service
+systemctl --user disable plant_ui.service
 ```
+
+**Discovered running this:** `plant_ui.service`'s unit file at `~/.config/systemd/user/plant_ui.service` is a symlink to the real source in this repo (`plant_ui/plant_ui.service`, same pattern as `telegram-bot/concierge-bot.service`) — `disable` removed *both* that top-level symlink and the `default.target.wants/` enablement symlink, leaving the unit completely unloadable (`could not be found`), not just non-autostarting. The repo source file is untouched, but restore the top-level symlink afterward so the unit stays manually startable for Task 10's rollback drill:
+```bash
+ln -s /home/cian/git/ai-agents/plant_ui/plant_ui.service /home/cian/.config/systemd/user/plant_ui.service
+systemctl --user daemon-reload
+```
+Expected `systemctl --user status plant_ui.service` after this: `Loaded: loaded (...; linked; ...)`, `Active: inactive (dead)` — loadable, not enabled.
 
 - [ ] **Step 5: Positive-reachability regression check, one more time**
 
@@ -889,7 +896,7 @@ Do not proceed without the human partner's explicit go-ahead, given separately f
 - [ ] **Step 2: Revert to systemd**
 
 ```bash
-sudo systemctl enable --now plant_ui.service
+systemctl --user enable --now plant_ui.service
 sleep 3
 curl -sf http://localhost:8765/healthz
 ```
@@ -905,8 +912,8 @@ Expected: real plant list, including the watering-record update from Task 7 Step
 - [ ] **Step 4: Re-cut-over to the k8s pod**
 
 ```bash
-sudo systemctl stop plant_ui.service
-sudo systemctl disable plant_ui.service
+systemctl --user stop plant_ui.service
+systemctl --user disable plant_ui.service
 curl -sf http://plants.yopflix.world/healthz
 ```
 Expected: `{"status":"ok"}`, confirming the pod is serving again after the rollback-and-recut sequence.
