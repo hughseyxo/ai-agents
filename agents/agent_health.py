@@ -180,6 +180,9 @@ def write_health_metric(directory: Path, timestamp: float) -> None:
     target = directory / "agent_health.prom"
     fd, tmp_path = tempfile.mkstemp(dir=directory, prefix=".agent_health-")
     try:
+        # mkstemp creates the file 0600 (owner-only) — node-exporter runs
+        # as a different uid and needs to read this file to scrape it.
+        os.chmod(tmp_path, 0o644)
         with os.fdopen(fd, "w") as f:
             f.write(f"agent_health_last_success_timestamp {int(timestamp)}\n")
         os.replace(tmp_path, target)

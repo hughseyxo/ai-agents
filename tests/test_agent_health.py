@@ -138,6 +138,8 @@ class TestWriteHealthMetric:
         assert content == "agent_health_last_success_timestamp 1234567890\n"
         # No leftover tempfile from the atomic-write pattern.
         assert list(tmp_path.iterdir()) == [metric_file]
+        # node-exporter scrapes as a different uid — must be world-readable.
+        assert (metric_file.stat().st_mode & 0o777) == 0o644
 
     def test_overwrites_existing_metric_file(self, tmp_path):
         from agents.agent_health import write_health_metric
