@@ -1,0 +1,35 @@
+# Default-deny egress, same shape as k8s/base/cronjobs/networkpolicy.yaml,
+# plus one deliberate, narrow exception: Prometheus needs to scrape pods
+# across every other namespace on Kubelet's metrics port (10250) and each
+# workload's own metrics port. This is the one namespace in the migration
+# whose entire purpose requires reaching outside itself — the exception is
+# scoped to that need, not a blanket relaxation of default-deny.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-egress
+  namespace: monitoring
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - ports:
+        - protocol: TCP
+          port: 443
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 10250
+        - protocol: TCP
+          port: 9100
+        - protocol: TCP
+          port: 8080

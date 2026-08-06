@@ -1,0 +1,13 @@
+# PSA privileged is required here, not a default left too loose:
+# node-exporter's DaemonSet needs hostPath mounts (/proc, /sys, the
+# textfile-collector directory) plus a hostPort to scrape node-level
+# metrics — both forbidden under baseline/restricted. Same reasoning as
+# the ai-agents-cron namespace (Phase 4) and plant-ui (Phase 6), just
+# triggered by hostPath+hostPort together rather than hostPath alone.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+  labels:
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/warn: privileged

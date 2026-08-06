@@ -3,7 +3,3 @@ kind: Kustomization
 resources:
   - namespace.yaml
   - networkpolicy.yaml
-  - wedding-ui
-  - cronjobs
-  - plant-ui
-  - monitoring
