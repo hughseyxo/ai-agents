@@ -1,9 +1,32 @@
 # Default-deny egress, same shape as k8s/base/cronjobs/networkpolicy.yaml,
-# plus one deliberate, narrow exception: Prometheus needs to scrape pods
-# across every other namespace on Kubelet's metrics port (10250) and each
-# workload's own metrics port. This is the one namespace in the migration
-# whose entire purpose requires reaching outside itself — the exception is
-# scoped to that need, not a blanket relaxation of default-deny.
+# but scoped by DESTINATION rather than by port list — unlike every other
+# namespace in this migration, this one's entire purpose is scraping
+# metrics from arbitrary ports across the cluster (Prometheus targets,
+# admission-webhook certgen, the Operator talking to the apiserver), so a
+# hardcoded port allowlist fights the namespace's own nature rather than
+# meaningfully restricting it. The actual boundary that matters: egress
+# stays inside this single-node cluster (pod network + the node's own real
+# IP for hostNetwork-bound targets) plus DNS and outbound HTTPS for the
+# Helm chart repo — never the wider LAN or public internet beyond that.
+#
+# Found during Task 6's real-cluster apply, in two rounds:
+# 1. A plain `ports: [443]` rule with no `to:` (meaning "unrestricted
+#    destination" per the NetworkPolicy spec) did NOT cover the
+#    kube-apiserver — kube-router (k3s's embedded NetworkPolicy
+#    controller) rejected (not dropped) that traffic with "connection
+#    refused". The `kubernetes` Service (ClusterIP 10.43.0.1) has no
+#    pod-backed Endpoints — it points directly at the control-plane
+#    node's real IP, which an unrestricted-destination rule didn't
+#    reliably cover under kube-router.
+# 2. After fixing that, Prometheus itself still couldn't reach several
+#    real scrape targets: node-exporter and the apiserver are
+#    hostNetwork-bound (real node IP, not pod-network), and coredns/
+#    grafana/alertmanager use ports (9153/3000/9093) never enumerated in
+#    the original narrow allowlist. Chasing each port individually doesn't
+#    scale for a namespace whose job is scraping arbitrary metrics
+#    endpoints — destination-scoped rules (pod CIDR + node IP) both fix
+#    this and stay a real boundary (nothing outside this single-node
+#    cluster is reachable except DNS/443).
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -24,12 +47,19 @@ spec:
     - ports:
         - protocol: TCP
           port: 443
+    # All pod-network destinations, any port — covers every real
+    # in-cluster Prometheus scrape target (kube-state-metrics, coredns,
+    # Grafana, Alertmanager, future ServiceMonitors) without needing to
+    # enumerate each one's port.
     - to:
-        - namespaceSelector: {}
-      ports:
-        - protocol: TCP
-          port: 10250
-        - protocol: TCP
-          port: 9100
-        - protocol: TCP
-          port: 8080
+        - ipBlock:
+            cidr: 10.42.0.0/24
+    # Tailscale's global CGNAT range (100.64.0.0/10) — not host-specific,
+    # same CIDR already used safely in this project's tracked Traefik
+    # middleware config. Covers hostNetwork/hostPort targets that live
+    # outside the pod network entirely: node-exporter, the kubelet's
+    # metrics endpoint, and the kube-apiserver, all bound to this node's
+    # real Tailscale IP without hardcoding that IP into a tracked file.
+    - to:
+        - ipBlock:
+            cidr: 100.64.0.0/10

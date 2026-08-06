@@ -22,6 +22,32 @@ spec:
             runAsGroup: 1001
             seccompProfile:
               type: RuntimeDefault
+          initContainers:
+            # Fixes hostPath ownership: DirectoryOrCreate creates the
+            # textfile-collector directory as root:root 0755 if it doesn't
+            # already exist (whichever pod — this CronJob or node-exporter's
+            # DaemonSet — happens to run first on a given node). The main
+            # container runs as uid 1001 and needs write access; node-exporter
+            # only needs read access, which 0755 already grants regardless of
+            # owner. Runs as root briefly, overriding the pod-level
+            # runAsNonRoot — chown is the one thing here that requires it.
+            - name: fix-textfile-collector-ownership
+              image: ghcr.io/hughseyxo/ai-agents-runner@sha256:7060d27e35444c3e549c0f27d0e8e6543bd8d10eadd86465b4a77e61a833c6c8
+              command: ["chown", "1001:1001", "/var/lib/node_exporter/textfile_collector"]
+              securityContext:
+                runAsNonRoot: false
+                runAsUser: 0
+                runAsGroup: 0
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
+                  # chown requires CAP_CHOWN even for uid 0 once ALL is
+                  # dropped — root alone isn't sufficient under the Linux
+                  # capability model.
+                  add: ["CHOWN"]
+              volumeMounts:
+                - name: node-exporter-textfile
+                  mountPath: /var/lib/node_exporter/textfile_collector
           containers:
             - name: agent-health
               image: ghcr.io/hughseyxo/ai-agents-runner@sha256:7060d27e35444c3e549c0f27d0e8e6543bd8d10eadd86465b4a77e61a833c6c8
