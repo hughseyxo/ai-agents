@@ -4,6 +4,8 @@
 >
 > **This plan pushes to `origin/main`, touches live production Traefik routing (outside this repo, in `~/git/yopflix/seedbox`), and does a real cutover window on the highest-daily-use workload in this whole migration — a PWA installed to a home screen.** Tasks 6, 7, 8, 9, 10 are marked STOP — do not execute them, or resume past them, without the human partner's explicit go-ahead in this session, given separately for each STOP (not one blanket yes covering all of them). No subagent may be dispatched for any STOP task.
 
+> **Superseded (2026-08-06):** the Traefik + `plants.internal.yopflix.world` + Tailscale Split DNS networking approach described throughout this plan (Task 8 onward) was built, deployed, and then abandoned after unresolved cross-device DNS reachability failures. Final state is direct `NodePort` access via Tailscale MagicDNS (`http://yopflix.tailed77a8.ts.net:30801`) — see decision 4 in `docs/superpowers/specs/2026-08-05-k3s-phase6-plant-ui-cutover-design.md` and the full history in `docs/superpowers/specs/2026-08-06-tailscale-split-dns-internal-yopflix-design.md`. The steps below are left as an accurate record of what was executed at the time; Task 10 has been updated to use the current address.
+
 **Goal:** Move `plant-ui` from its current systemd service onto k3s permanently — dedicated image, hostPath onto the real shared `data/`/`docs/` (not a PVC copy, since host-side cron agents still write the same SQLite db), Traefik cutover to a new Tailscale-only hostname — proven with real writes (chat continuity across a pod restart, a photo assessment, a watering record) before the live switch, and a rollback path proven to actually work.
 
 **Architecture:** New namespace `plant-ui`, PSA `privileged` (required by the hostPath mounts — no way around it, unlike wedding-ui which is PVC-backed and fully `restricted`). New dedicated image `ai-agents-plant-ui`, not an extension of `ai-agents-runner`. Storage is entirely hostPath onto the real `data/`, three specific `docs/` subdirectories, and the already-provisioned `/srv/k3s-claude-home` identity — no PVC anywhere in this phase, because `data/agents.db` is still live shared state with host-side cron agents that haven't cut over. Networking is a `NodePort` Service (Traefik, still running in Docker on the host, can only reach a node-bound port — the same mechanism wedding-ui's cutover already proved) fronted by a new Traefik route at `plants.internal.yopflix.world`, restricted to Tailscale-only via a new `ipAllowList` middleware rather than reusing the exact `<TAILSCALE_IP>:8765` address (accepting a PWA-reinstall cost across every device, per explicit preference during design).
@@ -914,9 +916,9 @@ Expected: real plant list, including the watering-record update from Task 7 Step
 ```bash
 systemctl --user stop plant_ui.service
 systemctl --user disable plant_ui.service
-curl -sf http://plants.internal.yopflix.world/healthz
+curl -sf http://$(tailscale ip -4):30801/healthz
 ```
-Expected: `{"status":"ok"}`, confirming the pod is serving again after the rollback-and-recut sequence.
+Expected: `{"status":"ok"}`, confirming the pod is serving again after the rollback-and-recut sequence. (Uses the direct NodePort address, not `plants.internal.yopflix.world` — the Traefik/Split DNS route documented earlier in this plan's Task 8 was later abandoned; see `docs/superpowers/specs/2026-08-06-tailscale-split-dns-internal-yopflix-design.md`.)
 
 ---
 
