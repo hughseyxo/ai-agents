@@ -814,7 +814,7 @@ grep -q plants.yopflix.world /etc/hosts || echo "<TAILSCALE_IP> plants.yopflix.w
 - [ ] **Step 7: Positive check — Tailscale-side reachability**
 
 ```bash
-curl -sf https://plants.yopflix.world/healthz -k
+curl -sf http://plants.yopflix.world/healthz
 ```
 Expected: `{"status":"ok"}`.
 
@@ -822,7 +822,7 @@ Expected: `{"status":"ok"}`.
 
 From a device NOT on the tailnet (e.g. the same off-Tailscale Windows laptop used in Phase 2's negative exposure test, or a mobile connection with Tailscale disabled), attempt:
 ```
-curl -sf https://plants.yopflix.world/healthz
+curl -sf http://plants.yopflix.world/healthz
 ```
 Expected: connection fails or times out (public DNS doesn't resolve `plants.yopflix.world` at all, since it was never added there — this is belt-and-suspenders on top of the `ipAllowList`). Additionally, from any machine, test the `ipAllowList` itself directly against the public IP with a forged Host header:
 ```bash
@@ -857,7 +857,7 @@ sudo systemctl stop plant_ui.service
 - [ ] **Step 3: Confirm the k8s pod is now the only thing serving requests**
 
 ```bash
-curl -sf https://plants.yopflix.world/healthz -k
+curl -sf http://plants.yopflix.world/healthz
 sudo systemctl status plant_ui.service | head -3
 ```
 Expected: `/healthz` still returns `{"status":"ok"}` (from the k8s pod, since `plant_ui.service` is now stopped and both share the same `data/`/`docs/` — this proves the pod alone is now authoritative), `systemctl status` shows `inactive (dead)`.
@@ -907,7 +907,7 @@ Expected: real plant list, including the watering-record update from Task 7 Step
 ```bash
 sudo systemctl stop plant_ui.service
 sudo systemctl disable plant_ui.service
-curl -sf https://plants.yopflix.world/healthz -k
+curl -sf http://plants.yopflix.world/healthz
 ```
 Expected: `{"status":"ok"}`, confirming the pod is serving again after the rollback-and-recut sequence.
 
