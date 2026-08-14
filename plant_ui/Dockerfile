@@ -1,10 +1,8 @@
-# ai-agents-plant-ui — FloraPulse PWA (chat + Opus vision diagnostics).
-# Runs the claude CLI directly (chat_backend.py, claude_backend.py), same
-# runtime shape as Dockerfile.runner but a separate image: different
-# entrypoint (a long-running web service, not a one-shot agent run) and a
-# narrower dependency set (no python-telegram-bot).
+# FloraPulse PWA (chat + Opus vision diagnostics) — self-contained image for
+# the yopflix seedbox Docker Compose stack. Runs the claude CLI directly
+# (chat_backend.py, claude_backend.py) as a long-running web service.
 # Build context = the ai-agents repo root:
-#   docker build -f plant_ui/Dockerfile -t ai-agents-plant-ui .
+#   docker build -f plant_ui/Dockerfile -t plant-ui .
 FROM node:20-slim
 RUN npm install -g @anthropic-ai/claude-code@2.1.92
 

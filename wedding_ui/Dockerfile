@@ -1,4 +1,4 @@
-# Wedding Budget PWA — self-contained image for the k3s cluster.
+# Wedding Budget PWA — self-contained image for the yopflix seedbox Docker Compose stack.
 # Build context = the ai-agents repo root:  docker build -f wedding_ui/Dockerfile -t wedding-fund .
 FROM python:3.12-slim AS builder
 WORKDIR /app

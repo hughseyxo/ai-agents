@@ -10,10 +10,7 @@ Fully deterministic — no LLM. Runs hourly so a 2h-stale hourly agent surfaces
 quickly.
 """
 
-import os
-import tempfile
 from datetime import datetime, timezone
-from pathlib import Path
 
 from .base import BaseAgent
 from .telegram_client import send_telegram
@@ -21,7 +18,6 @@ from .telegram_client import send_telegram
 STALE_FACTOR = 2
 # Statuses that mean the agent actually executed to completion.
 HEALTHY_STATUSES = ("success", "partial_failure")
-TEXTFILE_COLLECTOR_DIR = Path("/var/lib/node_exporter/textfile_collector")
 
 
 def cron_interval_seconds(schedule: str) -> int:
@@ -162,33 +158,12 @@ class AgentHealthAgent(BaseAgent):
         # is left unrecorded so the next run retries it instead of going silent.
         still_alerted = [n for n in stale if n in previously] + sent_names
         self.set_state("alerted", still_alerted)
-        write_health_metric(TEXTFILE_COLLECTOR_DIR, now.timestamp())
         return {"checked": len(monitored), "stale": stale, "alerts_sent": len(sent_names)}
 
     # --- telegram ---
 
     def _send_telegram(self, text: str) -> bool:
         return send_telegram(text)
-
-
-def write_health_metric(directory: Path, timestamp: float) -> None:
-    """Write agent-health's own last-success timestamp for node-exporter's
-    textfile collector to scrape. Atomic (tempfile + os.replace) — safe here
-    because the target is a whole-directory hostPath mount, not the
-    single-file `type: File` mount that caused Phase 4's EBUSY bug."""
-    directory.mkdir(parents=True, exist_ok=True)
-    target = directory / "agent_health.prom"
-    fd, tmp_path = tempfile.mkstemp(dir=directory, prefix=".agent_health-")
-    try:
-        # mkstemp creates the file 0600 (owner-only) — node-exporter runs
-        # as a different uid and needs to read this file to scrape it.
-        os.chmod(tmp_path, 0o644)
-        with os.fdopen(fd, "w") as f:
-            f.write(f"agent_health_last_success_timestamp {int(timestamp)}\n")
-        os.replace(tmp_path, target)
-    except BaseException:
-        os.unlink(tmp_path)
-        raise
 
 
 def _parse_ts(s: str):

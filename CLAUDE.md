@@ -120,7 +120,7 @@ Configured for both Claude (`.mcp.json`) and Antigravity (`mcp_config.json`):
 # FloraPulse Plant PWA
 - **Role:** Mobile-first Progressive Web App (PWA) dashboard, plant management (CRUD), photo uploads, and Claude Opus diagnostics.
 - **Port:** 8765, bound to `0.0.0.0` (Tailscale: `<TAILSCALE_IP>:8765`).
-- **Service:** `plant_ui.service` (systemd user service, `~/.config/systemd/user/`)
+- **Hosting:** Docker (`plant_ui/Dockerfile`, build context = repo root) on the yopflix seedbox at **`plant.yopflix.world`** behind **Traefik basic auth**. Seedbox files: `services/plant-ui.yaml` + `config.yaml` entry (in the **separate** `~/git/yopflix/seedbox` repo). `data/agents.db` and `docs/{plants,plant-observations,garden-knowledge}` are bind-mounted from this repo checkout; `claude` CLI credentials are bind-mounted from `~/.claude`. Deploy: `cd ~/git/yopflix/seedbox && ./run-seedbox.sh`.
 - **Frontend:** Single Page Application (SPA) loading Alpine.js and Marked.js from CDN, custom vanilla CSS styling, service worker cached assets for offline capabilities.
 - **Chat views:** dashboard "Garden chat" button (scope=garden, whole-garden assistant) + plant detail "Ask about X" button (scope=plant, plant-scoped). Both use `POST /api/chat` with `--resume` session persistence per chat thread.
 - **Chat exception:** `chat_backend.py` is **Claude-only** — this is the one place where Antigravity is not tried first. Reason: `--resume` multi-turn memory requires Claude's stateful session IDs; Antigravity is stateless.

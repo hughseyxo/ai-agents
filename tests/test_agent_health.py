@@ -19,9 +19,6 @@ class TestAlertPersistence:
         return AgentHealthAgent(db_path=tmp_path / "h.db")
 
     def test_failed_send_not_persisted(self, tmp_path, monkeypatch):
-        import agents.agent_health as agent_health_module
-
-        monkeypatch.setattr(agent_health_module, "TEXTFILE_COLLECTOR_DIR", tmp_path / "textfile_collector")
         agent = self._agent(tmp_path)
         monkeypatch.setattr(agent, "_monitored", lambda: {"plant-agent": ("0 * * * *", None)})
         monkeypatch.setattr(agent, "_send_telegram", lambda msg: False)
@@ -32,9 +29,6 @@ class TestAlertPersistence:
         assert agent.get_state("alerted") == []
 
     def test_successful_send_persisted(self, tmp_path, monkeypatch):
-        import agents.agent_health as agent_health_module
-
-        monkeypatch.setattr(agent_health_module, "TEXTFILE_COLLECTOR_DIR", tmp_path / "textfile_collector")
         agent = self._agent(tmp_path)
         monkeypatch.setattr(agent, "_monitored", lambda: {"plant-agent": ("0 * * * *", None)})
         monkeypatch.setattr(agent, "_send_telegram", lambda msg: True)
@@ -124,28 +118,3 @@ class TestDiffAlerts:
         new, recovered = diff_alerts(["b"], ["a"])
         assert new == ["b"]
         assert recovered == ["a"]
-
-
-class TestWriteHealthMetric:
-    def test_writes_metric_file_atomically(self, tmp_path):
-        from agents.agent_health import write_health_metric
-
-        write_health_metric(tmp_path, 1234567890.0)
-
-        metric_file = tmp_path / "agent_health.prom"
-        assert metric_file.exists()
-        content = metric_file.read_text()
-        assert content == "agent_health_last_success_timestamp 1234567890\n"
-        # No leftover tempfile from the atomic-write pattern.
-        assert list(tmp_path.iterdir()) == [metric_file]
-        # node-exporter scrapes as a different uid — must be world-readable.
-        assert (metric_file.stat().st_mode & 0o777) == 0o644
-
-    def test_overwrites_existing_metric_file(self, tmp_path):
-        from agents.agent_health import write_health_metric
-
-        write_health_metric(tmp_path, 1000.0)
-        write_health_metric(tmp_path, 2000.0)
-
-        content = (tmp_path / "agent_health.prom").read_text()
-        assert content == "agent_health_last_success_timestamp 2000\n"
