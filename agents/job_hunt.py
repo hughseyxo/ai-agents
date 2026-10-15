@@ -3,7 +3,7 @@
 Daily: read the newest CV from Drive, search LinkedIn (NL, remote + hybrid)
 with queries the LLM derives from that CV, triage and score new postings for
 CV fit, turn job-related Gmail into an application pipeline, and ping
-Telegram about strong new matches. Everything lands in data/jobs.db
+Telegram about strong new matches. Everything lands in data/jobs/jobs.db
 (JobStore), which the jobs_ui PWA browses.
 
 No role titles or sectors are hard-coded — the CV drives the search and the

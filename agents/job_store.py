@@ -1,6 +1,6 @@
 """JobStore — SQLite persistence for the job-hunt agent and the jobs_ui PWA.
 
-One dedicated database (data/jobs.db, independent of agents.db) shared by a
+One dedicated database (data/jobs/jobs.db, independent of agents.db) shared by a
 writer on the host (JobHuntAgent: CV snapshots, jobs, scores, Gmail-derived
 applications) and the web app (job status, manual applications, notes,
 manual search queries). WAL mode lets the two touch it concurrently.
@@ -16,7 +16,9 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-DEFAULT_JOBS_DB = Path(__file__).resolve().parent.parent / "data" / "jobs.db"
+# Own directory so the jobs_ui container can bind-mount it (SQLite WAL needs a
+# writable dir) without seeing agents.db or anything else under data/.
+DEFAULT_JOBS_DB = Path(__file__).resolve().parent.parent / "data" / "jobs" / "jobs.db"
 
 JOB_STATUSES = ("new", "seen", "dismissed", "applied")
 APP_STATUSES = ("applied", "interview", "rejected", "offer", "withdrawn")

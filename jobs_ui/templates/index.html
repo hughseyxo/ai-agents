@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Job Hunt</title>
+  <meta name="theme-color" content="#0f1419">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" href="/static/icon-192.png">
+  <link rel="manifest" href="/static/manifest.json">
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.15.12/dist/cdn.min.js"
+          integrity="sha384-pb6hrQvo4s23cEUFtj0CZkzGE3jyK3pj26RIupXXxhSrrcUA/Cn0lZgcCrGH0t6L"
+          crossorigin="anonymous"></script>
+  <script src="/static/app.js"></script>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body x-data="jobsApp()" x-init="init()">
+<main class="shell">
+
+  <header class="topbar">
+    <h1>Job Hunt</h1>
+    <p class="sub" x-show="cv" x-text="cv ? 'Matched against ' + cv.name : ''"></p>
+    <p class="sub warn" x-show="loaded && !cv">No CV snapshot yet. The agent hasn't run.</p>
+  </header>
+
+  <nav class="tabs">
+    <button :class="{active: tab === 'matches'}" @click="tab = 'matches'">
+      Matches <span class="count" x-text="jobs.length"></span>
+    </button>
+    <button :class="{active: tab === 'apps'}" @click="tab = 'apps'">
+      Applications <span class="count" x-text="applications.length"></span>
+    </button>
+    <button :class="{active: tab === 'search'}" @click="tab = 'search'">Search</button>
+  </nav>
+
+  <p class="error" x-show="error" x-text="error"></p>
+
+  <!-- Matches -->
+  <section x-show="tab === 'matches'">
+    <div class="chips">
+      <template x-for="f in jobFilters" :key="f.key">
+        <button class="chip" :class="{active: jobFilter === f.key}" @click="setJobFilter(f.key)" x-text="f.label"></button>
+      </template>
+    </div>
+
+    <p class="empty" x-show="loaded && !jobs.length">No jobs here yet.</p>
+
+    <template x-for="job in jobs" :key="job.job_id">
+      <article class="card">
+        <div class="card-head">
+          <span class="score" :class="scoreClass(job.score)" x-text="job.score ?? '…'"></span>
+          <div class="grow">
+            <a class="title" :href="job.url" target="_blank" rel="noopener noreferrer" x-text="job.title"></a>
+            <p class="meta" x-text="job.company + ' · ' + job.location + ' · ' + job.posted"></p>
+          </div>
+        </div>
+        <p class="rationale" x-show="job.rationale" x-text="job.rationale"></p>
+        <p class="rationale muted" x-show="job.score === null">Not scored yet.</p>
+        <div class="tags" x-show="job.matched_skills.length || job.gaps.length">
+          <template x-for="s in job.matched_skills"><span class="tag good" x-text="s"></span></template>
+          <template x-for="g in job.gaps"><span class="tag gap" x-text="g"></span></template>
+        </div>
+        <div class="actions">
+          <template x-if="job.status === 'applied'"><span class="badge">Applied</span></template>
+          <template x-if="job.status !== 'applied' && job.status !== 'dismissed'">
+            <div class="row">
+              <button class="btn primary" @click="setJobStatus(job, 'applied')">Mark applied</button>
+              <button class="btn" @click="setJobStatus(job, 'dismissed')">Dismiss</button>
+            </div>
+          </template>
+          <template x-if="job.status === 'dismissed'">
+            <button class="btn" @click="setJobStatus(job, 'new')">Restore</button>
+          </template>
+        </div>
+      </article>
+    </template>
+  </section>
+
+  <!-- Applications -->
+  <section x-show="tab === 'apps'">
+    <div class="pipeline">
+      <template x-for="s in appStatuses" :key="s">
+        <div class="stage" :class="'st-' + s">
+          <span class="stage-n" x-text="applications.filter(a => a.status === s).length"></span>
+          <span class="stage-l" x-text="s"></span>
+        </div>
+      </template>
+    </div>
+
+    <details class="card add-form">
+      <summary>Add application</summary>
+      <form @submit.prevent="addApplication()">
+        <input x-model="newApp.company" placeholder="Company" required maxlength="120">
+        <input x-model="newApp.role" placeholder="Role" maxlength="160">
+        <select x-model="newApp.status">
+          <template x-for="s in appStatuses"><option :value="s" x-text="s"></option></template>
+        </select>
+        <button class="btn primary" type="submit">Add</button>
+      </form>
+    </details>
+
+    <p class="empty" x-show="loaded && !applications.length">No applications tracked yet.</p>
+
+    <template x-for="app in sortedApplications()" :key="app.id">
+      <article class="card">
+        <div class="card-head">
+          <div class="grow">
+            <p class="title" x-text="app.company"></p>
+            <p class="meta" x-text="(app.role || 'Role unknown') + ' · via ' + app.source"></p>
+          </div>
+          <select class="status-select" :class="'st-' + app.status" :value="app.status"
+                  @change="updateApplication(app, {status: $event.target.value})">
+            <template x-for="s in appStatuses"><option :value="s" x-text="s" :selected="s === app.status"></option></template>
+          </select>
+        </div>
+        <ul class="events" x-show="app.events.length">
+          <template x-for="e in app.events" :key="e.id">
+            <li><span class="ev-date" x-text="(e.occurred_at || '').slice(0, 10)"></span>
+                <span class="ev-status" :class="'st-' + e.status" x-text="e.status"></span>
+                <span x-text="e.subject"></span></li>
+          </template>
+        </ul>
+        <textarea placeholder="Notes" maxlength="2000" :value="app.notes"
+                  @change="updateApplication(app, {notes: $event.target.value})"></textarea>
+      </article>
+    </template>
+  </section>
+
+  <!-- Search -->
+  <section x-show="tab === 'search'">
+    <article class="card">
+      <p class="label">CV</p>
+      <p x-show="cv" x-text="cv ? cv.name + ' (modified ' + (cv.modified_time || '').slice(0, 10) + ')' : ''"></p>
+      <p class="muted">The agent picks up your newest Cian_Hughes_CV_General* in Drive. When the CV changes, it re-derives the queries and re-scores recent jobs.</p>
+    </article>
+
+    <article class="card">
+      <p class="label">LinkedIn search queries (NL · remote + hybrid)</p>
+      <ul class="queries">
+        <template x-for="q in queries" :key="q.id">
+          <li>
+            <span x-text="q.query"></span>
+            <span class="tag" :class="q.source === 'cv' ? 'good' : ''" x-text="q.source === 'cv' ? 'from CV' : 'manual'"></span>
+            <button class="link" @click="deleteQuery(q)" aria-label="Remove query">✕</button>
+          </li>
+        </template>
+      </ul>
+      <form class="row" @submit.prevent="addQuery()">
+        <input x-model="newQuery" placeholder="Add a query, e.g. Terraform" maxlength="40">
+        <button class="btn primary" type="submit">Add</button>
+      </form>
+    </article>
+  </section>
+
+</main>
+</body>
+</html>
