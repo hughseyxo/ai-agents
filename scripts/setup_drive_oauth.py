@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
-"""One-time interactive OAuth consent for Google Drive (drive.file scope).
+"""One-time interactive OAuth consent for Google Drive.
+
+Default: drive.file scope (plant digest push, agents/drive_client.py).
+--readonly: drive.readonly scope into a separate token file, used by the
+job-hunt agent to read the user's CV (agents/drive_reader.py).
 
 Writes a token file separate from Gmail/Calendar's ~/.google_tokens.json (see
 agents/drive_client.py) so this consent can never disturb those working tokens.
 Reuses the existing OAuth client (GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET in .env,
 redirect_uri http://localhost, same as Gmail/Calendar).
 
-Usage: python3 scripts/setup_drive_oauth.py
+Usage: python3 scripts/setup_drive_oauth.py [--readonly]
 """
 
 import json
@@ -20,6 +24,7 @@ import urllib.request
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from agents.drive_client import CLIENT_ID, CLIENT_SECRET, SCOPE, TOKEN_FILE, save_tokens
+from agents.drive_reader import SCOPE_RO, TOKEN_FILE_RO
 
 REDIRECT_URI = "http://localhost"
 AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
@@ -41,6 +46,8 @@ def _print_qr(data: str) -> None:
 
 
 def main():
+    readonly = "--readonly" in sys.argv[1:]
+    scope, token_file = (SCOPE_RO, TOKEN_FILE_RO) if readonly else (SCOPE, TOKEN_FILE)
     if not CLIENT_ID or not CLIENT_SECRET:
         print("ERROR: GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET not set (check .env).", file=sys.stderr)
         sys.exit(1)
@@ -49,7 +56,7 @@ def main():
         "client_id": CLIENT_ID,
         "redirect_uri": REDIRECT_URI,
         "response_type": "code",
-        "scope": SCOPE,
+        "scope": scope,
         "access_type": "offline",
         "prompt": "consent",
     }
@@ -93,8 +100,8 @@ def main():
         sys.exit(1)
 
     tokens["obtained_at"] = time.time()
-    save_tokens(tokens)
-    print(f"\nSaved Drive token to {TOKEN_FILE}")
+    save_tokens(tokens, token_file)
+    print(f"\nSaved Drive token to {token_file}")
 
 
 if __name__ == "__main__":

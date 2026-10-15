@@ -26,21 +26,23 @@ API_BASE = "https://www.googleapis.com/drive/v3"
 UPLOAD_BASE = "https://www.googleapis.com/upload/drive/v3/files"
 
 
-def load_tokens():
-    with open(TOKEN_FILE) as f:
+def load_tokens(token_file=None):
+    with open(token_file or TOKEN_FILE) as f:
         return json.load(f)
 
 
-def save_tokens(tokens):
+def save_tokens(tokens, token_file=None):
     # Atomic write, mirroring agents/gmail_client.py — a crash must never leave
-    # a truncated token file.
-    directory = os.path.dirname(TOKEN_FILE) or "."
+    # a truncated token file. token_file defaults to TOKEN_FILE; drive_reader
+    # passes its separate read-only token file.
+    token_file = token_file or TOKEN_FILE
+    directory = os.path.dirname(token_file) or "."
     fd, tmp = tempfile.mkstemp(dir=directory, prefix=".google_tokens_drive.", suffix=".tmp")
     try:
         with os.fdopen(fd, "w") as f:
             json.dump(tokens, f, indent=2)
         os.chmod(tmp, 0o600)
-        os.replace(tmp, TOKEN_FILE)
+        os.replace(tmp, token_file)
     except BaseException:
         try:
             os.unlink(tmp)
@@ -49,14 +51,15 @@ def save_tokens(tokens):
         raise
 
 
-def get_access_token():
-    tokens = load_tokens()
+def get_access_token(token_file=None):
+    tokens = load_tokens(token_file)
     obtained_at = tokens.get("obtained_at", 0)
     expires_in = tokens.get("expires_in", 3600)
     if time.time() > obtained_at + expires_in - 300:
         if "refresh_token" not in tokens:
             raise RuntimeError(
-                "No refresh_token in drive token file; re-run scripts/setup_drive_oauth.py."
+                "No refresh_token in drive token file; re-run scripts/setup_drive_oauth.py "
+                "(add --readonly for the job-hunt CV token)."
             )
         data = urllib.parse.urlencode({
             "client_id": CLIENT_ID,
@@ -82,7 +85,7 @@ def get_access_token():
         tokens["access_token"] = new_tokens["access_token"]
         tokens["expires_in"] = new_tokens.get("expires_in", 3600)
         tokens["obtained_at"] = time.time()
-        save_tokens(tokens)
+        save_tokens(tokens, token_file)
     return tokens["access_token"]
 
 

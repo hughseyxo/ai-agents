@@ -14,8 +14,10 @@ import time
 import urllib.request
 import urllib.parse
 import urllib.error
+from datetime import datetime, timezone
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from html.parser import HTMLParser
 
 TOKEN_FILE = os.path.expanduser("~/.google_tokens.json")
 # A hung Gmail/OAuth call must not stall an hourly cron run indefinitely.
@@ -145,3 +147,96 @@ def create_draft(to, subject, body, mime_type="text/html"):
     raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
     return gmail_request("POST", "/users/me/drafts",
                          body={"message": {"raw": raw}})
+
+
+# --- read helpers (job-hunt application tracking) ---
+
+class _HTMLText(HTMLParser):
+    _SKIP = {"script", "style", "head"}
+
+    def __init__(self):
+        super().__init__()
+        self.parts = []
+        self._skip = 0
+
+    def handle_starttag(self, tag, attrs):
+        if tag in self._SKIP:
+            self._skip += 1
+
+    def handle_endtag(self, tag):
+        if tag in self._SKIP:
+            self._skip = max(0, self._skip - 1)
+
+    def handle_data(self, data):
+        if not self._skip:
+            self.parts.append(data)
+
+
+def _html_to_text(html):
+    parser = _HTMLText()
+    try:
+        parser.feed(html)
+    except Exception:
+        pass
+    return " ".join(parser.parts)
+
+
+def search_messages(q, max_results=200):
+    """Message stubs ({id, threadId}) matching a Gmail search query, newest first."""
+    out, page_token = [], None
+    while len(out) < max_results:
+        params = {"q": q, "maxResults": min(100, max_results - len(out))}
+        if page_token:
+            params["pageToken"] = page_token
+        resp = gmail_request("GET", "/users/me/messages", params=params)
+        out.extend(resp.get("messages", []))
+        page_token = resp.get("nextPageToken")
+        if not page_token:
+            break
+    return out[:max_results]
+
+
+def get_message(message_id):
+    return gmail_request("GET", f"/users/me/messages/{message_id}", params={"format": "full"})
+
+
+def _decode_part(part):
+    data = (part.get("body") or {}).get("data")
+    if not data:
+        return ""
+    return base64.urlsafe_b64decode(data + "=" * (-len(data) % 4)).decode("utf-8", errors="replace")
+
+
+def _find_body(payload, mime):
+    if payload.get("mimeType") == mime:
+        text = _decode_part(payload)
+        if text:
+            return text
+    for part in payload.get("parts") or []:
+        text = _find_body(part, mime)
+        if text:
+            return text
+    return ""
+
+
+def extract_message(msg, body_cap=1500):
+    """Flatten a format=full message into {id, thread_id, subject, sender,
+    date (ISO, UTC), body}. Body prefers text/plain, else stripped HTML, else
+    the snippet; whitespace-collapsed and capped."""
+    payload = msg.get("payload") or {}
+    headers = {h["name"].lower(): h["value"] for h in payload.get("headers", [])}
+    body = _find_body(payload, "text/plain")
+    if not body:
+        html = _find_body(payload, "text/html")
+        body = _html_to_text(html) if html else msg.get("snippet", "")
+    date = ""
+    if msg.get("internalDate"):
+        date = datetime.fromtimestamp(int(msg["internalDate"]) / 1000, tz=timezone.utc).isoformat(timespec="seconds")
+    return {
+        "id": msg.get("id"),
+        "thread_id": msg.get("threadId"),
+        "subject": headers.get("subject", ""),
+        "sender": headers.get("from", ""),
+        "date": date,
+        "body": " ".join(body.split())[:body_cap],
+    }
