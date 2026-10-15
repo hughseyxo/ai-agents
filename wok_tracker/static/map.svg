@@ -1,0 +1,69 @@
+<svg viewBox="0 0 1040 620" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Stylized original map of Roshar">
+  <rect x="0" y="0" width="1040" height="620" class="map-bg" rx="18"/>
+
+  <g class="region" id="region-aimia">
+    <path d="M 60,395 L 130,375 L 165,410 L 150,460 L 85,470 L 45,435 Z"/>
+    <text x="105" y="422">Aimia</text>
+  </g>
+
+  <g class="region" id="region-shinovar">
+    <path d="M 190,170 L 280,160 L 330,230 L 335,360 L 300,460 L 230,500 L 160,470 L 140,340 L 150,230 Z"/>
+    <text x="235" y="322">Shinovar</text>
+  </g>
+
+  <g class="region" id="region-reshi_isles">
+    <path d="M 430,110 L 470,95 L 495,120 L 470,145 L 435,140 Z
+             M 510,90 L 550,80 L 570,105 L 545,130 L 505,120 Z
+             M 400,150 L 430,140 L 445,165 L 420,180 L 395,170 Z"/>
+    <text x="470" y="128">Reshi Isles</text>
+  </g>
+
+  <g class="region" id="region-jah_keved">
+    <path d="M 560,190 L 660,170 L 720,220 L 710,300 L 650,340 L 580,320 L 545,250 Z"/>
+    <text x="635" y="252">Jah Keved</text>
+  </g>
+
+  <g class="region" id="region-tashikk">
+    <path d="M 460,420 L 540,405 L 575,440 L 555,485 L 490,495 L 450,460 Z"/>
+    <text x="510" y="452">Tashikk</text>
+  </g>
+
+  <g class="region" id="region-emul">
+    <path d="M 575,440 L 640,425 L 670,460 L 655,505 L 595,510 L 555,485 Z"/>
+    <text x="612" y="467">Emul</text>
+  </g>
+
+  <g class="region" id="region-kharbranth">
+    <path d="M 660,505 L 720,490 L 760,520 L 750,570 L 690,585 L 650,555 Z"/>
+    <text x="705" y="542">Kharbranth</text>
+  </g>
+
+  <g class="region" id="region-alethkar_front">
+    <path d="M 735,215 L 800,195 L 850,225 L 840,270 L 780,280 L 740,255 Z"/>
+    <text x="790" y="237">Alethi warfront</text>
+  </g>
+
+  <g class="region" id="region-kholinar">
+    <path d="M 730,285 L 800,275 L 825,320 L 805,365 L 745,370 L 715,330 Z"/>
+    <text x="775" y="327">Kholinar</text>
+  </g>
+
+  <g class="region" id="region-hearthstone">
+    <path d="M 740,375 L 800,370 L 820,410 L 795,445 L 745,440 L 725,405 Z"/>
+    <text x="775" y="407">Hearthstone</text>
+  </g>
+
+  <g class="region" id="region-unclaimed_hills">
+    <path d="M 825,325 L 890,315 L 920,360 L 900,410 L 840,415 L 815,370 Z"/>
+    <text x="865" y="367">Unclaimed Hills</text>
+  </g>
+
+  <g class="region" id="region-shattered_plains">
+    <path d="M 900,410 L 960,395 L 1000,430 L 990,485 L 930,510 L 870,480 L 860,435 Z"/>
+    <g class="plateau-cracks">
+      <path d="M 900,430 L 925,445 L 915,465 L 940,480"/>
+      <path d="M 950,420 L 960,445 L 985,455 L 970,480"/>
+    </g>
+    <text x="930" y="452">Shattered Plains</text>
+  </g>
+</svg>

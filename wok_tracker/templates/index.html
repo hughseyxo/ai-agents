@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Way of Kings Companion</title>
+  <meta name="theme-color" content="#f6efe1">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="/static/manifest.json">
+
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.15.12/dist/cdn.min.js"
+          integrity="sha384-pb6hrQvo4s23cEUFtj0CZkzGE3jyK3pj26RIupXXxhSrrcUA/Cn0lZgcCrGH0t6L"
+          crossorigin="anonymous"></script>
+  <link rel="stylesheet" href="/static/style.css?v={{V}}">
+  <script>window.WOK_ASSET_VERSION = "{{V}}";</script>
+</head>
+<body x-data="wokApp()" x-init="init()">
+
+  <main class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark">&#9876;</span>
+        <div>
+          <h1>The Way of Kings</h1>
+          <p class="sub">spoiler-free companion — no peeking ahead</p>
+        </div>
+      </div>
+    </header>
+
+    <section class="glass picker">
+      <label for="chapter-select">What did you just finish?</label>
+      <select id="chapter-select" x-model="currentId" @change="load()">
+        <template x-for="c in chapters" :key="c.id">
+          <option :value="c.id" x-text="optionLabel(c)"></option>
+        </template>
+      </select>
+
+      <div class="picker-nav">
+        <button class="ghost" @click="step(-1)" :disabled="atStart()">&larr; Previous</button>
+        <button class="ghost" @click="step(1)" :disabled="atEnd()">Next &rarr;</button>
+        <label class="read-toggle">
+          <input type="checkbox" :checked="isRead(currentId)" @change="toggleRead(currentId)">
+          Mark read
+        </label>
+      </div>
+    </section>
+
+    <section class="glass detail" x-show="detail">
+      <h2 x-text="detail ? detail.label : ''"></h2>
+      <p class="part-tag" x-text="detail ? detail.part : ''"></p>
+
+      <div class="map-viewport" x-ref="mapViewport">
+        <div class="map-zoom-target" x-ref="mapZoomTarget" x-html="mapSvg"
+             :style="`transform: translate(${mapPan.x}px, ${mapPan.y}px) scale(${mapZoom})`"></div>
+      </div>
+      <div class="zoom-controls">
+        <button class="ghost zoom-btn" @click="zoomBy(-0.4)">&minus;</button>
+        <button class="ghost zoom-btn" @click="zoomReset()">Reset</button>
+        <button class="ghost zoom-btn" @click="zoomBy(0.4)">&plus;</button>
+      </div>
+      <p class="location-label" x-show="detail && detail.location_label">
+        Setting: <strong x-text="detail ? detail.location_label : ''"></strong>
+      </p>
+      <p class="location-label muted" x-show="detail && !detail.location_label">
+        Setting: unclear / outside the present timeline
+      </p>
+
+      <h3 class="chars-heading">Who's in this chapter</h3>
+      <div class="char-list">
+        <template x-for="ch in (detail ? detail.characters : [])" :key="ch.key">
+          <div class="char-card">
+            <span class="char-name" x-text="ch.name"></span>
+            <p class="char-blurb" x-text="ch.blurb"></p>
+          </div>
+        </template>
+      </div>
+    </section>
+
+    <section class="glass progress">
+      <h3>Read so far</h3>
+      <div class="progress-grid">
+        <template x-for="c in chapters" :key="'p-' + c.id">
+          <span class="dot" :class="{ done: isRead(c.id), current: c.id === currentId }"
+                :title="optionLabel(c)" @click="currentId = c.id; load()"></span>
+        </template>
+      </div>
+    </section>
+
+    <footer class="foot">Spoiler cutoff enforced by chapter — nothing here is from later than what you've selected.</footer>
+  </main>
+
+  <script src="/static/app.js?v={{V}}"></script>
+</body>
+</html>

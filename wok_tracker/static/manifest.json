@@ -1,0 +1,9 @@
+{
+  "name": "Way of Kings Companion",
+  "short_name": "WoK Companion",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f6efe1",
+  "theme_color": "#f6efe1",
+  "icons": []
+}

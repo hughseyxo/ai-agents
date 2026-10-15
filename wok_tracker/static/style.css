@@ -1,0 +1,165 @@
+:root {
+  --bg: #f6efe1;
+  --panel: rgba(255,255,255,0.7);
+  --panel-border: rgba(120,95,60,0.18);
+  --text: #3a2c1b;
+  --muted: #8a765c;
+  --accent: #b5651d;
+  --map-bg: #cfe8ea;
+  --map-region: #e3d3ad;
+  --map-region-active: #d98c2b;
+  --map-text: #5b4a30;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.shell {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 20px 16px 60px;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.brand { display: flex; align-items: center; gap: 12px; }
+.brand-mark { font-size: 28px; }
+h1 { margin: 0; font-size: 22px; }
+.sub { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+
+.glass {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 16px;
+  padding: 18px;
+  margin-bottom: 16px;
+  backdrop-filter: blur(6px);
+}
+
+.picker label { display: block; margin-bottom: 8px; color: var(--muted); font-size: 13px; }
+
+select {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--panel-border);
+  background: #fffaf0;
+  color: var(--text);
+  font-size: 15px;
+}
+
+.picker-nav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+button.ghost {
+  background: transparent;
+  border: 1px solid var(--panel-border);
+  color: var(--text);
+  padding: 8px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 13px;
+}
+button.ghost:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.read-toggle {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.detail h2 { margin: 0 0 2px; }
+.part-tag { margin: 0 0 14px; color: var(--muted); font-size: 13px; }
+
+.map-viewport {
+  overflow: hidden;
+  border-radius: 12px;
+  touch-action: none;
+  position: relative;
+  cursor: grab;
+}
+.map-viewport.panning { cursor: grabbing; }
+.map-zoom-target { transform-origin: 0 0; will-change: transform; }
+.map-zoom-target svg { width: 100%; height: auto; display: block; }
+
+.zoom-controls { display: flex; justify-content: center; gap: 8px; margin-top: 10px; }
+.zoom-btn { min-width: 44px; font-size: 16px; font-weight: 600; }
+
+.map-bg { fill: var(--map-bg); }
+.region path {
+  fill: var(--map-region);
+  stroke: var(--map-bg);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  transition: fill 0.25s, stroke 0.25s;
+}
+.region text {
+  fill: var(--map-text);
+  font-size: 17px;
+  font-weight: 500;
+  text-anchor: middle;
+  dominant-baseline: middle;
+  paint-order: stroke;
+  stroke: var(--map-bg);
+  stroke-width: 3.5px;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+.region.active path { fill: var(--map-region-active); stroke: var(--accent); }
+.region.active text { fill: #1a1300; font-weight: 600; stroke: var(--map-region-active); }
+
+.plateau-cracks path {
+  fill: none;
+  stroke: var(--map-bg);
+  stroke-width: 1.5;
+  opacity: 0.5;
+  pointer-events: none;
+}
+.region.active .plateau-cracks path { stroke: #7a5a10; opacity: 0.6; }
+
+.location-label { margin: 12px 0 0; font-size: 14px; }
+.location-label.muted { color: var(--muted); }
+
+.chars-heading { margin: 18px 0 10px; font-size: 15px; color: var(--muted); }
+
+.char-list { display: flex; flex-direction: column; gap: 10px; }
+.char-card {
+  background: rgba(255,255,255,0.55);
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+.char-name { font-weight: 600; color: var(--accent); }
+.char-blurb { margin: 6px 0 0; font-size: 14px; line-height: 1.4; color: var(--text); }
+
+.progress h3 { margin: 0 0 10px; font-size: 15px; color: var(--muted); }
+.progress-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+.dot {
+  width: 12px; height: 12px; border-radius: 50%;
+  background: rgba(120,95,60,0.18);
+  cursor: pointer;
+}
+.dot.done { background: var(--accent); }
+.dot.current { outline: 2px solid var(--text); outline-offset: 2px; }
+
+.foot { text-align: center; color: var(--muted); font-size: 12px; margin-top: 24px; }
