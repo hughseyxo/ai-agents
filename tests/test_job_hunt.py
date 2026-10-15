@@ -159,7 +159,7 @@ def test_fetch_rate_limit_retries_once_then_fails_and_saves_cursor(agent):
     # SRE fully fetched (2 workplace types), Cloud tried twice (backoff retry), Platform never reached
     assert calls == [("SRE", 2), ("SRE", 3), ("Cloud", 2), ("Cloud", 2)]
     assert any(c.args[0] == agent.rate_limit_backoff for c in sleep.call_args_list)
-    assert agent.get_state("fetch_cursor") == 1
+    assert agent.get_state("fetch_cursor") == "Cloud"
 
 
 def test_fetch_rate_limit_recovers_after_backoff(agent):
@@ -176,20 +176,20 @@ def test_fetch_rate_limit_recovers_after_backoff(agent):
             patch.object(job_hunt.time, "sleep"):
         out = agent._step_fetch()
     assert out["new"] == 1 and attempts == [2, 2, 3]
-    assert agent.get_state("fetch_cursor") == 0
+    assert agent.get_state("fetch_cursor") is None
 
 
 def test_fetch_starts_from_saved_cursor(agent):
     for q in ("A1", "B1", "C1"):
         agent.store.add_manual_query(q)
-    agent.set_state("fetch_cursor", 2)
+    agent.set_state("fetch_cursor", "C1")
     order = []
     with patch.object(job_hunt.linkedin_jobs, "fetch_search",
                       side_effect=lambda q, wt, start=0: order.append(q) or []), \
             patch.object(job_hunt.time, "sleep"):
         agent._step_fetch()
     assert order[::2] == ["C1", "A1", "B1"]
-    assert agent.get_state("fetch_cursor") == 0
+    assert agent.get_state("fetch_cursor") is None
 
 
 # --- triage ---
@@ -415,3 +415,91 @@ def test_fetch_reconciles_even_when_rate_limited(agent):
         with pytest.raises(RuntimeError):
             agent._step_fetch()
     assert agent.store.get_job("1")["status"] == "applied"
+
+
+# --- review fixes ---
+
+def test_extract_json_array_ignores_trailing_brackets():
+    assert extract_json_array('[{"id": "1"}]\n\nNote [1]: see above') == [{"id": "1"}]
+    assert extract_json_array('Ranges like [a-z] first, then [1, 2]') == [1, 2]
+
+
+def test_cv_with_no_valid_queries_stores_nothing(agent):
+    with _patch_drive(), patch.object(agent, "_ask", return_value='["bad;q", "<x>"]'):
+        with pytest.raises(RuntimeError):
+            agent._step_cv()
+    assert agent.store.latest_cv() is None
+
+
+def test_score_skips_job_when_description_fetch_fails(agent):
+    agent.store.add_cv_snapshot("f", "cv", "t", "cv text")
+    _seed_job(agent, "1")
+    with patch.object(job_hunt.linkedin_jobs, "fetch_description", return_value=None), \
+            patch.object(agent, "_ask") as ask:
+        out = agent._step_score()
+    ask.assert_not_called()
+    assert out == {"candidates": 1, "scored": 0, "no_description": 1}
+    assert agent.store.get_job("1")["description"] is None  # retried next run
+
+
+def test_fetch_cursor_is_query_text_not_position(agent):
+    for q in ("A1", "B1", "C1"):
+        agent.store.add_manual_query(q)
+    agent.set_state("fetch_cursor", "B1")
+    order = []
+    with patch.object(job_hunt.linkedin_jobs, "fetch_search",
+                      side_effect=lambda q, wt, start=0: order.append(q) or []):
+        agent._step_fetch()
+    assert order[::2] == ["B1", "C1", "A1"]
+
+
+def _gmail_stubs(ids):
+    # search returns newest first
+    return lambda q, max_results=0: [{"id": i} for i in ids][:max_results]
+
+
+@pytest.mark.parametrize("last_ok,expected", [
+    (None, "newer_than:90d"),
+    (1, "newer_than:7d"),
+    (20, "newer_than:22d"),
+    (400, "newer_than:90d"),
+])
+def test_gmail_window_follows_last_successful_sync(agent, last_ok, expected):
+    from datetime import date, timedelta
+    if last_ok is not None:
+        agent.set_state("gmail_last_ok", (date.today() - timedelta(days=last_ok)).isoformat())
+    queries = []
+    with patch.object(job_hunt.gmail_client, "search_messages",
+                      side_effect=lambda q, max_results=0: queries.append(q) or []):
+        agent._step_gmail()
+    assert expected in queries[0]
+
+
+def test_gmail_processes_oldest_first_and_only_marks_ok_when_drained(agent):
+    agent.GMAIL_PROCESS_MAX = 2
+    msgs = {i: _msg(i) for i in ("3", "2", "1")}
+    reply = lambda prompt: json.dumps([])  # noqa: E731
+    with patch.multiple(job_hunt.gmail_client, search_messages=_gmail_stubs(["3", "2", "1"]),
+                        get_message=lambda mid: msgs[mid], extract_message=lambda raw: raw), \
+            patch.object(agent, "_ask", side_effect=lambda p, m: reply(p)):
+        out = agent._step_gmail()
+        assert out["remaining"] == 1
+        assert agent.store.gmail_seen("1") and agent.store.gmail_seen("2") and not agent.store.gmail_seen("3")
+        assert agent.get_state("gmail_last_ok") is None
+        agent._step_gmail()
+    assert agent.get_state("gmail_last_ok") is not None
+
+
+def test_gmail_failure_does_not_mark_ok(agent):
+    with _patch_gmail([_msg("1")]), patch.object(agent, "_ask", side_effect=RuntimeError("down")):
+        with pytest.raises(RuntimeError):
+            agent._step_gmail()
+    assert agent.get_state("gmail_last_ok") is None
+
+
+def test_gmail_rejects_company_not_mentioned_in_email(agent):
+    reply = json.dumps([{"id": "1", "status": "rejected", "company": "Google", "role": "SRE"}])
+    with _patch_gmail([_msg("1")]), patch.object(agent, "_ask", return_value=reply):
+        out = agent._step_gmail()
+    assert out["events"] == 0
+    assert agent.store.list_applications() == []

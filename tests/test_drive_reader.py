@@ -106,3 +106,24 @@ def test_fetch_latest_cv_timeout(monkeypatch):
     monkeypatch.setattr(drive_reader.subprocess, "run", boom)
     with pytest.raises(RuntimeError, match="timed out"):
         fetch_latest_cv()
+
+
+def test_fetch_denies_dangerous_tools_explicitly(monkeypatch):
+    seen = {}
+    monkeypatch.setattr(drive_reader.subprocess, "run",
+                        lambda cmd, **kw: seen.setdefault("cmd", cmd) and
+                        subprocess.CompletedProcess(cmd, 0, stdout=_events(), stderr=""))
+    fetch_latest_cv()
+    cmd = seen["cmd"]
+    denied = cmd[cmd.index("--disallowedTools") + 1:cmd.index("--allowedTools")]
+    assert {"Bash", "Write", "CronCreate", "SendMessage", "RemoteTrigger"} <= set(denied)
+    assert not ({SEARCH_TOOL, READ_TOOL, "ToolSearch"} & set(denied))
+    assert cmd[cmd.index("--permission-mode") + 1] == "default"
+
+
+def test_parse_stream_requires_title_prefix():
+    # A file merely *containing* the prefix doesn't qualify, so the newest real CV
+    # is now the gdoc — which wasn't the file read.
+    stream = _events().replace("Cian_Hughes_CV_General_v5.docx", "Old_Cian_Hughes_CV_General_v5.docx")
+    with pytest.raises(RuntimeError, match="newest"):
+        parse_stream(stream)

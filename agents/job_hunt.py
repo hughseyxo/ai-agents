@@ -21,12 +21,12 @@ import random
 import re
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from . import drive_reader, gmail_client, linkedin_jobs
 from .base import BaseAgent, REPO_ROOT
 from .db import DEFAULT_DB_PATH
-from .job_store import DEFAULT_JOBS_DB, JobStore
+from .job_store import DEFAULT_JOBS_DB, JobStore, normalise_company, validate_query
 from .linkedin_jobs import RateLimitedError, looks_like_injection, normalise_job, sanitize_text
 from .telegram_client import send_telegram
 
@@ -124,15 +124,15 @@ def extract_json_array(text: str):
     """First JSON array in an LLM reply (code fences/prose tolerated), else None."""
     if not text:
         return None
-    text = re.sub(r"```(?:json)?", "", text)
-    match = re.search(r"\[[\s\S]*\]", text)
-    if not match:
-        return None
-    try:
-        data = json.loads(match.group(0))
-    except ValueError:
-        return None
-    return data if isinstance(data, list) else None
+    decoder = json.JSONDecoder()
+    for match in re.finditer(r"\[", text):
+        try:
+            data, _ = decoder.raw_decode(text, match.start())
+        except ValueError:
+            continue
+        if isinstance(data, list):
+            return data
+    return None
 
 
 def _str_list(value, max_items: int, cap: int) -> list:
@@ -176,6 +176,16 @@ def _validate_email_item(item, known_ids: set):
     return {"id": msg_id, "status": status, "company": company, "role": role}
 
 
+def _mentions_company(company: str, msg: dict) -> bool:
+    """The classified company must actually appear in the email (sender,
+    subject or body). Stops a hallucinated or injected company name from
+    creating/advancing an application it has nothing to do with."""
+    needle = normalise_company(company).replace(" ", "")
+    haystack = re.sub(r"[^a-z0-9&]", "", " ".join(
+        (msg.get("sender") or "", msg.get("subject") or "", msg.get("body") or "")).lower())
+    return bool(needle) and needle in haystack
+
+
 def _chunks(items: list, size: int):
     for i in range(0, len(items), size):
         yield items[i:i + size]
@@ -196,7 +206,10 @@ class JobHuntAgent(BaseAgent):
     SCORE_BATCH = 5
     TRIAGE_BATCH = 50
     TRIAGE_MAX_BATCHES = 10
-    GMAIL_MAX = 300
+    GMAIL_SEARCH_MAX = 1000   # stub listing is cheap (ids only)
+    GMAIL_PROCESS_MAX = 150   # full fetch + classification per run; backlog carries over
+    GMAIL_MIN_DAYS = 7
+    GMAIL_MAX_DAYS = 90
     GMAIL_BATCH = 15
     RESCORE_DAYS = 14
     request_delay = 5.0
@@ -242,9 +255,9 @@ class JobHuntAgent(BaseAgent):
 
     def _derive_queries(self, cv_text: str) -> list:
         data = extract_json_array(self._ask(QUERIES_PROMPT.format(cv=cv_text), SCORE_MODEL))
-        queries = [q for q in (data or []) if isinstance(q, str)]
+        queries = [q for q in (data or []) if isinstance(q, str) and validate_query(q)]
         if not queries:
-            raise RuntimeError("LLM returned no usable search queries")
+            raise RuntimeError("LLM returned no valid search queries")
         return queries
 
     def _step_cv(self) -> dict:
@@ -263,8 +276,6 @@ class JobHuntAgent(BaseAgent):
             snap = self.store.add_cv_snapshot(file["id"], file["name"], file["modifiedTime"], text) \
                 if changed else latest
             result["queries"] = self.store.replace_cv_queries(queries)
-            if result["queries"] == 0:
-                raise RuntimeError("No valid search queries after validation")
             if changed and latest:
                 result["rescored"] = self.store.reset_scores_since(self.RESCORE_DAYS)
         else:
@@ -301,7 +312,11 @@ class JobHuntAgent(BaseAgent):
             return {"skipped": "no search queries"}
         # Rotate the starting query so a rate limit doesn't starve the same
         # queries every day; the cursor records where the last run stopped.
-        offset = int(self.get_state("fetch_cursor", 0) or 0) % len(queries)
+        # Cursor is the query text (not a position) so it survives queries being
+        # added/removed/re-derived between runs.
+        names = [q["query"] for q in queries]
+        cursor = self.get_state("fetch_cursor")
+        offset = names.index(cursor) if cursor in names else 0
         ordered = queries[offset:] + queries[:offset]
         found = new = 0
         for i, q in enumerate(ordered):
@@ -318,12 +333,12 @@ class JobHuntAgent(BaseAgent):
                         if len(cards) < 10:
                             break
             except RateLimitedError as e:
-                self.set_state("fetch_cursor", (offset + i) % len(queries))
+                self.set_state("fetch_cursor", q["query"])
                 linked = self.store.reconcile_applications()
                 self.context["fetch_stats"] = {"found": found, "new": new, "already_applied": linked,
                                                "rate_limited": True}
                 raise RuntimeError(f"{e} — stopped at query {i + 1}/{len(queries)} after {new} new jobs") from e
-        self.set_state("fetch_cursor", 0)
+        self.set_state("fetch_cursor", None)
         linked = self.store.reconcile_applications()
         self.context["fetch_stats"] = {"found": found, "new": new, "already_applied": linked}
         return {"queries": len(queries), "found": found, "new": new, "already_applied": linked}
@@ -363,12 +378,20 @@ class JobHuntAgent(BaseAgent):
     def _step_score(self) -> dict:
         cv = self._cv_text()
         cv_id = self.context["cv_snapshot"]["id"]
-        jobs = self.store.jobs_to_score(self.SCORE_LIMIT)
-        for job in jobs:
+        candidates = self.store.jobs_to_score(self.SCORE_LIMIT)
+        jobs, no_description = [], 0
+        for job in candidates:
             if job.get("description") is None:
-                job["description"] = linkedin_jobs.fetch_description(job["job_id"])
-                self.store.set_description(job["job_id"], job["description"])
+                desc = linkedin_jobs.fetch_description(job["job_id"])
                 self._pause()
+                if desc is None:
+                    # Don't score on the title alone or persist the miss —
+                    # leave it NULL so a later run retries the fetch.
+                    no_description += 1
+                    continue
+                job["description"] = desc
+                self.store.set_description(job["job_id"], desc)
+            jobs.append(job)
 
         scored = failures = 0
         for batch in _chunks(jobs, self.SCORE_BATCH):
@@ -396,15 +419,32 @@ class JobHuntAgent(BaseAgent):
                     scored += 1
         if failures and not scored:
             raise RuntimeError(f"All {failures} scoring batches failed")
-        return {"candidates": len(jobs), "scored": scored}
+        result = {"candidates": len(candidates), "scored": scored}
+        if no_description:
+            result["no_description"] = no_description
+        return result
 
     # --- 5. Gmail ---
 
     def _step_gmail(self) -> dict:
-        window = "7d" if self.store.has_gmail_history() else "90d"
-        stubs = gmail_client.search_messages(f"newer_than:{window} {GMAIL_FILTER}", max_results=self.GMAIL_MAX)
-        fresh = [s for s in stubs if not self.store.gmail_seen(s["id"])]
-        messages = [gmail_client.extract_message(gmail_client.get_message(s["id"])) for s in fresh]
+        # Window reaches back to the last fully successful sync (+2 days slack),
+        # so downtime or failed batches are picked up again; 90 days on first run.
+        days = self.GMAIL_MAX_DAYS
+        last_ok = self.get_state("gmail_last_ok")
+        if last_ok:
+            try:
+                gap = (date.today() - date.fromisoformat(last_ok)).days + 2
+                days = min(self.GMAIL_MAX_DAYS, max(self.GMAIL_MIN_DAYS, gap))
+            except ValueError:
+                pass
+        window = f"{days}d"
+        stubs = gmail_client.search_messages(f"newer_than:{window} {GMAIL_FILTER}",
+                                             max_results=self.GMAIL_SEARCH_MAX)
+        # Search is newest-first; process oldest-first and carry any backlog
+        # beyond GMAIL_PROCESS_MAX over to the next run.
+        fresh = [s for s in reversed(stubs) if not self.store.gmail_seen(s["id"])]
+        todo, remaining = fresh[:self.GMAIL_PROCESS_MAX], max(0, len(fresh) - self.GMAIL_PROCESS_MAX)
+        messages = [gmail_client.extract_message(gmail_client.get_message(s["id"])) for s in todo]
         messages.sort(key=lambda m: m.get("date") or "")
 
         events = failures = 0
@@ -427,7 +467,7 @@ class JobHuntAgent(BaseAgent):
             by_id = {m["id"]: m for m in batch}
             for item in data:
                 valid = _validate_email_item(item, set(by_id))
-                if not valid:
+                if not valid or not _mentions_company(valid["company"], by_id[valid["id"]]):
                     continue
                 msg = by_id.pop(valid["id"])
                 events += 1
@@ -443,7 +483,9 @@ class JobHuntAgent(BaseAgent):
         self.context["gmail_preview"] = preview
         if failures:
             raise RuntimeError(f"{failures} email classification batches failed ({events} events recorded)")
-        return {"window": window, "messages": len(messages), "events": events}
+        if not remaining and not self.dry_run:
+            self.set_state("gmail_last_ok", date.today().isoformat())
+        return {"window": window, "messages": len(messages), "events": events, "remaining": remaining}
 
     # --- 6. Notify ---
 

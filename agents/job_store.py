@@ -8,7 +8,6 @@ manual search queries). WAL mode lets the two touch it concurrently.
 
 from __future__ import annotations
 
-import difflib
 import hashlib
 import json
 import re
@@ -72,6 +71,7 @@ CREATE TABLE IF NOT EXISTS application_events (
 CREATE TABLE IF NOT EXISTS gmail_seen (message_id TEXT PRIMARY KEY);
 CREATE INDEX IF NOT EXISTS idx_jobs_score ON jobs(score);
 CREATE INDEX IF NOT EXISTS idx_events_app ON application_events(application_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_app_job ON applications(job_id) WHERE job_id IS NOT NULL;
 """
 
 
@@ -92,11 +92,27 @@ def normalise_company(name: str) -> str:
     return " ".join(tokens)
 
 
+_ROLE_NOISE = {"senior", "sr", "junior", "jr", "medior", "mid", "lead", "staff", "principal",
+               "i", "ii", "iii", "iv", "of", "and", "the", "a", "m", "f", "x", "d"}
+_ROLE_ABBREV = {"sre": ("site", "reliability", "engineer")}
+
+
+def _role_tokens(role: str) -> set:
+    tokens = set()
+    for w in re.findall(r"[a-z0-9]+", (role or "").lower()):
+        tokens.update(_ROLE_ABBREV.get(w, (w,)))
+    return tokens - _ROLE_NOISE
+
+
 def _roles_match(a: str, b: str) -> bool:
-    a, b = (a or "").lower().strip(), (b or "").lower().strip()
-    if not a or not b or a in b or b in a:
+    """Seniority-insensitive role match: one title's words contained in the
+    other's, or Jaccard >= 0.6. "Data Engineer" != "Platform Engineer"."""
+    ta, tb = _role_tokens(a), _role_tokens(b)
+    if not ta or not tb:
         return True
-    return difflib.SequenceMatcher(None, a, b).ratio() >= 0.6
+    if ta <= tb or tb <= ta:
+        return True
+    return len(ta & tb) / len(ta | tb) >= 0.6
 
 
 class JobStore:
@@ -114,6 +130,11 @@ class JobStore:
         cols = {r["name"] for r in self.conn.execute("PRAGMA table_info(jobs)")}
         if "application_id" not in cols:
             self.conn.execute("ALTER TABLE jobs ADD COLUMN application_id INTEGER REFERENCES applications(id)")
+        # Backfill links made before jobs.application_id existed (applications.job_id only).
+        self.conn.execute(
+            "UPDATE jobs SET application_id = (SELECT a.id FROM applications a WHERE a.job_id = jobs.job_id) "
+            "WHERE application_id IS NULL AND EXISTS (SELECT 1 FROM applications a WHERE a.job_id = jobs.job_id)"
+        )
 
     def close(self):
         self.conn.close()
@@ -294,8 +315,14 @@ class JobStore:
         if job.get("application_id"):
             return self.get_application(job["application_id"])
         existing = self._one("SELECT id FROM applications WHERE job_id=?", (job_id,))
-        app = (self.get_application(existing["id"]) if existing else
-               self.create_application(job["company"], job["title"], "applied", "manual", job_id=job_id))
+        if existing:
+            app = self.get_application(existing["id"])
+        else:
+            try:
+                app = self.create_application(job["company"], job["title"], "applied", "manual", job_id=job_id)
+            except sqlite3.IntegrityError:  # concurrent double-tap won the insert
+                app = self.get_application(
+                    self._one("SELECT id FROM applications WHERE job_id=?", (job_id,))["id"])
         self.conn.execute("UPDATE jobs SET application_id=? WHERE job_id=?", (app["id"], job_id))
         self.conn.commit()
         return app
@@ -347,12 +374,17 @@ class JobStore:
 
     def find_application(self, company: str, role: str) -> dict | None:
         """Most recently updated application at the same (normalised) company
-        whose role fuzzily matches; an empty role on either side matches."""
+        whose role matches. An email with no role only matches when the company
+        has exactly one application — otherwise it could land on the wrong one."""
         target = normalise_company(company)
         if not target:
             return None
-        for app in self._all("SELECT * FROM applications ORDER BY updated_at DESC, id DESC"):
-            if normalise_company(app["company"]) == target and _roles_match(app["role"], role):
+        same_company = [a for a in self._all("SELECT * FROM applications ORDER BY updated_at DESC, id DESC")
+                        if normalise_company(a["company"]) == target]
+        if not (role or "").strip():
+            return same_company[0] if len(same_company) == 1 else None
+        for app in same_company:
+            if _roles_match(app["role"], role):
                 return app
         return None
 
@@ -365,7 +397,7 @@ class JobStore:
         target = normalise_company(app["company"])
         linked = 0
         for job in self._all("SELECT job_id, company, title FROM jobs "
-                             "WHERE application_id IS NULL ORDER BY first_seen"):
+                             "WHERE application_id IS NULL AND status != 'dismissed' ORDER BY first_seen"):
             if normalise_company(job["company"]) == target and _roles_match(job["title"], app["role"]):
                 self.conn.execute("UPDATE jobs SET application_id=?, status='applied' WHERE job_id=?",
                                   (app["id"], job["job_id"]))

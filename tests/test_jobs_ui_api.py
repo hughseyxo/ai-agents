@@ -156,3 +156,13 @@ def test_jobs_expose_application_status(client, store):
     job = client.get("/api/jobs?status=applied").json()[0]
     assert job["application_status"] == "rejected"
     assert client.get("/api/jobs?min_score=75").json() == [job]  # still listed; UI filters applied out
+
+
+def test_post_application_with_job_id_links_and_dedups(client, store):
+    _job(store, "1", 80, title="SRE", company="Adyen")
+    r1 = client.post("/api/applications", json={"company": "Adyen", "role": "SRE", "status": "interview",
+                                                 "job_id": "1", "notes": "n"}).json()
+    r2 = client.post("/api/applications", json={"company": "Adyen", "status": "applied", "job_id": "1"}).json()
+    assert r1["id"] == r2["id"]
+    assert r1["status"] == "interview" and r1["notes"] == "n"
+    assert store.get_job("1")["application_id"] == r1["id"]

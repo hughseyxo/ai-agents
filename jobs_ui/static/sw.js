@@ -1,4 +1,4 @@
-const CACHE = 'job-hunt-v2';
+const CACHE = 'job-hunt-v3';
 const SHELL = [
   '/',
   '/static/app.js',
@@ -18,23 +18,17 @@ self.addEventListener('activate', (e) => {
   );
 });
 
+// Network-first everywhere (Tailscale LAN, so it's fast): deploys show up
+// immediately; the cache is only an offline fallback.
 self.addEventListener('fetch', (e) => {
-  const url = new URL(e.request.url);
-  // Network-first for API (data freshness); cache-first for the shell/assets.
-  if (url.pathname.startsWith('/api/')) {
-    e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
-    return;
-  }
+  if (e.request.method !== 'GET') return;
   e.respondWith(
-    caches.match(e.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(e.request).then((res) => {
-        if (res && res.status === 200 && e.request.method === 'GET') {
-          const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put(e.request, copy));
-        }
-        return res;
-      });
-    })
+    fetch(e.request).then((res) => {
+      if (res && res.status === 200 && !new URL(e.request.url).pathname.startsWith('/api/')) {
+        const copy = res.clone();
+        caches.open(CACHE).then((c) => c.put(e.request, copy));
+      }
+      return res;
+    }).catch(() => caches.match(e.request))
   );
 });

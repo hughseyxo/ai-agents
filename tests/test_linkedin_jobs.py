@@ -216,10 +216,12 @@ def test_fetch_description_success_and_failure():
         assert "Kubernetes" in fetch_description("123")
     assert get.call_args.args[0].endswith("/jobPosting/123")
     with patch.object(linkedin_jobs.requests, "get", return_value=_resp(404)):
-        assert fetch_description("123") == ""
+        assert fetch_description("123") is None
+    with patch.object(linkedin_jobs.requests, "get", return_value=_resp(429)):
+        assert fetch_description("123") is None
 
 
 def test_fetch_description_rejects_non_numeric_id():
     with patch.object(linkedin_jobs.requests, "get") as get:
-        assert fetch_description("../../evil") == ""
+        assert fetch_description("../../evil") is None
     get.assert_not_called()

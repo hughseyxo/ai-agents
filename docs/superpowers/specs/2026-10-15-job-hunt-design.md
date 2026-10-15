@@ -157,3 +157,25 @@ refuses unless the file read is the newest owned Doc/.docx matching the prefix. 
 parsing, the `--readonly` flag on `scripts/setup_drive_oauth.py`, and the `token_file` parameter on
 `drive_client` were all removed. Trade-off: the CV fetch depends on the claude.ai login and the
 connector rather than a Google token.
+
+## Revision 2 (2026-10-15) — reconcile with applications + review fixes
+
+- **Already applied / rejected:** Gmail now runs *before* the LinkedIn fetch. `JobStore.reconcile_applications()`
+  (also run by `record_email_event`) links jobs to tracked applications by normalised company plus a
+  seniority-insensitive role-token match (`SRE` expands to site reliability engineer; subset or Jaccard ≥ 0.6;
+  "Data Engineer" ≠ "Platform Engineer"). A linked job gets `status='applied'` and `jobs.application_id` (new column,
+  auto-migrated and backfilled), leaves the triage, scoring and ping queues, and the UI shows the application status.
+  Dismissed jobs are never auto-linked. `UNIQUE(applications.job_id)` means one application per job.
+- **Gmail window:** reaches back to the last fully drained sync (`gmail_last_ok` + 2 days, clamped 7–90). It processes
+  ≤150 messages oldest-first per run and carries the backlog over, so downtime, failed batches and a large 90-day
+  backfill don't lose mail.
+- **Email validation:** the classified company must appear in the sender, subject or body. An email with no role
+  only attaches to a company's application when there is exactly one.
+- **Scoring:** a failed description fetch returns `None` and the job is skipped (left NULL for retry) rather than
+  scored on its title.
+- **Robustness:** JSON arrays are extracted with `raw_decode`, which tolerates trailing brackets in the reply. The fetch
+  cursor is stored as query text, not a position. Queries are validated before the CV snapshot is stored.
+- **Drive CLI:** `--permission-mode default`, `--max-turns 6`, and an explicit `--disallowedTools` list
+  (`BaseAgent.DENIED_TOOLS` + the other claude.ai connectors + the Drive write tools). The title must start with the
+  CV prefix.
+- **UI:** the service worker is network-first, so deploys show immediately.

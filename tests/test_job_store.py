@@ -260,3 +260,52 @@ def test_migrates_old_jobs_table_without_application_id(tmp_path):
     s = JobStore(path)
     assert s.get_job("1")["application_id"] is None
     s.close()
+
+
+@pytest.mark.parametrize("a,b,expected", [
+    ("Data Engineer", "Platform Engineer", False),
+    ("SRE", "Senior Site Reliability Engineer", True),
+    ("Platform Engineer", "Senior Platform Engineer", True),
+    ("Site Reliability Engineer II", "SRE", True),
+    ("Senior DevOps Engineer", "DevOps Engineer Knowledge Management", True),
+    ("Account Manager", "Site Reliability Engineer", False),
+])
+def test_roles_match(a, b, expected):
+    from agents.job_store import _roles_match
+    assert _roles_match(a, b) is expected
+
+
+def test_link_jobs_skips_dismissed(store):
+    store.insert_job(_job("1", company="Adyen", title="SRE"))
+    store.set_job_status("1", "dismissed")
+    store.create_application("Adyen", "SRE", "applied", "gmail")
+    assert store.reconcile_applications() == 0
+    assert store.get_job("1")["status"] == "dismissed"
+
+
+def test_find_application_empty_role_needs_unique_company_match(store):
+    store.create_application("Adyen", "SRE", "applied", "gmail")
+    assert store.find_application("Adyen", "") is not None
+    store.create_application("Adyen", "Platform Engineer", "applied", "gmail")
+    assert store.find_application("Adyen", "") is None
+
+
+def test_one_application_per_job(store):
+    import sqlite3
+    store.insert_job(_job("1"))
+    store.mark_applied("1")
+    with pytest.raises(sqlite3.IntegrityError):
+        store.create_application("Adyen", "SRE", "applied", "manual", job_id="1")
+
+
+def test_migration_backfills_job_application_link(tmp_path):
+    path = tmp_path / "j.db"
+    s = JobStore(path)
+    s.insert_job(_job("1"))
+    app = s.create_application("Adyen", "SRE", "applied", "manual", job_id="1")
+    s.conn.execute("UPDATE jobs SET application_id=NULL")
+    s.conn.commit()
+    s.close()
+    s = JobStore(path)
+    assert s.get_job("1")["application_id"] == app["id"]
+    s.close()

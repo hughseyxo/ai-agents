@@ -111,9 +111,13 @@ def list_applications(store: JobStore = Depends(get_store)):
 @app.post("/api/applications", status_code=201)
 def create_application(data: ApplicationCreate, store: JobStore = Depends(get_store)):
     if data.job_id:
-        if not store.get_job(data.job_id):
+        job = store.get_job(data.job_id)
+        if not job:
             raise HTTPException(status_code=400, detail="Unknown job_id")
-        store.set_job_status(data.job_id, "applied")
+        if job.get("application_id"):  # already tracked — one application per job
+            return store.get_application(job["application_id"])
+        app = store.mark_applied(data.job_id)
+        return store.update_application(app["id"], status=data.status, notes=data.notes)
     return store.create_application(data.company.strip(), data.role.strip(), data.status,
                                     "manual", job_id=data.job_id, notes=data.notes)
 

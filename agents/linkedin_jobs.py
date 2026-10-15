@@ -276,14 +276,14 @@ def fetch_search(query: str, wt: int, start: int = 0) -> List[Dict]:
     return parse_job_cards(_get(SEARCH_URL, params) or "")
 
 
-def fetch_description(job_id: str) -> str:
-    """Description text for a job id; "" on any failure (incl. 429 — a
-    missing description only degrades scoring, it must not abort it)."""
+def fetch_description(job_id: str) -> Optional[str]:
+    """Description text for a job id; None on any failure (incl. 429), so the
+    caller can retry on a later run instead of scoring on the title alone."""
     if not str(job_id).isdigit():
-        return ""
+        return None
     try:
         html = _get(POSTING_URL.format(job_id=job_id))
     except RateLimitedError as e:
         print(f"[linkedin_jobs] {e}", file=sys.stderr)
-        return ""
-    return parse_description(html) if html else ""
+        return None
+    return parse_description(html) if html else None

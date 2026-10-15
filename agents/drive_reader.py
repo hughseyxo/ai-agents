@@ -18,9 +18,21 @@ import subprocess
 import sys
 import tempfile
 
+from .base import DENIED_TOOLS
+
 SEARCH_TOOL = "mcp__claude_ai_Google_Drive__search_files"
 READ_TOOL = "mcp__claude_ai_Google_Drive__read_file_content"
 ALLOWED_TOOLS = ["ToolSearch", SEARCH_TOOL, READ_TOOL]
+# Belt and braces: user-level permission allow-rules apply to headless runs
+# too, so explicitly deny the dangerous built-ins (Bash/Write/Cron/SendMessage…)
+# rather than relying on non-allowed tools being refused.
+DISALLOWED_TOOLS = [t for t in DENIED_TOOLS if t not in ALLOWED_TOOLS] + [
+    # Other claude.ai connectors are loaded too; whole-server rules cover them.
+    "mcp__claude_ai_Gmail", "mcp__claude_ai_Google_Calendar",
+    "mcp__claude_ai_Google_Drive__update_file", "mcp__claude_ai_Google_Drive__trash_file",
+    "mcp__claude_ai_Google_Drive__share_file", "mcp__claude_ai_Google_Drive__copy_file",
+    "mcp__claude_ai_Google_Drive__create_file",
+]
 GDOC_MIME = "application/vnd.google-apps.document"
 DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 SUPPORTED_MIMES = (GDOC_MIME, DOCX_MIME)
@@ -79,7 +91,7 @@ def parse_stream(stdout: str) -> dict:
             continue
     candidates = [f for f in files if isinstance(f, dict)
                   and f.get("mimeType") in SUPPORTED_MIMES
-                  and CV_PREFIX in (f.get("title") or "")]
+                  and (f.get("title") or "").startswith(CV_PREFIX)]
     if not candidates:
         raise RuntimeError(f"No CV matching {CV_PREFIX}* found in Drive search results")
     newest = max(candidates, key=lambda f: f.get("modifiedTime") or "")
@@ -102,7 +114,8 @@ def fetch_latest_cv() -> dict:
     """Newest owned Cian_Hughes_CV_General* Google Doc / .docx as
     {id, name, modifiedTime, text}. Raises RuntimeError on any failure."""
     cmd = ["claude", "-p", "--model", MODEL, "--output-format", "stream-json", "--verbose",
-           "--allowedTools", *ALLOWED_TOOLS]
+           "--permission-mode", "default", "--max-turns", "6",
+           "--disallowedTools", *DISALLOWED_TOOLS, "--allowedTools", *ALLOWED_TOOLS]
     try:
         # Neutral cwd so the repo's CLAUDE.md isn't loaded into this small call.
         proc = subprocess.run(cmd, input=PROMPT, capture_output=True, text=True,
