@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Villa Grabau Wedding Fund</title>
+  <meta name="theme-color" content="#2f3a2c">
+  <link rel="apple-touch-icon" href="/static/icon-192.png">
+  <link rel="manifest" href="/static/manifest.json">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Jost:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="aurora"></div>
+  <main class="login-shell">
+    <img class="login-mark" src="/static/icon-192.png" alt="" width="88" height="88">
+    <h1>Villa Grabau</h1>
+    <p class="login-sub">Lucca, Tuscany</p>
+
+    <form class="glass login-card" method="post" action="/login">
+      <label for="passcode">Passcode</label>
+      <!-- autocapitalize/autocorrect off: iOS otherwise capitalises the first
+           letter and silently breaks the passcode. -->
+      <input id="passcode" name="passcode" type="password" required autofocus
+             autocomplete="current-password" autocapitalize="none"
+             autocorrect="off" spellcheck="false" inputmode="text">
+      <!--ERROR-->
+      <button type="submit">Enter</button>
+    </form>
+  </main>
+</body>
+</html>
