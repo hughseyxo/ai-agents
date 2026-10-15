@@ -35,6 +35,14 @@ def test_docx_to_text_rejects_non_docx():
         docx_to_text(b"not a zip")
 
 
+def test_docx_to_text_rejects_dtd():
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("word/document.xml", '<?xml version="1.0"?><!DOCTYPE x [<!ENTITY a "aaaa">]><x>&a;</x>')
+    with pytest.raises(ValueError):
+        docx_to_text(buf.getvalue())
+
+
 def test_find_latest_cv_prefers_supported_newest(monkeypatch):
     captured = {}
 
@@ -53,6 +61,7 @@ def test_find_latest_cv_prefers_supported_newest(monkeypatch):
     cv = find_latest_cv()
     assert cv["id"] == "docx"
     assert "name contains 'Cian_Hughes_CV_General'" in captured["q"]
+    assert "'me' in owners" in captured["q"]
     assert captured["orderBy"] == "modifiedTime desc"
 
 

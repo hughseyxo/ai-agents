@@ -52,7 +52,7 @@ def find_latest_cv(prefix: str = CV_PREFIX) -> dict | None:
     (PDFs are skipped — no stdlib text extraction). Keys: id, name, mimeType,
     modifiedTime."""
     q = (f"name contains '{drive_client._escape_query_value(prefix)}' "
-         "and trashed = false")
+         "and 'me' in owners and trashed = false")
     result = _get_json("/files", {
         "q": q,
         "orderBy": "modifiedTime desc",
@@ -72,8 +72,11 @@ def docx_to_text(data: bytes) -> str:
             xml = z.read("word/document.xml")
     except (zipfile.BadZipFile, KeyError) as e:
         raise ValueError(f"Not a readable .docx: {e}") from e
-    # stdlib parser is fine here: the input is the user's own CV from their own
-    # Drive, and expat never resolves external entities.
+    # Real .docx parts never carry a DTD; refusing one blocks entity-expansion
+    # (billion laughs) without a defusedxml dependency. Expat never resolves
+    # external entities, and find_latest_cv only picks files the user owns.
+    if b"<!DOCTYPE" in xml[:2048].upper():
+        raise ValueError("Refusing .docx with a DTD")
     root = ElementTree.fromstring(xml)
     lines = []
     for para in root.iter(f"{_W}p"):
