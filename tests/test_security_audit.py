@@ -269,3 +269,76 @@ class TestShodanExposure:
         assert len(agent.findings) == 1
         assert agent.findings[0]["severity"] == "High"
         assert "22" in agent.findings[0]["detail"]
+
+
+# --- Check 16: pre-push secret scan only counts what a push would add ---
+
+from agents.security_audit import _added_lines  # noqa: E402
+
+# Built at runtime so this file never contains a literal the pre-push scan
+# (rightly) flags as an added secret.
+FAKE_IP = ".".join(["100", "96", "86", "73"])
+FAKE_TOKEN = "TOK" + "EN=" + "abcdefghijklmnop"
+
+UNPUSHED_PATCH = """commit abc
+Author: x
+
+    revert: remove k3s
+
+diff --git a/agents/k8s.py b/agents/k8s.py
+--- a/agents/k8s.py
++++ b/agents/k8s.py
+@@ -1,3 +1,2 @@
+ context line
+-NODE_IP = "FAKE_IP"
++NODE_IP = os.environ["NODE_IP"]
+""".replace("FAKE_IP", FAKE_IP)
+
+
+def test_added_lines_drops_removed_context_and_headers():
+    out = _added_lines(UNPUSHED_PATCH)
+    assert 'NODE_IP = os.environ["NODE_IP"]' in out
+    assert FAKE_IP not in out
+    assert "context line" not in out and "+++ b/" not in out
+
+
+def _git_secrets_with(tmp_path, patch_text, messages="", staged=""):
+    repo = tmp_path / "git" / "repo"
+    (repo / ".git").mkdir(parents=True, exist_ok=True)
+    (repo / ".gitignore").write_text(".env\ncredentials.json\nacme.json\nhttp_auth\nagents.db\nsecurity-audit-*.md\n")
+
+    def fake_run(cmd, **kw):
+        out = ""
+        if "remote" in cmd:
+            out = "origin\tgit@github.com:x/repo.git (fetch)\n"
+        elif "--format=%B" in cmd:
+            out = messages
+        elif "log" in cmd:
+            out = patch_text
+        elif "--cached" in cmd:
+            out = staged
+        return MagicMock(returncode=0, stdout=out)
+
+    a = SecurityAuditAgent.__new__(SecurityAuditAgent)
+    a.findings, a.passed = [], []
+    a._pass = lambda msg: a.passed.append(msg)
+    a._finding = lambda **kw: a.findings.append(kw)
+    with patch("agents.security_audit.Path.home", return_value=tmp_path), \
+            patch("agents.security_audit._run", side_effect=fake_run):
+        a._check_git_secrets()
+    return a
+
+
+def test_git_secret_scan_ignores_removed_lines(tmp_path):
+    a = _git_secrets_with(tmp_path, UNPUSHED_PATCH)
+    assert a.findings == []
+
+
+def test_git_secret_scan_flags_added_lines(tmp_path):
+    a = _git_secrets_with(tmp_path, UNPUSHED_PATCH.replace('os.environ["NODE_IP"]', f'"{FAKE_IP}"'))
+    assert a.findings and "Tailscale IP" in str(a.findings)
+
+
+def test_git_secret_scan_flags_commit_messages_and_staged(tmp_path):
+    assert _git_secrets_with(tmp_path, "", messages=f"deploy to {FAKE_IP}").findings
+    assert _git_secrets_with(tmp_path, "", staged=f"+{FAKE_TOKEN}\n").findings

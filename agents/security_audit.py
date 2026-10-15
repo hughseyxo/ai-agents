@@ -38,6 +38,12 @@ SERVER_CONTEXT = {
 }
 
 
+def _added_lines(diff: str) -> str:
+    """Only the lines a diff adds ("+", excluding "+++" file headers)."""
+    return "\n".join(l[1:] for l in (diff or "").splitlines()
+                     if l.startswith("+") and not l.startswith("+++"))
+
+
 def _run(cmd: list[str], **kwargs) -> subprocess.CompletedProcess:
     """Run a read-only system command, returning result even on failure."""
     return subprocess.run(cmd, capture_output=True, text=True, timeout=30, **kwargs)
@@ -1082,13 +1088,19 @@ class SecurityAuditAgent(BaseAgent):
             if not has_public:
                 continue
 
-            # Scan unpushed commits
+            # Scan what a push would ADD: added (+) diff lines of unpushed
+            # commits and staged changes, plus unpushed commit messages.
+            # Removed (-) and context lines are already in pushed history, so
+            # counting them made e.g. a commit that *removes* a secret block
+            # its own push.
             unpushed = _run(["git", "-C", str(repo_dir), "log", "@{u}..HEAD", "-p", "--diff-filter=ACMR"])
-            diff_text = unpushed.stdout if unpushed.returncode == 0 else ""
+            diff_text = _added_lines(unpushed.stdout) if unpushed.returncode == 0 else ""
+            messages = _run(["git", "-C", str(repo_dir), "log", "@{u}..HEAD", "--format=%B"])
+            diff_text += "\n" + (messages.stdout if messages.returncode == 0 else "")
 
             # Also scan staged changes
             staged = _run(["git", "-C", str(repo_dir), "diff", "--cached"])
-            diff_text += "\n" + (staged.stdout if staged.returncode == 0 else "")
+            diff_text += "\n" + (_added_lines(staged.stdout) if staged.returncode == 0 else "")
 
             if diff_text.strip():
                 for pattern, desc in secret_patterns:
