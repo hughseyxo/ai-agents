@@ -47,3 +47,9 @@ cache/
 data/wedding.db*
 # Job hunt DB: CV text + inbox-derived application history. Never publish.
 data/jobs/
+
+# livesync-bridge mirrors of server-only peers (_memory, _map, _project, _dashboards) — never publish
+docs/memory/
+docs/map/
+docs/project/
+docs/dashboards/
