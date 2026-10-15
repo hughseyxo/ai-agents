@@ -61,8 +61,11 @@ def test_validate_score_item():
 # --- cv step ---
 
 def _patch_drive(text="CV text v1", file=CV_FILE):
-    return patch.multiple(job_hunt.drive_reader,
-                          find_latest_cv=lambda: file, read_cv_text=lambda f: text)
+    def fetch():
+        if file is None:
+            raise RuntimeError("No CV matching found")
+        return {**file, "text": text}
+    return patch.object(job_hunt.drive_reader, "fetch_latest_cv", side_effect=fetch)
 
 
 def test_cv_first_run_snapshots_and_derives_queries(agent):

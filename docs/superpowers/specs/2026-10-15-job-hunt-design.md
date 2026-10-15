@@ -1,7 +1,7 @@
 # Job Hunt — CV-matched LinkedIn tracker + Gmail application pipeline — Design
 
 **Date:** 2026-10-15
-**Status:** Implemented 2026-10-15 (live agent run pending the user's Drive read-only consent)
+**Status:** Implemented 2026-10-15 (Drive access revised — see Revision 1)
 **Author:** eagna (Claude Code)
 
 ## Related
@@ -29,7 +29,7 @@ industry that is a good fit for their CV** — so nothing about roles or sectors
 | Architecture | Host cron agent + thin web app | LLM calls and Google/Claude creds stay on the host; container only needs the DB |
 | Hosting | Docker, bound to `<TAILSCALE_IP>:8774`, Tailscale-only | Private data (CV, inbox-derived pipeline); no public hostname, so no login |
 | CV source | Newest `Cian_Hughes_CV_General*` in Drive | Auto-tracks CV revisions; re-scores open jobs when it changes |
-| Drive access | Python, new `drive.readonly` token | claude.ai Drive connector is unreachable from headless cron; existing `drive.file` token can't read user-created files |
+| Drive access | claude.ai Google Drive connector via headless `claude -p` (Haiku), `--allowedTools` = the 2 read tools + ToolSearch, no `--dangerously-skip-permissions` | Already authorised on the user's claude.ai account; a custom OAuth client asking for `drive.readonly` was blocked by Google ("This app's request is invalid"). Metadata + text are parsed from raw tool results in stream-json, not the model's reply (Revision 1) |
 | Gmail access | Python via existing `gmail_client` token | Already has `gmail.modify`; no new consent |
 | Applications | Auto from Gmail + manual "Mark applied" | Not every application sends a confirmation email |
 | Gmail backfill | 90 days on first run, then incremental (`gmail_seen`) | |
@@ -40,7 +40,7 @@ industry that is a good fit for their CV** — so nothing about roles or sectors
 
 ```
 job-hunt agent (host cron, 04:00 UTC)                 jobs_ui (Docker, <TAILSCALE_IP>:8774)
- 1 cv:      Drive (drive.readonly) → text, hash        FastAPI + Alpine PWA, no LLM
+ 1 cv:      Drive connector (claude -p) → text         FastAPI + Alpine PWA, no LLM
             changed? → LLM derives search queries      reads/writes data/jobs/jobs.db via JobStore
  2 fetch:   LinkedIn guest API per query × WT × page   tabs: Matches | Applications | Search/CV
  3 triage:  Haiku batch on title+company → drop junk
@@ -124,8 +124,7 @@ Hosting: seedbox `services/jobs.yaml` + `config.yaml` entry (separate `~/git/yop
 
 **New**
 - `agents/linkedin_jobs.py` — salvaged parser/sanitisers/429 handling + `fetch_search`, `fetch_description`
-- `agents/drive_reader.py` — `drive.readonly` client, token `~/.google_tokens_drive_ro.json`, `find_latest_cv`, `read_cv_text` (Docs export / stdlib docx extraction)
-- `scripts/setup_drive_oauth.py --readonly` — one-time consent (existing script, new flag)
+- `agents/drive_reader.py` — `fetch_latest_cv()`: headless `claude -p` + claude.ai Drive connector; `parse_stream()` takes file metadata/text from raw tool results and verifies the newest CV was read
 - `agents/job_store.py` — `JobStore`
 - `agents/job_hunt.py` — `JobHuntAgent`
 - `jobs_ui/` — `server.py`, `templates/index.html`, `static/*`, `Dockerfile`
@@ -143,3 +142,17 @@ Hosting: seedbox `services/jobs.yaml` + `config.yaml` entry (separate `~/git/yop
 - LinkedIn guest API is unofficial — markup changes or rate limits. Parser tests catch breakage; 429 aborts cleanly.
 - Gmail classification is heuristic — UI status override is the correction path.
 - CV naming convention: a CV not prefixed `Cian_Hughes_CV_General` won't be picked up.
+
+## Revision 1 (2026-10-15) — Drive via the claude.ai connector
+
+The original design read the CV through a custom Google OAuth client with a new `drive.readonly`
+token. Google's consent screen rejected that request ("Access blocked: This app's request is invalid").
+Rather than debug the unverified-app OAuth setup, `drive_reader` now uses the claude.ai Google
+Drive connector, which is already authorised and which headless `claude -p` loads (verified live).
+Confinement: no `--dangerously-skip-permissions`; `--allowedTools ToolSearch search_files
+read_file_content`, so every other tool is auto-denied in non-interactive mode. Python parses
+`--output-format stream-json`, takes the file list and `fileContent` from the raw tool results, and
+refuses unless the file read is the newest owned Doc/.docx matching the prefix. The docx/XML
+parsing, the `--readonly` flag on `scripts/setup_drive_oauth.py`, and the `token_file` parameter on
+`drive_client` were all removed. Trade-off: the CV fetch depends on the claude.ai login and the
+connector rather than a Google token.

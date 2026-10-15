@@ -241,12 +241,8 @@ class JobHuntAgent(BaseAgent):
         return queries
 
     def _step_cv(self) -> dict:
-        file = drive_reader.find_latest_cv()
-        if not file:
-            raise RuntimeError("No CV found in Drive")
-        text = drive_reader.read_cv_text(file)
-        if not text:
-            raise RuntimeError(f"CV {file['name']} is empty")
+        file = drive_reader.fetch_latest_cv()
+        text = file["text"]
 
         latest = self.store.latest_cv()
         changed = not latest or latest["text_hash"] != JobStore.text_hash(text)

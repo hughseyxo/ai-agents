@@ -1,106 +1,120 @@
-"""Read-only Google Drive access for the job-hunt agent: find the newest CV and
-return its plain text.
+"""Fetch the user's newest CV from Google Drive via the claude.ai Google Drive
+connector, run through a headless `claude -p`.
 
-Uses its own token file (drive.readonly scope, created by
-`scripts/setup_drive_oauth.py --readonly`) so it never widens or disturbs the
-drive.file token the plant digest push relies on. Token refresh is shared
-with agents/drive_client.py.
+No Google Cloud OAuth client or token file: the connector is already
+authorised on the user's claude.ai account, and headless `claude -p` loads it.
+The CLI runs WITHOUT --dangerously-skip-permissions and with --allowedTools
+limited to the two read-only Drive tools (+ ToolSearch, which MCP tools are
+deferred behind), so any other tool call — update/share/trash, Bash, Write —
+is denied automatically in non-interactive mode.
+
+The model only drives the two calls. File metadata and CV text are taken from
+the raw tool results in the stream-json output, never from the model's reply,
+and Python checks the file it read is the newest CV in the search results.
 """
 
-import io
 import json
-import os
-import re
-import urllib.parse
-import urllib.request
-import zipfile
-from xml.etree import ElementTree
+import subprocess
+import sys
+import tempfile
 
-from . import drive_client
-
-TOKEN_FILE_RO = os.path.expanduser("~/.google_tokens_drive_ro.json")
-SCOPE_RO = "https://www.googleapis.com/auth/drive.readonly"
+SEARCH_TOOL = "mcp__claude_ai_Google_Drive__search_files"
+READ_TOOL = "mcp__claude_ai_Google_Drive__read_file_content"
+ALLOWED_TOOLS = ["ToolSearch", SEARCH_TOOL, READ_TOOL]
 GDOC_MIME = "application/vnd.google-apps.document"
 DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 SUPPORTED_MIMES = (GDOC_MIME, DOCX_MIME)
 CV_PREFIX = "Cian_Hughes_CV_General"
+MODEL = "claude-haiku-4-5"
+TIMEOUT = 300
 
-_W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+PROMPT = f"""Fetch a CV from Google Drive using exactly two tool calls, then stop.
 
+1. Call {SEARCH_TOOL} with query "title contains '{CV_PREFIX}' and owner = 'me' and trashed = false",
+   excludeContentSnippets true, pageSize 50.
+2. From the results, pick the most recently modified file (by modifiedTime) whose mimeType is
+   "{GDOC_MIME}" or "{DOCX_MIME}", and call {READ_TOOL} with its id.
 
-def _open(path: str, params: dict | None):
-    token = drive_client.get_access_token(TOKEN_FILE_RO)
-    url = f"{drive_client.API_BASE}{path}"
-    if params:
-        url += "?" + urllib.parse.urlencode(params)
-    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
-    return urllib.request.urlopen(req, timeout=drive_client.REQUEST_TIMEOUT)
-
-
-def _get_json(path: str, params: dict | None = None) -> dict:
-    with _open(path, params) as resp:
-        return json.loads(resp.read())
+Do not call any other tool. Reply only DONE.
+"""
 
 
-def _get_bytes(path: str, params: dict | None = None) -> bytes:
-    with _open(path, params) as resp:
-        return resp.read()
+def _tool_text(content) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "".join(c.get("text", "") for c in content if isinstance(c, dict))
+    return ""
 
 
-def find_latest_cv(prefix: str = CV_PREFIX) -> dict | None:
-    """Most recently modified Google Doc / .docx whose name contains prefix
-    (PDFs are skipped — no stdlib text extraction). Keys: id, name, mimeType,
-    modifiedTime."""
-    q = (f"name contains '{drive_client._escape_query_value(prefix)}' "
-         "and 'me' in owners and trashed = false")
-    result = _get_json("/files", {
-        "q": q,
-        "orderBy": "modifiedTime desc",
-        "pageSize": 20,
-        "fields": "files(id,name,mimeType,modifiedTime)",
-    })
-    for f in result.get("files", []):
-        if f.get("mimeType") in SUPPORTED_MIMES:
-            return f
-    return None
+def parse_stream(stdout: str) -> dict:
+    """Extract {id, name, modifiedTime, text} for the newest CV from
+    `claude -p --output-format stream-json` output. Raises RuntimeError unless
+    the search succeeded and the file read is the newest supported CV."""
+    uses, results = {}, {}
+    for line in stdout.splitlines():
+        try:
+            event = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(event, dict) or event.get("type") not in ("assistant", "user"):
+            continue
+        for block in (event.get("message") or {}).get("content") or []:
+            if not isinstance(block, dict):
+                continue
+            if block.get("type") == "tool_use":
+                uses[block.get("id")] = block
+            elif block.get("type") == "tool_result" and not block.get("is_error"):
+                results[block.get("tool_use_id")] = _tool_text(block.get("content"))
+
+    def results_for(tool):
+        return [(uses[uid].get("input") or {}, results[uid])
+                for uid in uses if uses[uid].get("name") == tool and uid in results]
+
+    files = []
+    for _, text in results_for(SEARCH_TOOL):
+        try:
+            files += json.loads(text).get("files", [])
+        except (ValueError, AttributeError):
+            continue
+    candidates = [f for f in files if isinstance(f, dict)
+                  and f.get("mimeType") in SUPPORTED_MIMES
+                  and CV_PREFIX in (f.get("title") or "")]
+    if not candidates:
+        raise RuntimeError(f"No CV matching {CV_PREFIX}* found in Drive search results")
+    newest = max(candidates, key=lambda f: f.get("modifiedTime") or "")
+
+    for inp, text in results_for(READ_TOOL):
+        if inp.get("fileId") != newest["id"]:
+            continue
+        try:
+            content = (json.loads(text).get("fileContent") or "").strip()
+        except (ValueError, AttributeError):
+            content = ""
+        if not content:
+            raise RuntimeError(f"CV {newest['title']} came back empty")
+        return {"id": newest["id"], "name": newest["title"],
+                "modifiedTime": newest.get("modifiedTime", ""), "text": content}
+    raise RuntimeError(f"The newest CV ({newest['title']}) was not read")
 
 
-def docx_to_text(data: bytes) -> str:
-    """Plain text of a .docx: one line per paragraph, tabs preserved."""
+def fetch_latest_cv() -> dict:
+    """Newest owned Cian_Hughes_CV_General* Google Doc / .docx as
+    {id, name, modifiedTime, text}. Raises RuntimeError on any failure."""
+    cmd = ["claude", "-p", "--model", MODEL, "--output-format", "stream-json", "--verbose",
+           "--allowedTools", *ALLOWED_TOOLS]
     try:
-        with zipfile.ZipFile(io.BytesIO(data)) as z:
-            xml = z.read("word/document.xml")
-    except (zipfile.BadZipFile, KeyError) as e:
-        raise ValueError(f"Not a readable .docx: {e}") from e
-    # Real .docx parts never carry a DTD; refusing one blocks entity-expansion
-    # (billion laughs) without a defusedxml dependency. Expat never resolves
-    # external entities, and find_latest_cv only picks files the user owns.
-    if b"<!DOCTYPE" in xml[:2048].upper():
-        raise ValueError("Refusing .docx with a DTD")
-    root = ElementTree.fromstring(xml)
-    lines = []
-    for para in root.iter(f"{_W}p"):
-        parts = []
-        for node in para.iter():
-            if node.tag == f"{_W}t" and node.text:
-                parts.append(node.text)
-            elif node.tag == f"{_W}tab":
-                parts.append("\t")
-            elif node.tag in (f"{_W}br", f"{_W}cr"):
-                parts.append("\n")
-        line = "".join(parts).strip()
-        if line:
-            lines.append(line)
-    return "\n".join(lines)
-
-
-def read_cv_text(file: dict) -> str:
-    mime = file.get("mimeType")
-    if mime == GDOC_MIME:
-        raw = _get_bytes(f"/files/{file['id']}/export", {"mimeType": "text/plain"})
-        text = raw.decode("utf-8-sig", errors="replace")
-    elif mime == DOCX_MIME:
-        text = docx_to_text(_get_bytes(f"/files/{file['id']}", {"alt": "media"}))
-    else:
-        raise ValueError(f"Unsupported CV mime type: {mime}")
-    return re.sub(r"\r\n?", "\n", text).strip()
+        # Neutral cwd so the repo's CLAUDE.md isn't loaded into this small call.
+        proc = subprocess.run(cmd, input=PROMPT, capture_output=True, text=True,
+                              timeout=TIMEOUT, cwd=tempfile.gettempdir())
+    except subprocess.TimeoutExpired as e:
+        raise RuntimeError(f"Drive CV fetch timed out after {TIMEOUT}s") from e
+    except OSError as e:
+        raise RuntimeError(f"Could not start claude CLI: {e}") from e
+    if proc.returncode != 0:
+        raise RuntimeError(f"Drive CV fetch failed (rc={proc.returncode}): {(proc.stderr or '')[:300]}")
+    try:
+        return parse_stream(proc.stdout)
+    except RuntimeError as e:
+        print(f"[drive_reader] {e}; stderr: {(proc.stderr or '')[:300]}", file=sys.stderr)
+        raise
