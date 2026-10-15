@@ -17,6 +17,7 @@ Python from validated fields (parse_mode=None).
 """
 
 import json
+import random
 import re
 import sys
 import time
@@ -43,10 +44,13 @@ GMAIL_FILTER = (
 
 QUERIES_PROMPT = """You are helping a job seeker based in the Netherlands search LinkedIn Jobs.
 
-Read their CV below and propose 8-12 LinkedIn job-search keyword queries that would surface roles
+Read their CV below and propose 6-10 LinkedIn job-search keyword queries that would surface roles
 they are a strong fit for. Mix job titles (including adjacent titles they may not have considered)
 with distinctive skill or technology terms. They have mentioned interest in SRE, infrastructure
 and cloud engineering, but they are open to ANY title or industry that genuinely fits the CV.
+
+The search is already filtered to the Netherlands (remote + hybrid), so never include location words
+like Netherlands, NL or Amsterdam. Avoid near-duplicates — each query should surface different postings.
 
 Rules for each query: 1-4 words, at most 40 characters, only letters, digits, spaces and . + / # -
 
@@ -195,7 +199,8 @@ class JobHuntAgent(BaseAgent):
     GMAIL_MAX = 300
     GMAIL_BATCH = 15
     RESCORE_DAYS = 14
-    request_delay = 2.0
+    request_delay = 5.0
+    rate_limit_backoff = 60
     dry_run = False
 
     def __init__(self, db_path=DEFAULT_DB_PATH, jobs_db_path=DEFAULT_JOBS_DB):
@@ -275,27 +280,46 @@ class JobHuntAgent(BaseAgent):
 
     # --- 2. LinkedIn fetch ---
 
+    def _pause(self):
+        # Jittered spacing between LinkedIn requests (guest API rate-limits bursts).
+        time.sleep(self.request_delay * random.uniform(1.0, 1.6))
+
+    def _search(self, query: str, wt: int, start: int) -> list:
+        """fetch_search with one long back-off on 429; a second 429 propagates."""
+        try:
+            return linkedin_jobs.fetch_search(query, wt, start)
+        except RateLimitedError:
+            self._log(f"429 on '{query}' — backing off {self.rate_limit_backoff}s")
+            time.sleep(self.rate_limit_backoff)
+            return linkedin_jobs.fetch_search(query, wt, start)
+
     def _step_fetch(self) -> dict:
         queries = self.store.list_queries(enabled_only=True)
         if not queries:
             return {"skipped": "no search queries"}
+        # Rotate the starting query so a rate limit doesn't starve the same
+        # queries every day; the cursor records where the last run stopped.
+        offset = int(self.get_state("fetch_cursor", 0) or 0) % len(queries)
+        ordered = queries[offset:] + queries[:offset]
         found = new = 0
-        try:
-            for q in queries:
+        for i, q in enumerate(ordered):
+            try:
                 for wt in linkedin_jobs.WORKPLACE.values():
                     for start in (0, 10):
-                        cards = linkedin_jobs.fetch_search(q["query"], wt, start)
+                        cards = self._search(q["query"], wt, start)
                         for raw in cards:
                             job = normalise_job(raw)
                             if job:
                                 found += 1
                                 new += self.store.insert_job(job)
-                        time.sleep(self.request_delay)
+                        self._pause()
                         if len(cards) < 10:
                             break
-        except RateLimitedError as e:
-            self.context["fetch_stats"] = {"found": found, "new": new, "rate_limited": True}
-            raise RuntimeError(f"{e} — stopped after {new} new jobs") from e
+            except RateLimitedError as e:
+                self.set_state("fetch_cursor", (offset + i) % len(queries))
+                self.context["fetch_stats"] = {"found": found, "new": new, "rate_limited": True}
+                raise RuntimeError(f"{e} — stopped at query {i + 1}/{len(queries)} after {new} new jobs") from e
+        self.set_state("fetch_cursor", 0)
         self.context["fetch_stats"] = {"found": found, "new": new}
         return {"queries": len(queries), "found": found, "new": new}
 
@@ -339,7 +363,7 @@ class JobHuntAgent(BaseAgent):
             if job.get("description") is None:
                 job["description"] = linkedin_jobs.fetch_description(job["job_id"])
                 self.store.set_description(job["job_id"], job["description"])
-                time.sleep(self.request_delay)
+                self._pause()
 
         scored = failures = 0
         for batch in _chunks(jobs, self.SCORE_BATCH):

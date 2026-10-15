@@ -54,11 +54,12 @@ job-hunt agent (host cron, 04:00 UTC)                 jobs_ui (Docker, <TAILSCAL
 
 1. **cv** — `drive_reader.find_latest_cv()` picks the most recently modified `Cian_Hughes_CV_General*` (Google Doc
    or `.docx`; PDF skipped). Text is hashed; an unchanged hash reuses the last `cv_snapshots` row. On change: insert
-   a snapshot, and one LLM call returns 8–12 LinkedIn search queries (mix of titles and skill terms). Each is
+   a snapshot, and one LLM call returns 6–10 LinkedIn search queries (no location words) (mix of titles and skill terms). Each is
    validated in Python (≤ 40 chars, `[\w .+/#-]` only) and replaces the `source='cv'` rows; `source='manual'` rows
    (added in the UI) are kept.
 2. **fetch** — enabled queries × `f_WT` {2, 3} × 2 pages against the guest search endpoint, `f_TPR=r172800`,
-   2 s sleep between requests. A 429 raises `RateLimitedError`, aborts the step, and marks the run partial.
+   ~5–8 s jittered sleep between requests. A 429 gets one 60 s back-off + retry; a second 429 aborts the step
+   (run marked partial) and stores `fetch_cursor` so the next run starts from the query that was cut off.
    Already-known `job_id`s are skipped.
 3. **triage** — one batched Haiku call over title + company of new jobs → keep/drop. Cheap pre-filter so only
    plausible jobs cost a description fetch and a Sonnet scoring call.

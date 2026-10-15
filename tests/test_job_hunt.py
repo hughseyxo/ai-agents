@@ -15,6 +15,7 @@ CV_FILE = {"id": "f1", "name": "Cian_Hughes_CV_General_v5.docx",
 def agent(tmp_path):
     a = JobHuntAgent(db_path=tmp_path / "agents.db", jobs_db_path=tmp_path / "jobs.db")
     a.request_delay = 0
+    a.rate_limit_backoff = 0
     a.context["plan"] = a.plan()
     yield a
     a.store.close()
@@ -139,22 +140,56 @@ def test_fetch_no_queries_skips(agent):
     fs.assert_not_called()
 
 
-def test_fetch_rate_limit_keeps_progress_and_fails_step(agent):
+def test_fetch_rate_limit_retries_once_then_fails_and_saves_cursor(agent):
     agent.store.add_manual_query("SRE")
     agent.store.add_manual_query("Cloud")
+    agent.store.add_manual_query("Platform")
     calls = []
 
     def fs(query, wt, start=0):
-        calls.append(query)
-        if len(calls) > 1:
+        calls.append((query, wt))
+        if query == "Cloud":
+            raise RateLimitedError("429")
+        return [_card(f"{query}-{wt}".replace("-", "") + "1")]
+
+    with patch.object(job_hunt.linkedin_jobs, "fetch_search", side_effect=fs), \
+            patch.object(job_hunt.time, "sleep") as sleep:
+        with pytest.raises(RuntimeError, match="429"):
+            agent._step_fetch()
+    # SRE fully fetched (2 workplace types), Cloud tried twice (backoff retry), Platform never reached
+    assert calls == [("SRE", 2), ("SRE", 3), ("Cloud", 2), ("Cloud", 2)]
+    assert any(c.args[0] == agent.rate_limit_backoff for c in sleep.call_args_list)
+    assert agent.get_state("fetch_cursor") == 1
+
+
+def test_fetch_rate_limit_recovers_after_backoff(agent):
+    agent.store.add_manual_query("SRE")
+    attempts = []
+
+    def fs(query, wt, start=0):
+        attempts.append(wt)
+        if len(attempts) == 1:
             raise RateLimitedError("429")
         return [_card("1")]
 
-    with patch.object(job_hunt.linkedin_jobs, "fetch_search", side_effect=fs):
-        with pytest.raises(RuntimeError, match="429"):
-            agent._step_fetch()
-    assert agent.store.has_job("1")
-    assert len(calls) == 2
+    with patch.object(job_hunt.linkedin_jobs, "fetch_search", side_effect=fs), \
+            patch.object(job_hunt.time, "sleep"):
+        out = agent._step_fetch()
+    assert out["new"] == 1 and attempts == [2, 2, 3]
+    assert agent.get_state("fetch_cursor") == 0
+
+
+def test_fetch_starts_from_saved_cursor(agent):
+    for q in ("A1", "B1", "C1"):
+        agent.store.add_manual_query(q)
+    agent.set_state("fetch_cursor", 2)
+    order = []
+    with patch.object(job_hunt.linkedin_jobs, "fetch_search",
+                      side_effect=lambda q, wt, start=0: order.append(q) or []), \
+            patch.object(job_hunt.time, "sleep"):
+        agent._step_fetch()
+    assert order[::2] == ["C1", "A1", "B1"]
+    assert agent.get_state("fetch_cursor") == 0
 
 
 # --- triage ---
