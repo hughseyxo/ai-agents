@@ -236,7 +236,7 @@ def _run_llm(prompt: str, timeout: int = 120):
     try:
         print("[ytsave] Calling Antigravity (agy)...", file=sys.stderr)
         result = subprocess.run(
-            ["agy", "-y", "-o", "text"],
+            ["agy", "--dangerously-skip-permissions"],
             input=prompt, capture_output=True, text=True, timeout=timeout, cwd=str(Path.home()),
         )
         if result.returncode == 0 and result.stdout.strip():
