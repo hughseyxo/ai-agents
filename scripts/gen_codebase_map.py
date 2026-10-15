@@ -38,6 +38,7 @@ AREAS: dict[str, list[str]] = {
     "agents": ["agents/*.py", "agents/prompts/*.md"],
     "telegram-bot": ["telegram-bot/*.py"],
     "plant-ui": ["plant_ui/**/*"],
+    "wedding-apps": ["wedding_ui/**/*", "grabau_ui/**/*"],
     "mcp-servers": ["mcp-servers/*.py"],
     "tests": ["tests/*.py"],
     "skills": ["skills/**/*"],
