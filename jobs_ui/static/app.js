@@ -14,7 +14,7 @@ function jobsApp() {
     jobFilters: [
       { key: 'strong', label: 'Strong (75+)' },
       { key: 'all', label: 'All open' },
-      { key: 'applied', label: 'Applied' },
+      { key: 'applied', label: 'Applied / rejected' },
       { key: 'dismissed', label: 'Dismissed' },
     ],
     appStatuses: ['applied', 'interview', 'offer', 'rejected', 'withdrawn'],

@@ -147,3 +147,12 @@ def test_healthz_and_index(client):
     r = client.get("/")
     assert r.status_code == 200 and "jobsApp()" in r.text
     assert client.get("/sw.js").status_code == 200
+
+
+def test_jobs_expose_application_status(client, store):
+    _job(store, "1", 80, title="Site Reliability Engineer", company="Adyen")
+    store.create_application("Adyen", "Site Reliability Engineer", "rejected", "gmail")
+    store.reconcile_applications()
+    job = client.get("/api/jobs?status=applied").json()[0]
+    assert job["application_status"] == "rejected"
+    assert client.get("/api/jobs?min_score=75").json() == [job]  # still listed; UI filters applied out

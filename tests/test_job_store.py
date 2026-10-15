@@ -200,3 +200,63 @@ def test_gmail_seen(store):
     store.mark_gmail_seen(["a", "b", "a"])
     assert store.gmail_seen("a") and not store.gmail_seen("c")
     assert store.has_gmail_history() is True
+
+
+# --- reconciling jobs with applications ---
+
+def test_reconcile_links_matching_jobs_and_reports_status(store):
+    store.insert_job(_job("1", company="Adyen", title="Senior Site Reliability Engineer"))
+    store.insert_job(_job("2", company="Adyen", title="Account Executive"))
+    store.insert_job(_job("3", company="Mollie", title="Site Reliability Engineer"))
+    app = store.create_application("Adyen N.V.", "Site Reliability Engineer", "rejected", "gmail")
+    assert store.reconcile_applications() == 1
+    job = store.get_job("1")
+    assert job["status"] == "applied" and job["application_id"] == app["id"]
+    assert job["application_status"] == "rejected"
+    assert store.get_job("2")["status"] == "new"
+    assert store.get_job("3")["application_status"] is None
+    assert store.get_application(app["id"])["job_id"] == "1"
+    assert store.reconcile_applications() == 0  # idempotent
+
+
+def test_reconcile_skips_applications_without_role(store):
+    store.insert_job(_job("1", company="Harnham", title="Site Reliability Engineer"))
+    store.create_application("Harnham", "", "applied", "gmail")
+    assert store.reconcile_applications() == 0
+    assert store.get_job("1")["status"] == "new"
+
+
+def test_reconciled_jobs_leave_scoring_triage_and_notify_queues(store):
+    store.insert_job(_job("1", company="Adyen", title="SRE"))
+    store.set_triage("1", True)
+    store.insert_job(_job("2", company="Adyen", title="SRE II"))
+    store.save_score("2", 90, [], [], "fit", None)
+    store.create_application("Adyen", "SRE", "applied", "gmail")
+    store.reconcile_applications()
+    assert store.jobs_to_score(10) == []
+    assert store.jobs_needing_triage(10) == []
+    assert store.jobs_to_notify(75) == []
+
+
+def test_list_jobs_includes_application_status(store):
+    store.insert_job(_job("1"))
+    store.mark_applied("1")
+    store.update_application(store.list_applications()[0]["id"], status="interview")
+    assert store.list_jobs()[0]["application_status"] == "interview"
+
+
+def test_migrates_old_jobs_table_without_application_id(tmp_path):
+    import sqlite3
+    path = tmp_path / "old.db"
+    conn = sqlite3.connect(path)
+    conn.execute("CREATE TABLE jobs (job_id TEXT PRIMARY KEY, title TEXT NOT NULL, company TEXT NOT NULL, "
+                 "location TEXT, url TEXT NOT NULL, posted TEXT, description TEXT, triage TEXT, score INTEGER, "
+                 "matched_skills TEXT, gaps TEXT, rationale TEXT, cv_snapshot_id INTEGER, "
+                 "status TEXT NOT NULL DEFAULT 'new', notified INTEGER NOT NULL DEFAULT 0, "
+                 "first_seen TEXT NOT NULL, scored_at TEXT)")
+    conn.execute("INSERT INTO jobs (job_id, title, company, url, first_seen) VALUES ('1','SRE','A','u','t')")
+    conn.commit()
+    conn.close()
+    s = JobStore(path)
+    assert s.get_job("1")["application_id"] is None
+    s.close()

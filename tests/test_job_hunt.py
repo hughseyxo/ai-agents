@@ -383,3 +383,35 @@ def test_configure_dry_run(agent):
         dry_run = True
     agent.configure(Args())
     assert agent.dry_run is True
+
+
+def test_gmail_runs_before_fetch():
+    names = [s["name"] for s in JobHuntAgent.__new__(JobHuntAgent).steps()]
+    assert names.index("gmail") < names.index("fetch") < names.index("triage")
+
+
+def test_fetch_skips_jobs_already_applied_for(agent):
+    agent.store.add_manual_query("SRE")
+    agent.store.create_application("Adyen", "Site Reliability Engineer", "rejected", "gmail")
+    with patch.object(job_hunt.linkedin_jobs, "fetch_search", return_value=[_card("1"), _card("2", company="Mollie")]):
+        out = agent._step_fetch()
+    assert out["already_applied"] == 1
+    assert agent.store.get_job("1")["application_status"] == "rejected"
+    assert agent.store.jobs_needing_triage(10)[0]["job_id"] == "2"
+
+
+def test_fetch_reconciles_even_when_rate_limited(agent):
+    agent.store.add_manual_query("SRE")
+    agent.store.create_application("Adyen", "Site Reliability Engineer", "applied", "gmail")
+    calls = []
+
+    def fs(q, wt, start=0):
+        calls.append(wt)
+        if len(calls) > 1:
+            raise RateLimitedError("429")
+        return [_card("1")]
+
+    with patch.object(job_hunt.linkedin_jobs, "fetch_search", side_effect=fs):
+        with pytest.raises(RuntimeError):
+            agent._step_fetch()
+    assert agent.store.get_job("1")["status"] == "applied"

@@ -216,10 +216,12 @@ class JobHuntAgent(BaseAgent):
     def steps(self):
         return [
             {"name": "cv", "fn": self._step_cv, "fallback": self._cv_fallback},
+            # Gmail first, so new postings are compared against an up-to-date
+            # application pipeline (already applied / rejected → not re-scored).
+            {"name": "gmail", "fn": self._step_gmail, "retries": 0},
             {"name": "fetch", "fn": self._step_fetch, "retries": 0},
             {"name": "triage", "fn": self._step_triage},
             {"name": "score", "fn": self._step_score, "retries": 0},
-            {"name": "gmail", "fn": self._step_gmail, "retries": 0},
             {"name": "notify", "fn": self._step_notify, "side_effects": True, "retries": 0},
         ]
 
@@ -317,11 +319,14 @@ class JobHuntAgent(BaseAgent):
                             break
             except RateLimitedError as e:
                 self.set_state("fetch_cursor", (offset + i) % len(queries))
-                self.context["fetch_stats"] = {"found": found, "new": new, "rate_limited": True}
+                linked = self.store.reconcile_applications()
+                self.context["fetch_stats"] = {"found": found, "new": new, "already_applied": linked,
+                                               "rate_limited": True}
                 raise RuntimeError(f"{e} — stopped at query {i + 1}/{len(queries)} after {new} new jobs") from e
         self.set_state("fetch_cursor", 0)
-        self.context["fetch_stats"] = {"found": found, "new": new}
-        return {"queries": len(queries), "found": found, "new": new}
+        linked = self.store.reconcile_applications()
+        self.context["fetch_stats"] = {"found": found, "new": new, "already_applied": linked}
+        return {"queries": len(queries), "found": found, "new": new, "already_applied": linked}
 
     # --- 3. Triage ---
 
@@ -463,7 +468,7 @@ class JobHuntAgent(BaseAgent):
     def report(self) -> str:
         today = self.context["plan"]["today"]
         parts = [f"Job hunt {today}{' (dry run)' if self.dry_run else ''}"]
-        for step in ("cv", "fetch", "triage", "score", "gmail", "notify"):
+        for step in ("cv", "gmail", "fetch", "triage", "score", "notify"):
             result = self.context.get(step)
             parts.append(f"- {step}: {result if result is not None else 'FAILED'}")
         summary = "\n".join(parts)

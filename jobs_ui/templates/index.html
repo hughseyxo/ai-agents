@@ -62,7 +62,10 @@
           <template x-for="g in job.gaps"><span class="tag gap" x-text="g"></span></template>
         </div>
         <div class="actions">
-          <template x-if="job.status === 'applied'"><span class="badge">Applied</span></template>
+          <template x-if="job.status === 'applied'">
+            <span class="badge" :class="'st-' + (job.application_status || 'applied')"
+                  x-text="job.application_status && job.application_status !== 'applied' ? 'Applied · ' + job.application_status : 'Applied'"></span>
+          </template>
           <template x-if="job.status !== 'applied' && job.status !== 'dismissed'">
             <div class="row">
               <button class="btn primary" @click="setJobStatus(job, 'applied')">Mark applied</button>

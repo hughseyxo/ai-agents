@@ -26,6 +26,10 @@ APP_STATUSES = ("applied", "interview", "rejected", "offer", "withdrawn")
 # "application received" must never undo a rejection or interview.
 _STATUS_RANK = {"applied": 0, "interview": 1, "offer": 2, "rejected": 2, "withdrawn": 2}
 
+# Jobs joined with the status of the application they're linked to (if any).
+_JOB_SELECT = ("SELECT jobs.*, a.status AS application_status FROM jobs "
+               "LEFT JOIN applications a ON a.id = jobs.application_id")
+
 _QUERY_RE = re.compile(r"^[\w .+/#-]{1,40}$")
 _LEGAL_SUFFIXES = {"nv", "bv", "ltd", "limited", "inc", "gmbh", "plc", "llc", "ag", "sa", "se"}
 
@@ -48,7 +52,8 @@ CREATE TABLE IF NOT EXISTS jobs (
     score INTEGER, matched_skills TEXT, gaps TEXT, rationale TEXT, cv_snapshot_id INTEGER,
     status TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new','seen','dismissed','applied')),
     notified INTEGER NOT NULL DEFAULT 0,
-    first_seen TEXT NOT NULL, scored_at TEXT
+    first_seen TEXT NOT NULL, scored_at TEXT,
+    application_id INTEGER REFERENCES applications(id)
 );
 CREATE TABLE IF NOT EXISTS applications (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -102,7 +107,13 @@ class JobStore:
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.execute("PRAGMA foreign_keys=ON")
         self.conn.executescript(_SCHEMA)
+        self._migrate()
         self.conn.commit()
+
+    def _migrate(self):
+        cols = {r["name"] for r in self.conn.execute("PRAGMA table_info(jobs)")}
+        if "application_id" not in cols:
+            self.conn.execute("ALTER TABLE jobs ADD COLUMN application_id INTEGER REFERENCES applications(id)")
 
     def close(self):
         self.conn.close()
@@ -198,12 +209,12 @@ class JobStore:
         return cur.rowcount > 0
 
     def get_job(self, job_id: str) -> dict | None:
-        return self._decode_job(self._one("SELECT * FROM jobs WHERE job_id=?", (job_id,)))
+        return self._decode_job(self._one(f"{_JOB_SELECT} WHERE jobs.job_id=?", (job_id,)))
 
     def jobs_needing_triage(self, limit: int) -> list[dict]:
         return self._all(
             "SELECT job_id, title, company, location FROM jobs "
-            "WHERE triage IS NULL AND status != 'dismissed' ORDER BY first_seen, job_id LIMIT ?",
+            "WHERE triage IS NULL AND status IN ('new','seen') ORDER BY first_seen, job_id LIMIT ?",
             (limit,),
         )
 
@@ -245,14 +256,14 @@ class JobStore:
         return cur.rowcount
 
     def list_jobs(self, status: str | None = None, min_score: int | None = None) -> list[dict]:
-        sql, params = "SELECT * FROM jobs WHERE 1=1", []
+        sql, params = f"{_JOB_SELECT} WHERE 1=1", []
         if status:
-            sql += " AND status=?"
+            sql += " AND jobs.status=?"
             params.append(status)
         if min_score is not None:
-            sql += " AND score >= ?"
+            sql += " AND jobs.score >= ?"
             params.append(min_score)
-        sql += " ORDER BY score IS NULL, score DESC, first_seen DESC"
+        sql += " ORDER BY jobs.score IS NULL, jobs.score DESC, jobs.first_seen DESC"
         return [self._decode_job(j) for j in self._all(sql, params)]
 
     def set_job_status(self, job_id: str, status: str) -> bool:
@@ -280,10 +291,14 @@ class JobStore:
         if not job:
             return None
         self.set_job_status(job_id, "applied")
+        if job.get("application_id"):
+            return self.get_application(job["application_id"])
         existing = self._one("SELECT id FROM applications WHERE job_id=?", (job_id,))
-        if existing:
-            return self.get_application(existing["id"])
-        return self.create_application(job["company"], job["title"], "applied", "manual", job_id=job_id)
+        app = (self.get_application(existing["id"]) if existing else
+               self.create_application(job["company"], job["title"], "applied", "manual", job_id=job_id))
+        self.conn.execute("UPDATE jobs SET application_id=? WHERE job_id=?", (app["id"], job_id))
+        self.conn.commit()
+        return app
 
     # --- applications ---
 
@@ -341,12 +356,30 @@ class JobStore:
                 return app
         return None
 
-    def _find_job(self, company: str, role: str) -> dict | None:
-        target = normalise_company(company)
-        for job in self._all("SELECT job_id, company, title FROM jobs ORDER BY first_seen DESC"):
-            if normalise_company(job["company"]) == target and role and _roles_match(job["title"], role):
-                return job
-        return None
+    def _link_jobs(self, app: dict) -> int:
+        """Link still-open jobs at the same company with a matching role to this
+        application and mark them applied. Needs a role: matching on company
+        alone would swallow every posting from a recruiter or big employer."""
+        if not (app.get("role") or "").strip():
+            return 0
+        target = normalise_company(app["company"])
+        linked = 0
+        for job in self._all("SELECT job_id, company, title FROM jobs "
+                             "WHERE application_id IS NULL ORDER BY first_seen"):
+            if normalise_company(job["company"]) == target and _roles_match(job["title"], app["role"]):
+                self.conn.execute("UPDATE jobs SET application_id=?, status='applied' WHERE job_id=?",
+                                  (app["id"], job["job_id"]))
+                self.conn.execute("UPDATE applications SET job_id=COALESCE(job_id, ?) WHERE id=?",
+                                  (job["job_id"], app["id"]))
+                linked += 1
+        return linked
+
+    def reconcile_applications(self) -> int:
+        """Link every unlinked job that matches a tracked application (so jobs
+        already applied for / rejected from drop out of scoring and pings).
+        Returns the number of jobs newly linked. Idempotent."""
+        with self.conn:
+            return sum(self._link_jobs(app) for app in self._all("SELECT * FROM applications"))
 
     def record_email_event(self, company: str, role: str, status: str, message_id: str,
                            thread_id: str, subject: str, occurred_at: str) -> dict:
@@ -368,13 +401,7 @@ class JobStore:
             if cur.rowcount and _STATUS_RANK[status] >= _STATUS_RANK[app["status"]]:
                 self.conn.execute("UPDATE applications SET status=?, updated_at=? WHERE id=?",
                                   (status, _now(), app["id"]))
-            if not app.get("job_id"):
-                job = self._find_job(company, role)
-                if job:
-                    self.conn.execute("UPDATE applications SET job_id=? WHERE id=?",
-                                      (job["job_id"], app["id"]))
-                    self.conn.execute("UPDATE jobs SET status='applied' WHERE job_id=?",
-                                      (job["job_id"],))
+            self._link_jobs(self.get_application(app["id"]))
         return self.get_application(app["id"])
 
     # --- gmail dedup ---

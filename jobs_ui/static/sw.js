@@ -1,4 +1,4 @@
-const CACHE = 'job-hunt-v1';
+const CACHE = 'job-hunt-v2';
 const SHELL = [
   '/',
   '/static/app.js',
