@@ -38,6 +38,7 @@ AGENT_REGISTRY = {
     "librarian": "agents.librarian:LibrarianAgent",
     "plant-agent": "agents.plant_agent:PlantAgent",
     "agent-health": "agents.agent_health:AgentHealthAgent",
+    "job-hunt": "agents.job_hunt:JobHuntAgent",
 }
 
 
@@ -229,6 +230,7 @@ def main():
     run_parser.add_argument("agent", help="Agent name")
     run_parser.add_argument("--fix", action="store_true", help="Interactive fix mode (security-audit)")
     run_parser.add_argument("--force", action="store_true", help="Clear dedup and force re-run (daily-briefing)")
+    run_parser.add_argument("--dry-run", action="store_true", help="Run without Telegram pings or Gmail writes; write a report to output/ (job-hunt)")
     # Travel agent args (ignored by other agents)
     run_parser.add_argument(
         "--mode",
