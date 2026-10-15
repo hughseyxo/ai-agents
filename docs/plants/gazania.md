@@ -5,18 +5,18 @@ sunlight: full sun
 water_sensitivity: medium
 baseline_frequency_days: 7
 effective_frequency_days: 7
-last_watered: '2026-07-29'
+last_watered: '2026-09-01'
 needs_photo: false
 latest_health:
-  date: '2026-07-25'
-  summary: "Foliage remains healthy across the full 12\u219217\u219220\u219225 sequence\
-    \ \u2014 deep green, lance-shaped with silvery undersides, no chlorosis, curl,\
-    \ crisping or wilt. Flowering has clearly thinned from the 07-12 peak (many open\
-    \ orange/cream/pink-striped blooms) to just a few small, mostly-closed heads today;\
-    \ the closed flowers reflect the overcast/lower light at capture time (normal\
-    \ for gazania) compounded by deadheading that has been outstanding since 07-16.\
-    \ The plant has also been repositioned to the gravel strip against the fence,\
-    \ still in an open, sunny spot."
+  date: '2026-08-21'
+  summary: "This gazania remains fundamentally healthy \u2014 foliage is deep green,\
+    \ lance-shaped, firm and turgid with no chlorosis, crisping, wilt, pests, mildew\
+    \ or crown/stem rot at the soil line. The dominant trend across the series is\
+    \ habit rather than health: the rosette keeps relaxing and sprawling outward,\
+    \ leaving an ever-larger bare ring in the pot centre with reddish leggy stems\
+    \ trailing across the soil, and the open-bloom count stays low (one to two small\
+    \ orange/yellow heads upper-right). Soil is dark and evenly moist six days after\
+    \ the 08-15 watering, so no drought stress."
   status: Healthy
 tags:
 - plant
@@ -36,6 +36,30 @@ tags:
 
 ## Health Assessments
 <!-- Photo assessments appended here -->
+### 2026-08-21 — Healthy
+Seventh tracked photo (series 12 → 17 → 20 → 25 → 08-09 → 08-17 → 08-21), taken outdoor top-down in bright light, six days after the 2026-08-15 watering. Foliage remains healthy and unchanged in quality: deep green, lance-shaped, firm and turgid, silvery undersides, with no chlorosis, curl, crisping, wilt, sun scorch, pests, mildew or crown/stem rot at the soil line. Soil surface is dark and evenly moist with no pooling — no drought stress even in full sun, so the 9-day cycle continues to track comfortably; next water due ~2026-08-24, held to on_schedule, no frequency change warranted. The two persistent trends are both habit/bloom rather than health and have now intensified: (1) the rosette keeps relaxing and sprawling outward, with the bare-soil centre ring now noticeably larger than on 08-17 and reddish leggy stems trailing across the surface (crown leaves still upright — spreading, not dieback); (2) open-bloom count stays low at one to two small orange/yellow heads upper-right, explained by the chronically outstanding physical deadheading (flagged since 07-16, never executed despite repeated logged completions) plus normal spreading. Beyond deadheading, a light rejuvenating trim of the sprawling stems back toward the rosette is now worth doing to counter the increasingly bare-centred, leggy habit.
+
+**Recommended next steps:**
+- (medium) Deadhead the spent/fading heads and any trailing stems with no live bud, snipping each stem right back to the foliage rosette rather than pulling petals — Removing senescing heads redirects energy into new buds to rebuild the thin display; outstanding since 07-16 despite repeatedly logged completions
+- (medium) Give the sprawling, leggy reddish stems a light tidy trim back toward the rosette to reduce the growing bare-centre look — The bare-soil ring has enlarged across three consecutive photos; a light trim keeps the plant compact and encourages denser regrowth without any hard pruning
+- (low) Confirm the pot drains freely and isn't sitting in pooled water after watering — Gazania is very prone to crown and root rot, so free drainage is the single biggest rot-prevention lever
+
+### 2026-08-17 — Healthy
+Sixth tracked photo (series 12 → 17 → 20 → 25 → 08-09 → 08-17), taken two days after the 2026-08-15 watering, outdoor, top-down in bright light. Foliage remains healthy and unchanged in quality: deep green, lance-shaped, firm and turgid, no chlorosis, curl, crisping, wilt, sun scorch, pests, mildew or crown/stem rot at the soil line. Soil surface is dark and evenly moist with no pooling — no drought stress despite full sun, so the 7-day base cycle continues to track comfortably. The two continuing trends are both habit/bloom rather than health: (1) the rosette keeps relaxing and spreading outward, and the bare soil ring in the pot centre is now noticeably larger than on 08-09, with reddish leggy stems trailing across the surface (crown leaves still upright — spreading, not dieback); (2) open-bloom count has dropped to a single yellow head (upper-right) versus three open flowers on 08-09, with a couple of spent/fading heads low-centre. This is explained by the long-overdue physical deadheading (flagged since 07-16, never executed despite logged completions) plus normal spreading. Held to on_schedule, next water due ~2026-08-22; no frequency change warranted. Beyond deadheading, a light tidy trim of the sprawling stems would help the increasingly bare-centred, leggy habit.
+
+**Recommended next steps:**
+- (medium) Deadhead the spent/fading heads low-centre and the trailing stems with no live bud, snipping each stem right back to the foliage rosette rather than pulling petals — Removing senescing heads redirects energy into new buds to rebuild the thinning display; outstanding since 07-16 despite logged completions
+- (low) Give the sprawling, leggy reddish stems a light tidy trim back toward the rosette to reduce the bare-centre look — The rosette has relaxed open leaving a growing bare ring; a light trim keeps the plant compact and encourages denser regrowth without any hard pruning
+- (low) Confirm the pot drains freely and isn't sitting in pooled water after watering — Gazania is very prone to crown and root rot, so free drainage is the single biggest rot-prevention lever
+
+### 2026-08-09 — Healthy
+Fifth tracked photo (series now 12 → 17 → 20 → 25 → 08-09), taken 2 days after the 2026-08-07 watering, outdoor and — importantly — in bright direct midday sun. This is the first sunny-time capture requested since 07-25, and it confirms the earlier hypothesis: all flowers are OPEN here (a red-orange head, an orange head, and a white/cream-and-maroon striped head with a yellow disc), so the mostly-closed heads in the overcast 07-25 frame were light-driven closure, not a health problem. Foliage is unchanged and healthy across the whole series: deep green, lance-shaped with silvery undersides, firm and turgid — no chlorosis, curl, crisping, wilt, heat/sun scorch, pests, mildew or crown rot at the soil line. The one visible shift is habit: the rosette has spread outward and now leaves a ring of bare soil in the pot centre (relaxed spreading, crown leaves still upright — not dieback). Two spent/fading orange heads remain at lower-centre, so physical deadheading is still outstanding despite prior logged completions. No drought stress 2 days post-water even in full sun; next water due ~08-12, held to on_schedule, no frequency change warranted.
+
+**Recommended next steps:**
+- (medium) Deadhead the two spent/fading orange heads at lower-centre, snipping each stem right back to the foliage rosette rather than pulling petals — Removing senescing heads redirects energy into new buds and sustains the multi-colour display; this task has been outstanding since 07-16 despite logged completions
+- (low) Confirm the pot drains freely and isn't sitting in pooled water on the gravel/paving after watering — Gazania is very susceptible to crown and root rot, so free drainage is the single biggest rot-prevention lever
+- (low) Water as due around 2026-08-12, checking soil is dry a knuckle down first — Drought-tolerant once established; watering only when genuinely dry avoids the overwatering this species is most at risk from
+
 ### 2026-07-25 — Healthy
 Fourth photo in the tracked series (12 → 17 → 20 → 25), taken 5 days after the 2026-07-20 watering, outdoor. The pot has been repositioned onto the gravel border hard against the fence (new angle, lower/overcast light in this frame). Foliage remains healthy and consistent with every prior assessment: deep green, lance-shaped with silvery undersides, firm — no chlorosis, curl, crisping, wilt or heat/sun stress, and no pests, mildew or crown rot at the soil line. The one real trend across the series is a steady decline in flower count: from the dense multi-colour peak on 07-12 (orange/red, cream-and-maroon striped, pink-maroon striped) down to just a couple of small, mostly-closed orange/cream heads today. This is explained by (a) low-light flower closure — normal for gazania on cloudy days / in shade — and (b) deadheading that has never been physically executed despite repeated flags since 07-16 (and PWA completions logged 07-20/07-22 that don't match the visible spent heads). No drought signal despite 5 dry days; watering due ~07-27, held to on_schedule, no frequency change — the 7-day cycle continues to track comfortably.
 
@@ -96,6 +120,65 @@ Photo of the shared blue pot photographed against the wooden fence (Gazania Yell
 
 ## Intelligence Notes
 <!-- Appended by each intelligence run -->
+### 2026-10-11 (pruning)
+- restart deadheading of spent flower heads and trim sprawling stems (Recurring incomplete pattern: marked done 3 times (07-20, 07-22, 08-24) but spent/fading heads still visible in 08-21 photo)
+
+### 2026-10-11
+- Foliage healthy (deep green, lance-shaped, firm, turgid); no chlorosis, wilting, or crown rot
+- 33 DAYS OVERDUE—water today
+- RECURRING INCOMPLETE TASK: Deadheading marked done (07-20, 07-22, 08-24) but spent/fading heads documented in 08-21 photo—verify completion or restart immediately
+- #overdue-water #deadheading-incomplete #critical-overdue
+
+### 2026-09-14 (pruning)
+- Deadhead spent flower heads and trim sprawling stems back toward rosette (Recurring incomplete task marked done 3 times (07-20, 07-22, 08-24) but spent/fading heads still visible in 08-21 photo; verify completion and restart; redirect energy into new flowering and maintain compact habit)
+
+### 2026-09-14
+- Foliage healthy (deep green, lance-shaped, firm, turgid); no chlorosis, wilting, or crown rot
+- 6 DAYS OVERDUE for watering—water today
+- RECURRING INCOMPLETE TASK: Deadheading marked done 07-20, 07-22, and 08-24, but spent/fading heads documented in 08-21 photo—clear pattern of incompleteness; verify and restart
+
+### 2026-09-11 (pruning)
+- Verify/restart deadheading of spent flower heads (Recurring pattern: task marked done multiple times (07-20, 07-22, 08-24) but spent/fading heads persistently visible in photos; redirect energy into new flowering and maintain display)
+
+### 2026-09-11
+- Foliage healthy (deep green, lance-shaped, firm, turgid); no chlorosis, wilting, or crown rot
+- Rosette spreading outward with increasing bare-soil centre ring; bloom display thin (1-2 small heads)
+- Recurring incomplete task: Deadheading marked done 08-24 but intelligence notes pattern of incompleteness (marked 'done' multiple times yet spent heads still visible in photos)—verify completion status or restart task
+- #deadheading-incomplete
+
+### 2026-09-10
+- Foliage healthy (deep green, lance-shaped, firm, turgid); no chlorosis, wilting, or crown rot
+- Rosette spreading outward with increasing bare-soil centre ring; bloom display thin (1-2 small heads)
+- Deadheading marked done 08-24—verify completion status or flag task recurrence at next photo check
+
+### 2026-09-04
+- Foliage healthy: deep green, lance-shaped, firm, turgid; no chlorosis, wilting, or crown rot; 1-2 small open blooms
+- Recurring incomplete deadheading pattern: marked done (07-20, 07-22, 08-24) but spent/fading heads still visible in 08-21 photo—completion verification needed at next photo check
+
+### 2026-08-24 (completed)
+- Physical deadheading: snip spent/fading orange heads by cutting stems back to foliage rosette; light tidy trim of sprawling stems toward centre (marked done via PWA)
+
+### 2026-08-21 (pruning)
+- Physical deadheading: snip spent/fading orange heads by cutting stems back to foliage rosette; light tidy trim of sprawling stems toward centre (Recurring incomplete task flagged since 07-16 despite 'done' marks; spent heads still visible in 08-21 photo. Redirects energy into new buds; counters bare-centre habit.)
+
+### 2026-08-21
+- Foliage consistently healthy: deep green, lance-shaped, firm, turgid; no chlorosis, crisping, wilt, pests, or crown rot
+- **Recurring incomplete task:** Deadheading marked 'done' (07-20, 07-22) but spent/fading flower heads still visibly present in 08-21 photo; flagged since 07-16
+- Rosette spreading outward with increasingly pronounced bare-soil centre ring; bloom display thin due to incomplete deadheading + natural spreading habit
+
+### 2026-08-12 (completed)
+- deadhead spent/fading orange heads by snipping stems back to foliage rosette (marked done via PWA)
+
+### 2026-08-12 (pruning)
+- deadhead spent/fading orange heads by snipping stems back to foliage rosette (redirect energy into new buds; recurring incomplete task (marked done 07-20/07-22 but heads still visible; flagged since 07-16))
+
+### 2026-08-12
+- Foliage consistently healthy (deep green, lance-shaped, silvery undersides, firm, turgid); flowers confirmed open in full sun
+- RECURRING ISSUE: spent/fading flower heads visible in 2026-08-09 photo despite Todoist entries marked 'done' on 07-20 and 07-22
+- Physical deadheading (2–3 spent orange heads by snipping stems back to rosette) remains incomplete; flagged since 07-16
+- Confirm pot drains freely (very prone to crown/root rot)
+- #recurring-deadheading #outdoor
+
 ### 2026-07-30
 - Foliage consistently healthy (deep green, lance-shaped, silvery undersides, firm, turgid); 5-day adjusted cycle on track
 - Flowering thinner than 07-12 peak but no drought stress; closed flowers reflect overcast light (normal gazania behavior)
@@ -341,8 +424,7 @@ Healthy with persistent flowering
 Gazania Orange remains healthy 5 days after last watering (2026-05-28), on its 7-day full-sun outdoor cycle. Foliage dense, deep green, upright — no chlorosis, curl, or crisping; no heat/sun stress visible. Flowering active: one fully open orange bloom, several furled flowers (normal light-response closure, not wilt), and multiple buds developing — consistent with the persistent-flowering pattern logged 2026-05-30 and 2026-06-01. One spent flower drooping over the lower pot rim is normal senescence; deadhead to encourage further bloom. Soil surface dark/moist and surrounding pavement wet, indicating recent rain — held watering recommendation to 'delay'. No frequency change warranted: plant tracks comfortably on the 7-day baseline across all assessments to date with no recurring stress signal.
 
 ## Current Observations
-- Foliage consistently healthy (deep green, lance-shaped, silvery undersides, firm, turgid); 5-day adjusted cycle on track
-- Flowering thinner than 07-12 peak but no drought stress; closed flowers reflect overcast light (normal gazania behavior)
-- Deadheading marked done 07-20 and 07-22 in Todoist but fading spent heads still visible in 07-25 photo
-- RECURRING INCOMPLETE TASK: claimed execution not matching visual evidence; last assessment 07-25 (5 days old)
-- #recurring-deadheading #outdoor
+- Foliage healthy (deep green, lance-shaped, firm, turgid); no chlorosis, wilting, or crown rot
+- 33 DAYS OVERDUE—water today
+- RECURRING INCOMPLETE TASK: Deadheading marked done (07-20, 07-22, 08-24) but spent/fading heads documented in 08-21 photo—verify completion or restart immediately
+- #overdue-water #deadheading-incomplete #critical-overdue
