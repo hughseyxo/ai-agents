@@ -1,7 +1,7 @@
 # Job Hunt — CV-matched LinkedIn tracker + Gmail application pipeline — Design
 
 **Date:** 2026-10-15
-**Status:** Approved, not yet implemented
+**Status:** Implemented 2026-10-15 (live agent run pending the user's Drive read-only consent)
 **Author:** eagna (Claude Code)
 
 ## Related
@@ -41,13 +41,13 @@ industry that is a good fit for their CV** — so nothing about roles or sectors
 ```
 job-hunt agent (host cron, 04:00 UTC)                 jobs_ui (Docker, <TAILSCALE_IP>:8774)
  1 cv:      Drive (drive.readonly) → text, hash        FastAPI + Alpine PWA, no LLM
-            changed? → LLM derives search queries      reads/writes data/jobs.db via JobStore
+            changed? → LLM derives search queries      reads/writes data/jobs/jobs.db via JobStore
  2 fetch:   LinkedIn guest API per query × WT × page   tabs: Matches | Applications | Search/CV
  3 triage:  Haiku batch on title+company → drop junk
  4 score:   fetch description → Sonnet batch vs CV
  5 gmail:   search threads → Haiku classify → upsert applications/events
  6 notify:  Telegram if new score ≥ 75
-            all state → data/jobs.db (JobStore)
+            all state → data/jobs/jobs.db (JobStore)
 ```
 
 ### Steps (`JobHuntAgent`)
@@ -87,7 +87,7 @@ output field is re-validated in Python: score clamped to 0–100, status coerced
 renders all text with Alpine `x-text`, never `x-html`. Residual: `Read`/`Glob`/`Grep` remain available to the CLI,
 as documented in CLAUDE.md for other untrusted-input agents; output never leaves the user's own DB/Telegram.
 
-## Data model (`data/jobs.db`, `agents/job_store.py` → `JobStore`)
+## Data model (`data/jobs/jobs.db`, `agents/job_store.py` → `JobStore`)
 
 | Table | Columns |
 |---|---|
@@ -117,7 +117,7 @@ API: `GET /api/jobs?status=&min_score=`, `PATCH /api/jobs/{id}`, `GET /api/appli
 `GET /healthz`.
 
 Hosting: seedbox `services/jobs.yaml` + `config.yaml` entry (separate `~/git/yopflix/seedbox` repo), port bound to
-`<TAILSCALE_IP>:8774`, `traefik.enabled: false`, `data/jobs.db` bind-mounted. Rebuild the image before
+`<TAILSCALE_IP>:8774`, `traefik.enabled: false`, `data/jobs/jobs.db` bind-mounted. Rebuild the image before
 `./run-seedbox.sh` (it doesn't rebuild existing images).
 
 ## Files
@@ -125,7 +125,7 @@ Hosting: seedbox `services/jobs.yaml` + `config.yaml` entry (separate `~/git/yop
 **New**
 - `agents/linkedin_jobs.py` — salvaged parser/sanitisers/429 handling + `fetch_search`, `fetch_description`
 - `agents/drive_reader.py` — `drive.readonly` client, token `~/.google_tokens_drive_ro.json`, `find_latest_cv`, `read_cv_text` (Docs export / stdlib docx extraction)
-- `scripts/setup_drive_readonly_oauth.py` — one-time consent
+- `scripts/setup_drive_oauth.py --readonly` — one-time consent (existing script, new flag)
 - `agents/job_store.py` — `JobStore`
 - `agents/job_hunt.py` — `JobHuntAgent`
 - `jobs_ui/` — `server.py`, `templates/index.html`, `static/*`, `Dockerfile`
